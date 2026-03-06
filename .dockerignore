@@ -36,6 +36,9 @@ Thumbs.db
 *.swo
 *~
 
+# Video / large media (promo assets, not needed at runtime)
+public/videos
+
 # Project meta (not needed in production image)
 tasks
 *.md

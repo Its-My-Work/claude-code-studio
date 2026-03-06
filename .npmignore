@@ -31,6 +31,13 @@ test-*.sh
 
 # Large assets not needed at runtime
 *.png
+public/videos/
+*.mp4
+*.mov
+*.avi
+*.webm
+*.mkv
+*.gif
 README_RU.html
 README_RU.md
 README_UA.md
