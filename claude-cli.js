@@ -56,7 +56,7 @@ const CLAUDE_BIN = findClaudeBin();
 
 // Global subprocess timeout — process is killed if it does not exit within this window.
 // Configurable via CLAUDE_TIMEOUT_MS env var; default 10 minutes.
-const MAX_SUBPROCESS_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS || '1800000', 10);
+const MAX_SUBPROCESS_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS || '1800000', 10) || 1800000;
 
 // Maximum size of a single unflushed stdout line — guards against heap exhaustion
 // when the CLI emits a line without \n (should never happen in stream-json mode,
@@ -125,7 +125,10 @@ class ClaudeCLI {
 
     if (model) args.push('--model', MODEL_MAP[model] || model);
     if (maxTurns) args.push('--max-turns', String(maxTurns));
-    if (systemPrompt) args.push('--system-prompt', systemPrompt);
+    // Don't pass --system-prompt when resuming a session — the system prompt is
+    // already baked into the session history. Changing it invalidates cryptographic
+    // signatures on thinking blocks, causing API 400 "Invalid signature in thinking block".
+    if (systemPrompt && !sessionId) args.push('--system-prompt', systemPrompt);
 
     // allowedTools: pass each tool as separate arg (variadic)
     if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
@@ -156,16 +159,17 @@ class ClaudeCLI {
     // Handle image/file attachments: save to temp dir, append file paths to prompt
     // so Claude CLI can read them via its Read tool (CLI has no native content block API)
     const _tempFiles = [];
+    let _tempDir = null;
     let finalPrompt = prompt;
     if (contentBlocks && contentBlocks.length) {
-      const tmpDir = path.join(os.tmpdir(), `claude-att-${Date.now()}`);
-      fs.mkdirSync(tmpDir, { recursive: true });
+      _tempDir = path.join(os.tmpdir(), `claude-att-${Date.now()}`);
+      fs.mkdirSync(_tempDir, { recursive: true });
       const filePaths = [];
       for (const block of contentBlocks) {
         if (block.type === 'image' && block.source?.data) {
           const ext = (block.source.media_type || 'image/png').split('/')[1] || 'png';
           const fname = `attachment-${_tempFiles.length + 1}.${ext}`;
-          const fpath = path.join(tmpDir, fname);
+          const fpath = path.join(_tempDir, fname);
           fs.writeFileSync(fpath, Buffer.from(block.source.data, 'base64'));
           _tempFiles.push(fpath);
           filePaths.push(fpath);
@@ -208,8 +212,9 @@ class ClaudeCLI {
     let globalTimer = null;
     // Track MCP config hash for ref-counted cleanup
     let mcpHash = mcpConfigHash;
-    // Track temp attachment files for cleanup
+    // Track temp attachment files + parent dir for cleanup
     let attFiles = _tempFiles.slice();
+    let attDir = _tempDir;
 
     proc.stdout.on('data', (chunk) => {
       buffer += stdoutDecoder.write(chunk);
@@ -258,6 +263,7 @@ class ClaudeCLI {
       }
       releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
+      if (attDir) { try { fs.rmdirSync(attDir); } catch {} attDir = null; }
       attFiles = [];
       if (code !== 0 && stderrBuf.trim() && h.onError) {
         // Filter out known non-error noise (MCP loading messages) line-by-line,
@@ -280,6 +286,7 @@ class ClaudeCLI {
       // Clean up MCP config and temp attachments even when the process fails to start
       releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
+      if (attDir) { try { fs.rmdirSync(attDir); } catch {} attDir = null; }
       attFiles = [];
       // Wrapped in try-catch for the same reason as in 'close': onDone must always fire.
       try { if (h.onError) h.onError(`Failed to start claude: ${err.message}. Binary: ${this.claudeBin}`); } catch {}
@@ -294,6 +301,7 @@ class ClaudeCLI {
       killProc(proc);
       // Escalate to SIGKILL after 3 s (Unix only — on Windows killProc already force-kills)
       if (process.platform !== 'win32') {
+        if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
         sigkillTimer = setTimeout(() => {
           sigkillTimer = null;
           if (proc.exitCode !== null || proc.signalCode !== null) return;
@@ -310,6 +318,7 @@ class ClaudeCLI {
         // Guard: if proc already exited (exitCode/signalCode set), skip to avoid
         // hitting a new process that the OS reused the same PID for.
         if (process.platform !== 'win32') {
+          if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
           sigkillTimer = setTimeout(() => {
             sigkillTimer = null;
             if (proc.exitCode !== null || proc.signalCode !== null) return;

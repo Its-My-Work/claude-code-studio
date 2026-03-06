@@ -56,6 +56,8 @@ Create a card. Describe what you want. Move it to "To Do". Claude picks it up au
 
 Queue 10 tasks, walk away, come back to all of them done. Cards can run **in parallel** (independent tasks) or **sequentially** (linked sessions, so Claude remembers what the previous task built).
 
+**True parallel execution** — independent tasks now run simultaneously even in the same project directory. No artificial workdir locks holding them back. Chain tasks still respect sequential order, but standalone cards run at full speed, in parallel, the way you'd expect.
+
 ![Kanban screenshot](public/screenshots/03-kanban.png)
 
 ### 🕐 Scheduler — Your AI on Autopilot
@@ -185,6 +187,8 @@ Three modes in the "Mode" toolbar group control what Claude is allowed to do:
 **Plan** — read-only mode. Claude can explore the project, analyze code, and produce a plan, but **cannot modify files or run commands**. The tool list is restricted to read-only operations (View, Grep, Glob, ListDir). Use this when you want analysis and a plan of action before committing to changes — especially on unfamiliar codebases or risky refactorings.
 
 When Claude produces a plan in Plan mode, an **"Execute Plan"** button appears at the bottom of the response. Click it — and Studio automatically switches to Auto mode and instructs Claude to execute the plan step by step. This creates a smooth workflow: analyze first, then execute with one click.
+
+**Auto Plan Detection** — Studio now watches for plan completion signals in Claude's response. When Claude says "plan complete" or "starting execution", Studio automatically switches from Plan to Auto mode without you lifting a finger. You don't even need to click Execute Plan — the transition just happens.
 
 **Task** — explicit execution mode. Same full tool access as Auto, with an added system instruction signaling this is an execution task. Practically similar to Auto but makes intent clear.
 
@@ -383,6 +387,9 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 💾 History | Everything saved to SQLite, resume anytime |
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
 | 🔒 Auth | Password login, 30-day tokens, data stays on your machine |
+| 🧠 Language-aware AI | Claude reasons in English for precision, responds in your language — full native experience in every conversation |
+| 🛡 Smart session recovery | Thinking block errors auto-heal — Studio resets the session and continues without interruption or data loss |
+| ⚡ True parallel tasks | Independent Kanban tasks run simultaneously in the same project — no artificial workdir locks |
 | 🌍 3 languages | English, Ukrainian, Russian — auto-detected on first visit, switch anytime |
 | 🖥 Cross-platform | Windows, macOS, Linux — no compatibility headaches |
 | 🛡 Security hardened | XSS, path traversal, SQL injection protection built-in |

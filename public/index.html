@@ -3500,8 +3500,31 @@ function handleWsMsg(d) {
           }
         }
 
-        streaming.el = null; streaming.txt = '';
-        streaming.toolCounts = {}; streaming.toolLog = []; // reset tool tracking
+        // ─── Text-parsing fallback for automatic plan completion detection ───
+        // When in planning mode and response looks done, text-parsing fallback for automatic mode switching
+        if (curMode === 'planning' && streaming.el && _planText) {
+          // Check for phrases indicating plan completion
+          const planPhrases = [
+            /plan\s+(complete|is ready|готов|план готов|exiting plan mode|switching to execution|starting execution|moving to execution)/i,
+            /now\s+(executing|implementing)/i,
+            /exiting\s*plan mode|switching to execution mode|starting execution/i
+          ];
+          if (planPhrases.some(p => p.test(_planText))) {
+            // Auto-switch to auto mode
+            curMode = 'auto';
+            syncBtn('mode', 'auto');
+            // Show success toast
+            toast('✅ Auto-switched to auto mode', { duration: 2000 });
+          }
+        }
+        // Clear streaming state
+        streaming.el = null;
+        streaming.txt = '';
+        streaming.toolCounts = {};
+        streaming.toolLog = [];
+      } else {
+      streaming.el = null; streaming.txt = '';
+      streaming.toolCounts = {}; streaming.toolLog = []; // reset tool tracking
         // Clear retry badge on successful completion
         { const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove(); }
         if (d.taskId) {

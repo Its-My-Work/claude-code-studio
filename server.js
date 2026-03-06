@@ -757,7 +757,7 @@ function processQueue() {
   const inProg = stmts.getInProgressTasks.all();
   // Sessions currently occupied (in_progress or just started by taskRunning)
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
-  // Workdir-level lock: prevents two Claude instances from writing to the same directory concurrently
+  // Workdir-level lock: prevents parallel chain tasks from writing to the same directory concurrently
   const occupiedWorkdirs = new Set(inProg.filter(t => t.workdir).map(t => t.workdir));
   // Count independent running tasks (null session_id)
   let indepRunning = inProg.filter(t => !t.session_id).length;
@@ -799,8 +799,9 @@ function processQueue() {
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
-    // Workdir lock: skip if another task is already running in the same directory
-    if (task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
+    // Workdir lock: only for chain tasks — prevents parallel chains from conflicting in the same directory.
+    // Independent tasks (no chain_id) can run in parallel per workdir; the user explicitly chose concurrency.
+    if (task.chain_id && task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
     if (task.session_id) {
       // Shared session: one at a time per session
       if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id)) {
@@ -1315,6 +1316,9 @@ const BASE_SYSTEM_INSTRUCTIONS = `When you are answering a specific question or 
 > <original question or task text>
 Then provide your answer below it. Do not add the blockquote if the message contains only a single question or task.`;
 
+// Language names for UI language instruction
+const LANG_NAMES = { en: 'English', uk: 'Ukrainian', ru: 'Russian' };
+
 // Internal MCP tool instructions — compact versions (~140 tokens vs original ~240)
 const ASK_USER_INSTRUCTION = `\n\nYou have access to an "ask_user" tool (via MCP server "_ccs_ask_user"). When you need user input BEFORE proceeding — such as choosing between approaches, confirming an action, or clarifying requirements — you MUST call ask_user instead of writing questions as text. The ask_user tool pauses execution and waits for the user's response. Do NOT ask questions in your text output and then continue working — always use the ask_user tool for questions.`;
 
@@ -1369,17 +1373,22 @@ FINAL: ✅ All requirements verified [/ ⚠️ N issues found and fixed]
 
 /**
  * Build system prompt for a chat turn.
- * Caches by sorted skill IDs to avoid rebuilding identical prompts.
+ * Caches by sorted skill IDs + UI language to avoid rebuilding identical prompts.
  * @param {string[]} skillIds - active skill IDs
- * @param {object} config - merged config with skills definitions
+ * @param {object} config - merged config with skills definitions and UI language
  * @returns {string} assembled system prompt
  */
 function buildSystemPrompt(skillIds, config) {
-  const cacheKey = [...skillIds].sort().join('|');
+  const uiLang = config.lang || 'en';
+  const cacheKey = [...skillIds].sort().join('|') + `|lang:${uiLang}`;
   const cached = _systemPromptCache.get(cacheKey);
   if (cached) return cached;
 
   let prompt = BASE_SYSTEM_INSTRUCTIONS;
+
+  // Language instruction: reasoning in English, user-facing in UI language
+  const langName = LANG_NAMES[uiLang] || 'English';
+  prompt += `\n\nLANGUAGE: All internal reasoning, thinking, and inter-agent communication MUST be in English (token-efficient). All user-facing text (responses, explanations, questions) MUST be in ${langName}.`;
 
   for (const sid of skillIds) {
     const s = config.skills[sid];
@@ -1551,7 +1560,7 @@ async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write'];
+  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook','mcp_set_ui_state'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', 'mcp_set_ui_state'];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -1561,11 +1570,12 @@ async function runCliSingle(p) {
 
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
 
-  // Run a single CLI invocation and return { resultData, sid }
+  // Run a single CLI invocation and return { resultData, sid, errorText }
   const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
     let resultData = null;
+    let errorText = '';
     let _done = false;
-    const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid }); } };
+    const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText }); } };
 
     cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController })
       .onText(t => {
@@ -1593,6 +1603,8 @@ async function runCliSingle(p) {
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
       .onResult(r => { resultData = r; })
       .onError(err => {
+        // Capture error text for the main loop to inspect (e.g. thinking block signature errors)
+        errorText += err;
         // Don't resolve here — let onDone be the sole resolver (matches taskWorker pattern).
         // This ensures resultData is fully populated before the loop checks it.
         try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
@@ -1606,11 +1618,31 @@ async function runCliSingle(p) {
   // Main loop: run agent, auto-continue until it finishes successfully or budget exhausted
   let lastResult = null;
   while (true) {
-    const { resultData } = await runOnce(currentPrompt, currentContentBlocks, newCid);
+    const { resultData, errorText } = await runOnce(currentPrompt, currentContentBlocks, newCid);
     lastResult = resultData;
 
     // ✅ Success — agent finished naturally
     if (resultData?.subtype === 'success') break;
+
+    // 🔑 Invalid thinking block signature — session is corrupted, start fresh
+    // This happens when system prompt changed between turns or session state is inconsistent.
+    // Clear the Claude session ID so the next attempt starts a new session.
+    if (errorText && /Invalid signature in thinking block/i.test(errorText)) {
+      log.warn('thinking-block-signature-error', { sessionId, oldCid: newCid });
+      const notice = '\n\n⚠️ **Session reset** — thinking block signature expired, starting fresh session...\n\n';
+      fullText += notice;
+      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      // Clear session ID — next iteration will start a fresh Claude session
+      newCid = null;
+      try { stmts.updateClaudeId.run(null, sessionId); } catch {}
+      // Use original prompt for the fresh session, not the continuation prompt
+      currentPrompt = prompt;
+      currentContentBlocks = Array.isArray(userContent) ? userContent : null;
+      continueCount++;
+      if (continueCount >= MAX_AUTO_CONTINUES) break;
+      continue;
+    }
 
     // 💰 Budget exceeded — hard limit, cannot continue
     if (resultData?.subtype === 'error_max_budget_usd') {
@@ -1664,7 +1696,7 @@ async function runSshSingle(p) {
   const { prompt, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook'] : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
+  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook','mcp_set_ui_state'] : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', 'mcp_set_ui_state'];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
