@@ -121,7 +121,10 @@ class ClaudeCLI {
     const args = ['--print'];
 
     // Session resumption: --resume <sessionId> (not --session-id + --resume separately)
-    if (sessionId) args.push('--resume', sessionId);
+    // Guard: only pass string UUIDs — reject objects or corrupted JSON values
+    if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) {
+      args.push('--resume', sessionId);
+    }
 
     if (model) args.push('--model', MODEL_MAP[model] || model);
     if (maxTurns) args.push('--max-turns', String(maxTurns));
@@ -430,8 +433,13 @@ class ClaudeCLI {
     if (data.type === 'result' && h.onResult) {
       h.onResult(data);
     }
-    // Session ID in result messages
-    if (data.session_id && !h._detectedSid && h.onSessionId) { h._detectedSid = data.session_id; h.onSessionId(data.session_id); }
+    // Session ID in result messages — ensure it's a clean string (not object/nested JSON)
+    if (data.session_id && !h._detectedSid && h.onSessionId) {
+      const sid = typeof data.session_id === 'string' ? data.session_id
+        : (typeof data.session_id === 'object' && data.session_id.session_id) ? data.session_id.session_id
+        : null;
+      if (sid && typeof sid === 'string') { h._detectedSid = sid; h.onSessionId(sid); }
+    }
   }
 }
 

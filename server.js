@@ -258,6 +258,34 @@ function runDatabaseMaintenance() {
 }
 
 // ============================================
+// SESSION ID SANITIZATION
+// ============================================
+// Extracts a clean UUID string from potentially corrupted claude_session_id values.
+// Bug: runMultiAgent fallback could store { cid, completed } objects or nested JSON
+// like {"cid":"{\"cid\":\"uuid\",\"completed\":true}","completed":false}
+// This helper recursively unwraps to find the actual UUID.
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function sanitizeSessionId(val) {
+  if (!val) return null;
+  // Already a clean UUID
+  if (typeof val === 'string' && UUID_RE.test(val)) return val;
+  // Object with .cid field (from runCliSingle return value)
+  if (typeof val === 'object' && val !== null && val.cid) return sanitizeSessionId(val.cid);
+  // JSON string — try to parse and extract
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (parsed && typeof parsed === 'object' && parsed.cid) return sanitizeSessionId(parsed.cid);
+    } catch {}
+    // Maybe a UUID is embedded somewhere in the string
+    const m = val.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+// ============================================
 // DATABASE
 // ============================================
 const db = new Database(DB_PATH);
@@ -400,7 +428,16 @@ function wrapStmt(stmt, label) {
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
-  updateClaudeId: db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`),
+  updateClaudeId: (() => {
+    const _stmt = db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`);
+    const _origRun = _stmt.run.bind(_stmt);
+    _stmt.run = (cid, sessionId) => {
+      const clean = sanitizeSessionId(cid);
+      if (cid && !clean) log.warn('updateClaudeId: rejected non-UUID session_id', { raw: String(cid).substring(0, 80), sessionId });
+      return _origRun(clean, sessionId);
+    };
+    return _stmt;
+  })(),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
@@ -595,7 +632,7 @@ async function startTask(task) {
     }
     // Resume existing claude session if any
     const session = stmts.getSession.get(sessionId);
-    const claudeSessionId = session?.claude_session_id || null;
+    const claudeSessionId = sanitizeSessionId(session?.claude_session_id) || null;
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
@@ -1880,7 +1917,10 @@ async function runMultiAgent(p) {
 
   if (!plan?.agents?.length) {
     ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Falling back to single mode', statusKey:'agent.fallback_single', ...(tabId ? { tabId } : {}) }));
-    return runCliSingle(p);
+    // runCliSingle returns { cid, completed } — extract .cid to match
+    // runMultiAgent's contract of returning a plain session ID string.
+    const fallback = await runCliSingle(p);
+    return fallback?.cid || null;
   }
 
   const planSummaryText = `📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n`;
@@ -2519,8 +2559,9 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
 });
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
-  if (!session?.claude_session_id) return res.status(400).json({ error: 'No Claude session ID' });
-  const safeSid = session.claude_session_id.replace(/[^a-zA-Z0-9-]/g, '');
+  const _cleanSid = sanitizeSessionId(session?.claude_session_id);
+  if (!_cleanSid) return res.status(400).json({ error: 'No Claude session ID' });
+  const safeSid = _cleanSid.replace(/[^a-zA-Z0-9-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
   const workdir = session.workdir || WORKDIR;
   const platform = process.platform;
@@ -3351,7 +3392,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
       ws: proxy,
       sessionId,
       abortController,
-      claudeSessionId: session.claude_session_id || undefined,
+      claudeSessionId: sanitizeSessionId(session.claude_session_id) || undefined,
       mode,
       workdir,
     };
@@ -3778,7 +3819,7 @@ wss.on('connection', (ws) => {
         stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.engine)||null,sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
-        localClaudeId = existSess.claude_session_id || undefined;
+        localClaudeId = sanitizeSessionId(existSess.claude_session_id) || undefined;
       }
 
       // For legacy (no tabId) mode, keep WS-level state in sync
@@ -4095,7 +4136,7 @@ wss.on('connection', (ws) => {
       legacySessionId = msg.sessionId || genId();
       const existing = stmts.getSession.get(legacySessionId);
       if (existing) {
-        legacyClaudeId = existing.claude_session_id || undefined;
+        legacyClaudeId = sanitizeSessionId(existing.claude_session_id) || undefined;
         // Don't send session_started for existing sessions — the client's session_started
         // handler resets streaming.el which destroys the just-restored _bgTxt bubble on tab switch.
         // session_started is only needed for NEW sessions (to map temp tab ID → real session ID).
@@ -4390,7 +4431,7 @@ wss.on('connection', (ws) => {
 
             await new Promise(resolve => {
               let done = false;
-              cli.send({ prompt: planPrompt, sessionId: session?.claude_session_id, model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
+              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.claude_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
                 .onText(t => { planText += t; })
                 .onError(() => { if (!done) { done = true; resolve(); } })
                 .onDone(() => { if (!done) { done = true; resolve(); } });
