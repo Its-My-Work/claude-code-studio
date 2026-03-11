@@ -1938,7 +1938,7 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
       maxTurns: 1,
       allowedTools: ['_none'],
       mcpServers: {},
-      systemPrompt: 'You are a task classifier. Analyze the user task and:\n1. Select 1-4 most relevant specialist IDs from the list\n2. Generate a short chat title (3-7 words, in the SAME language as user\'s message)\n\nReturn ONLY a JSON object: {"skills":["id1","id2"],"title":"Short title here"}\nNo explanation, no markdown.',
+      systemPrompt: 'You are a task classifier. Analyze the user task and:\n1. Select 0-4 most relevant specialist IDs from the list\n2. Generate a short chat title (3-7 words, in the SAME language as user\'s message)\n\nRules:\n- Only select a skill if it will materially improve the answer for this exact task.\n- Prefer narrow, task-specific skills over broad or generic ones.\n- Avoid generic meta/introduction/help skills unless the user is explicitly asking about that system itself.\n- For simple general-knowledge questions, pricing lookups, or web facts, it is usually correct to select no extra skills.\n- Do not select skills just because their description sounds broadly applicable.\n\nReturn ONLY a JSON object: {"skills":["id1","id2"],"title":"Short title here"}\nNo explanation, no markdown.',
     })
     .onText(t => { fullText += t; })
     .onDone(() => {
