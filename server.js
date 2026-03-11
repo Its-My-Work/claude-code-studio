@@ -1355,42 +1355,145 @@ function isTextAttachment(att) {
   return TEXT_FILE_EXTS.has(ext);
 }
 
+function normalizeStoredAttachment(att = {}) {
+  if (!att || typeof att !== 'object') return null;
+  if (isImageAttachment(att)) {
+    return {
+      type: getImageMimeType(att),
+      name: att.name || 'image.png',
+      base64: att.base64 || '',
+    };
+  }
+  if (att.type === 'ssh') {
+    return {
+      type: 'ssh',
+      hostId: att.hostId || null,
+      label: att.label || att.host || 'SSH',
+      host: att.host || '',
+      port: Number(att.port) || 22,
+      sshKeyPath: att.sshKeyPath || '',
+      password: att.password || '',
+    };
+  }
+  return {
+    type: att.type || att.mimeType || 'application/octet-stream',
+    name: att.name || 'attachment.bin',
+    base64: att.base64 || '',
+  };
+}
+
+function serializeMessageAttachments(attachments = []) {
+  return attachments
+    .map(normalizeStoredAttachment)
+    .filter(Boolean);
+}
+
+function parseMessageAttachments(raw) {
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw;
+    return Array.isArray(parsed) ? parsed.map(normalizeStoredAttachment).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildAttachmentContentBlocks(attachments = []) {
+  const blocks = [];
+  for (const att of attachments) {
+    if (isImageAttachment(att)) {
+      blocks.push({ type: 'image', source: { type: 'base64', media_type: getImageMimeType(att), data: att.base64 } });
+      continue;
+    }
+    if (att.type === 'ssh') {
+      let sshKeyPath = att.sshKeyPath || '';
+      let password = att.password || '';
+      if ((!sshKeyPath && !password) && att.hostId) {
+        try {
+          const rh = loadRemoteHosts().find(h => h.id === att.hostId);
+          if (rh) {
+            sshKeyPath = rh.sshKeyPath || '';
+            password = decryptPassword(rh.password) || '';
+          }
+        } catch {}
+      }
+      let sshText = `[SSH Host: ${att.label || att.host || 'SSH'}]\nHost: ${att.host}:${att.port || 22}`;
+      if (sshKeyPath) sshText += `\nSSH Key: ${sshKeyPath}`;
+      else if (password) sshText += `\nPassword: ${password}`;
+      blocks.push({ type: 'text', text: sshText });
+      continue;
+    }
+    if (isTextAttachment(att)) {
+      let content = '(unable to decode)';
+      try { content = Buffer.from(att.base64, 'base64').toString('utf-8'); } catch {}
+      blocks.push({ type: 'text', text: `[File: ${att.name}]\n${content}` });
+      continue;
+    }
+    blocks.push({
+      type: 'file',
+      source: {
+        type: 'base64',
+        media_type: att.type || 'application/octet-stream',
+        data: att.base64,
+        name: att.name || 'attachment.bin',
+      },
+    });
+  }
+  return blocks;
+}
+
 // Build Claude content blocks from text + file attachments.
 // Returns plain string when no attachments, or ContentBlock[] when attachments present.
 function buildUserContent(text, attachments = []) {
   if (!attachments || attachments.length === 0) return text;
-  const blocks = [];
-  for (const att of attachments) {
-    if (isImageAttachment(att)) {
-      // Vision block — base64 image
-      blocks.push({ type: 'image', source: { type: 'base64', media_type: getImageMimeType(att), data: att.base64 } });
-    } else if (att.type === 'ssh') {
-      // SSH host reference — inject full connection info as text context
-      let sshText = `[SSH Host: ${att.label || att.host}]\nHost: ${att.host}:${att.port || 22}`;
-      if (att.sshKeyPath) sshText += `\nSSH Key: ${att.sshKeyPath}`;
-      else if (att.password) sshText += `\nPassword: ${att.password}`;
-      blocks.push({ type: 'text', text: sshText });
-    } else if (isTextAttachment(att)) {
-      // Text-like files can be embedded directly into the prompt.
-      let content = '(unable to decode)';
-      try { content = Buffer.from(att.base64, 'base64').toString('utf-8'); } catch {}
-      blocks.push({ type: 'text', text: `[File: ${att.name}]\n${content}` });
-    } else {
-      // Preserve binary attachments as temp files for the CLI instead of
-      // decoding them into prompt text. Raw binary can contain null bytes,
-      // which makes child_process.spawn reject argv entries.
-      blocks.push({
-        type: 'file',
-        source: {
-          type: 'base64',
-          media_type: att.type || 'application/octet-stream',
-          data: att.base64,
-          name: att.name || 'attachment.bin',
-        },
-      });
+  const blocks = buildAttachmentContentBlocks(attachments);
+  if (text) blocks.push({ type: 'text', text });
+  return blocks;
+}
+
+function buildReplyQuoteFromHistory(msgMap, replyToId) {
+  if (!replyToId) return '';
+  const ref = msgMap.get(replyToId);
+  if (!ref?.content) return '';
+  const snippet = String(ref.content).slice(0, 200);
+  return `[Replying to: ${ref.role || 'user'}: ${snippet}]`;
+}
+
+function buildSessionReplayContent(sessionId) {
+  const rawMsgs = stmts.getMsgsLite.all(sessionId);
+  if (!rawMsgs.length) return null;
+
+  const msgMap = new Map(rawMsgs.map(m => [m.id, m]));
+  const blocks = [{
+    type: 'text',
+    text: '[Session recovery]\nThe previous Claude session was unavailable. Treat the following replay as the full prior conversation history for this chat. The latest user turn appears last and should be answered next.',
+  }];
+
+  let userTurn = 0;
+  let assistantTurn = 0;
+  for (const msg of rawMsgs) {
+    if (msg.type === 'tool') continue;
+
+    const attachments = parseMessageAttachments(msg.attachments);
+    const replyQuote = buildReplyQuoteFromHistory(msgMap, msg.reply_to_id);
+
+    if (msg.role === 'user') {
+      userTurn++;
+      blocks.push({ type: 'text', text: `[User turn ${userTurn}]` });
+      if (replyQuote) blocks.push({ type: 'text', text: replyQuote });
+      if (attachments.length) {
+        blocks.push({ type: 'text', text: `[Attachments from user turn ${userTurn}]` });
+        blocks.push(...buildAttachmentContentBlocks(attachments));
+      }
+      if (msg.content) blocks.push({ type: 'text', text: msg.content });
+      continue;
+    }
+
+    if (msg.role === 'assistant' && msg.content) {
+      assistantTurn++;
+      blocks.push({ type: 'text', text: `[Assistant turn ${assistantTurn}]\n${msg.content}` });
     }
   }
-  if (text) blocks.push({ type: 'text', text });
+
   return blocks;
 }
 
@@ -1739,6 +1842,10 @@ function decryptPassword(stored) {
 // Each continue resumes the session, giving the agent another maxTurns window.
 const MAX_AUTO_CONTINUES = 3;
 
+function isResettableClaudeSessionError(errorText = '') {
+  return /Invalid signature in thinking block|invalid session|session .* not found|could not find .*session|no conversation found|resume .*failed|failed to resume|conversation .* not found/i.test(errorText || '');
+}
+
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
@@ -1812,21 +1919,25 @@ async function runCliSingle(p) {
     // ✅ Success — agent finished naturally
     if (resultData?.subtype === 'success') break;
 
-    // 🔑 Invalid thinking block signature — session is corrupted, start fresh
-    // This happens when system prompt changed between turns or session state is inconsistent.
-    // Clear the Claude session ID so the next attempt starts a new session.
-    if (errorText && /Invalid signature in thinking block/i.test(errorText)) {
-      log.warn('thinking-block-signature-error', { sessionId, oldCid: newCid });
-      const notice = '\n\n⚠️ **Session reset** — thinking block signature expired, starting fresh session...\n\n';
+    // 🔑 Resume/session state is broken — start fresh
+    // Covers both signature expiry and missing/invalid remote Claude session state.
+    if (errorText && isResettableClaudeSessionError(errorText)) {
+      const isThinkingSig = /Invalid signature in thinking block/i.test(errorText);
+      log.warn('claude-session-reset', { sessionId, oldCid: newCid, reason: isThinkingSig ? 'thinking-signature' : 'missing-or-invalid-session' });
+      const notice = isThinkingSig
+        ? '\n\n⚠️ **Session reset** — thinking block signature expired, starting fresh session...\n\n'
+        : '\n\n⚠️ **Session reset** — previous Claude session was missing or invalid, starting fresh session...\n\n';
       fullText += notice;
       { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
       try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
       // Clear session ID — next iteration will start a fresh Claude session
       newCid = null;
       try { stmts.updateClaudeId.run(null, sessionId); } catch {}
-      // Use original prompt for the fresh session, not the continuation prompt
-      currentPrompt = prompt;
-      currentContentBlocks = Array.isArray(userContent) ? userContent : null;
+      const replayContent = buildSessionReplayContent(sessionId);
+      currentPrompt = replayContent
+        ? 'Continue this chat from the replayed history above. The latest user turn is included last. Respond to that latest user request.'
+        : prompt;
+      currentContentBlocks = replayContent || (Array.isArray(userContent) ? userContent : null);
       continueCount++;
       if (continueCount >= MAX_AUTO_CONTINUES) break;
       continue;
@@ -1939,16 +2050,22 @@ async function runSshSingle(p) {
     const { resultData, errorText } = await runOnce(currentPrompt, currentContentBlocks, newCid);
     lastResult = resultData;
     if (resultData?.subtype === 'success') break;
-    if (errorText && /Invalid signature in thinking block/i.test(errorText)) {
-      log.warn('ssh-thinking-block-signature-error', { sessionId, oldCid: newCid });
-      const notice = '\n\n⚠️ **Session reset** — remote thinking block signature expired, starting a fresh session...\n\n';
+    if (errorText && isResettableClaudeSessionError(errorText)) {
+      const isThinkingSig = /Invalid signature in thinking block/i.test(errorText);
+      log.warn('ssh-claude-session-reset', { sessionId, oldCid: newCid, reason: isThinkingSig ? 'thinking-signature' : 'missing-or-invalid-session' });
+      const notice = isThinkingSig
+        ? '\n\n⚠️ **Session reset** — remote thinking block signature expired, starting a fresh session...\n\n'
+        : '\n\n⚠️ **Session reset** — previous remote Claude session was missing or invalid, starting a fresh session...\n\n';
       fullText += notice;
       { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
       try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
       newCid = null;
       try { stmts.updateClaudeId.run(null, sessionId); } catch {}
-      currentPrompt = prompt;
-      currentContentBlocks = Array.isArray(userContent) ? userContent : null;
+      const replayContent = buildSessionReplayContent(sessionId);
+      currentPrompt = replayContent
+        ? 'Continue this chat from the replayed history above. The latest user turn is included last. Respond to that latest user request.'
+        : prompt;
+      currentContentBlocks = replayContent || (Array.isArray(userContent) ? userContent : null);
       continueCount++;
       if (continueCount >= MAX_AUTO_CONTINUES) break;
       continue;
@@ -3394,9 +3511,10 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
   try {
     // Build user content (with attachments if any)
     const userContent = buildUserContent(text, attachments || []);
+    const attJson = attachments?.length ? JSON.stringify(serializeMessageAttachments(attachments)) : null;
 
     // Store user message in DB (marked as telegram source)
-    stmts.addTelegramMsg.run(sessionId, 'user', 'text', typeof userContent === 'string' ? userContent : text, null, null, null, null);
+    stmts.addTelegramMsg.run(sessionId, 'user', 'text', typeof userContent === 'string' ? userContent : text, null, null, null, attJson);
 
     // Broadcast user message to web UI watchers (so web chat updates in real-time)
     broadcastToSession(sessionId, {
@@ -3956,15 +4074,13 @@ wss.on('connection', (ws) => {
         if (!rh) return att;
         return { ...att, sshKeyPath: rh.sshKeyPath || '', password: decryptPassword(rh.password) || '' };
       });
-      const userContent = buildUserContent(engineMessage, enrichedAttachments);
+      let userContent = buildUserContent(engineMessage, enrichedAttachments);
+      const shouldReplaySessionHistory = !!existSess && !localClaudeId;
+      let enginePrompt = engineMessage;
 
       if (!retry) {
         const attJson = attachments.length
-          ? JSON.stringify(attachments.map(a => ({
-              type: isImageAttachment(a) ? getImageMimeType(a) : (a.type || ''),
-              name: a.name,
-              base64: a.base64,
-            })))
+          ? JSON.stringify(serializeMessageAttachments(attachments))
           : null;
         try { stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId,attJson); }
         catch (e) { log.error('addMsg(user) failed', { sessionId: localSessionId, replyToId, attJsonLen: attJson?.length, err: e.message, stack: e.stack }); throw e; }
@@ -4032,6 +4148,14 @@ wss.on('connection', (ws) => {
       // it would be pure waste. System prompt was already set on the first turn of this session.
       const systemPrompt = localClaudeId ? undefined : buildSystemPrompt(effectiveSkills, config);
 
+      if (shouldReplaySessionHistory) {
+        const replayContent = buildSessionReplayContent(localSessionId);
+        if (replayContent?.length) {
+          userContent = replayContent;
+          enginePrompt = 'Continue this chat from the replayed history above. The latest user turn is included last. Respond to that latest user request.';
+        }
+      }
+
       const mcpServers = {};
       for (const mid of mIds) {
         const m = config.mcpServers[mid];
@@ -4081,7 +4205,7 @@ wss.on('connection', (ws) => {
       activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null });
 
       const params = {
-        prompt: engineMessage,
+        prompt: enginePrompt,
         userContent,
         systemPrompt,
         mcpServers,
@@ -4393,13 +4517,21 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      const task = activeTasks.get(sessionId);
+      if (task && !task.abortController?.signal?.aborted) {
+        ws.send(JSON.stringify({ type: 'error', error: 'Task is still running', tabId: sessionId }));
+        return;
+      }
+
       // Get user messages from the session to transfer context
       const userMessages = stmts.getMsgsLite.all(sessionId).filter(m => m.role === 'user');
 
-      // Clear the broken Claude session ID to start fresh
+      // Clear broken Claude session state so the next user turn starts truly fresh.
       try { stmts.updateClaudeId.run(null, sessionId); } catch {}
+      try { stmts.clearLastUserMsg.run(sessionId); } catch {}
+      try { stmts.setPartialText.run(null, sessionId); } catch {}
 
-      // Notify client that session was successfully reset and ready for new chat
+      // Notify client that session was successfully reset and ready for a fresh Claude session
       log.info('session restart cleared claude_session_id', { sessionId, userMessages: userMessages.length });
       ws.send(JSON.stringify({
         type: 'session_restart_done',

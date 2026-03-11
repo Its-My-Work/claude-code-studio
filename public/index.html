@@ -350,7 +350,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .mw { max-width: min(86%, 820px); animation: fadeUp .15s ease; position: relative; }
-.mw:hover .cpb { opacity: .6; }
+.mw .msg:hover ~ .cpb,
+.mw .msg:focus-within ~ .cpb,
+.mw .cpb:focus-visible { opacity: .6; }
 .mw:hover .cpmd { opacity: .6; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } }
 .mw.user { align-self: flex-end; }
@@ -835,6 +837,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 /* ─── Attachment chips (files & screenshots) ─── */
 .att-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px 2px; min-height: 0; }
 .att-chips:empty { display: none; }
+.msg-att-chips { padding: 4px 0 2px; }
 .att-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--s3); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px 3px 6px; font-size: 11px; color: var(--text); max-width: 260px; position: relative; transition: border-color .12s; }
 .att-chip:hover { border-color: var(--accent); }
 .att-chip .chip-icon { font-size: 13px; flex-shrink: 0; }
@@ -842,19 +845,19 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .att-chip .chip-act,
 .att-chip .chip-rm { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 0 0 2px; font-size: 13px; line-height: 1; flex-shrink: 0; transition: color .1s; }
 .att-chip .chip-act {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; margin-left: auto; padding: 0;
-  border-radius: 5px; color: rgba(201, 208, 255, .7);
-  background: rgba(255,255,255,.03); border: 1px solid transparent;
-  opacity: .78; transition: opacity .12s, color .12s, background .12s, border-color .12s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-width: 28px; height: 22px; margin-left: auto; padding: 0 8px;
+  border-radius: 999px; color: rgba(214, 219, 255, .92);
+  background: rgba(124,106,239,.12); border: 1px solid rgba(124,106,239,.24);
+  opacity: 1; transition: color .12s, background .12s, border-color .12s, transform .12s;
 }
 .att-chip .chip-act svg { width: 11px; height: 11px; }
-.att-chip:hover .chip-act { opacity: .95; }
-.att-chip .chip-act:hover { color: var(--accent2); background: rgba(124,106,239,.12); border-color: rgba(124,106,239,.28); }
+.att-chip .chip-act-label { font-size: 10px; font-weight: 700; letter-spacing: .01em; }
+.att-chip .chip-act:hover { color: #fff; background: rgba(124,106,239,.22); border-color: rgba(124,106,239,.42); transform: translateY(-1px); }
 .att-chip .chip-rm:hover { color: var(--red); }
 .att-chip.chip-img { padding: 3px 8px 3px 3px; gap: 6px; }
 .att-chip.chip-img img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; display: block; cursor: zoom-in; }
-.att-chip.chip-img .chip-name { max-width: 164px; }
+.att-chip.chip-img .chip-name { max-width: 132px; }
 
 /* ─── Image chip hover preview ─── */
 #imgChipPreview {
@@ -1566,7 +1569,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   color: var(--muted); padding: 3px 7px; border-radius: 5px;
   cursor: pointer; font-size: 13px; line-height: 1; transition: opacity .15s;
 }
-.mw:hover .reply-btn { opacity: .6; }
+.mw .msg:hover ~ .reply-btn,
+.mw .msg:focus-within ~ .reply-btn,
+.mw .reply-btn:focus-visible { opacity: .6; }
 .reply-btn:hover { color: var(--text); opacity: 1 !important; background: var(--s2); }
 /* User messages: shift action buttons left past the 34px avatar padding so they stay inside the bubble */
 .mw.user .cpb   { right: 39px; } /* 34px avatar + 5px gap */
@@ -1580,7 +1585,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   color: var(--muted); padding: 3px 7px; border-radius: 5px;
   cursor: pointer; font-size: 12px; line-height: 1; transition: opacity .15s;
 }
-.mw:hover .fork-btn { opacity: .6; }
+.mw .msg:hover ~ .fork-btn,
+.mw .msg:focus-within ~ .fork-btn,
+.mw .fork-btn:focus-visible { opacity: .6; }
 .fork-btn:hover { color: var(--text); opacity: 1 !important; background: var(--s2); }
 .mw.user .fork-btn { right: 39px; top: 55px; }
 
@@ -1591,7 +1598,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   color: var(--muted); padding: 3px 7px; border-radius: 5px;
   cursor: pointer; font-size: 12px; line-height: 1; transition: opacity .15s;
 }
-.mw:hover .use-btn { opacity: .6; }
+.mw .msg:hover ~ .use-btn,
+.mw .msg:focus-within ~ .use-btn,
+.mw .use-btn:focus-visible { opacity: .6; }
 .use-btn:hover { color: var(--text); opacity: 1 !important; background: var(--s2); }
 .mw.user .use-btn { right: 39px; top: 55px; }
 .mw.assistant .use-btn { top: 80px; } /* below fork-btn */
@@ -4148,12 +4157,35 @@ function handleWsMsg(d) {
     case 'session_restart_done':
       // Session was successfully reset - remove restart button and show success
       { const rb = msgsEl.querySelector('.session-restart-btn'); if (rb) rb.remove(); }
+      if (tabId) {
+        delete getTS(tabId)._sessionRestartAvailable;
+        _retryingSessions.delete(tabId);
+      }
+      {
+        const retryEl = $i('sessBarRetry');
+        if (retryEl) {
+          retryEl.style.display = 'none';
+          retryEl.textContent = '';
+          retryEl.title = '';
+        }
+      }
+      {
+        const idEl = $i('sessBarClaudeId');
+        if (idEl) {
+          idEl.style.display = 'none';
+          idEl.textContent = '';
+          idEl.title = '';
+          delete idEl.dataset.fullId;
+        }
+      }
+      { const openBtn = $i('sessBarOpenBtn'); if (openBtn) openBtn.style.display = 'none'; }
       toast('✅ Session restarted - you can continue chatting', false, 3000);
       // Reset streaming state for fresh start
       streaming.el = null; streaming.txt = '';
       streaming.toolCounts = {}; streaming.toolLog = [];
       isGen = false;
       setSendStop(false);
+      if (tabId === activeTabId) updateSessBar();
       break;
 
     case 'files_changed':
@@ -4330,8 +4362,7 @@ function handleWsMsg(d) {
             // Restore attachment chips if any
             if (item.attachments?.length) {
               const chipsDiv = document.createElement('div');
-              chipsDiv.className = 'att-chips';
-              chipsDiv.style.cssText = 'padding:4px 0 2px';
+              chipsDiv.className = 'att-chips msg-att-chips';
               chipsDiv.innerHTML = item.attachments.map(a => isImageAttachmentData(a)
                 ? renderReadonlyImageChip(a)
                 : a.type === 'ssh'
@@ -6102,7 +6133,7 @@ function _syncAttachmentsState(shouldSave = true) {
 }
 
 function chipCopyButtonHtml() {
-  return `<button class="chip-act" onclick="event.stopPropagation();copyChipImage(this)" data-i18n-title="fpv.copy_img.title" title="${t('fpv.copy_img.title')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg></button>`;
+  return `<button class="chip-act" onclick="event.stopPropagation();copyChipImage(this)" data-i18n-title="fpv.copy_img.title" title="${t('fpv.copy_img.title')}" aria-label="${escH(t('fpv.copy_img.title'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg><span class="chip-act-label">${escH(t('fpv.copy_img'))}</span></button>`;
 }
 
 function renderReadonlyImageChip(att) {
@@ -6497,8 +6528,7 @@ async function send() {
   // Show file/image chips in message bubble
   if (attSnapshot.length) {
     const chipsDiv = document.createElement('div');
-    chipsDiv.className = 'att-chips';
-    chipsDiv.style.cssText = 'padding:4px 0 2px';
+    chipsDiv.className = 'att-chips msg-att-chips';
     chipsDiv.innerHTML = attSnapshot.map(a => a.type === 'image'
       ? renderReadonlyImageChip(a)
       : a.type === 'ssh'
@@ -6864,8 +6894,7 @@ function _renderMsgAt(idx, prepend = false) {
       const atts = typeof m.attachments === 'string' ? JSON.parse(m.attachments) : m.attachments;
       if (Array.isArray(atts) && atts.length) {
         const chipsDiv = document.createElement('div');
-        chipsDiv.className = 'att-chips';
-        chipsDiv.style.cssText = 'padding:4px 0 2px';
+        chipsDiv.className = 'att-chips msg-att-chips';
         chipsDiv.innerHTML = atts.map(a =>
           isImageAttachmentData(a)
             ? renderReadonlyImageChip(a)
