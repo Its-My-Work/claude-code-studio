@@ -754,6 +754,7 @@ async function startTask(task) {
               type: 'notification', level: 'warn',
               title: `Retrying: "${task.title}"`,
               detail: `Attempt ${(task.task_retry_count||0)+2}/${MAX_CHAIN_RETRIES+1}${isRateLimited ? '. Rate limited, backing off.' : ''}`,
+              tabId: task.source_session_id,
               chainTaskId: task.id, chainStatus: 'retry',
               sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
             });
@@ -771,6 +772,7 @@ async function startTask(task) {
               type: 'notification', level: 'error',
               title: `Task failed: "${task.title}"`,
               detail: task.chain_id ? `Retries exhausted (${reason}). Dependent tasks will be cancelled.` : reason,
+              tabId: task.source_session_id,
               chainTaskId: task.id, chainStatus: 'cancelled',
               sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
             });
@@ -889,6 +891,7 @@ function processQueue() {
                 type: 'notification', level: 'warn',
                 title: `Task cancelled: "${task.title}"`,
                 detail: 'Dependency failed',
+                tabId: task.source_session_id,
                 chainTaskId: task.id, chainStatus: 'cancelled',
                 sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
               });
@@ -3695,6 +3698,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
       type: 'task_started',
       prompt: typeof userContent === 'string' ? userContent : text,
       source: 'telegram',
+      tabId: sessionId,
     });
 
     // Load session config
@@ -3781,6 +3785,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
       claudeSessionId: sanitizeSessionId(session.claude_session_id) || undefined,
       mode,
       workdir,
+      tabId: sessionId,
     };
 
     // Check if the active project is a remote SSH project
@@ -3799,10 +3804,10 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
     }
 
     const _taskStart = activeTasks.get(sessionId)?.startedAt;
-    proxy.send(JSON.stringify({ type: 'done', duration: _taskStart ? Date.now() - _taskStart : 0 }));
+    proxy.send(JSON.stringify({ type: 'done', tabId: sessionId, duration: _taskStart ? Date.now() - _taskStart : 0 }));
   } catch (err) {
     log.error('[processTelegramChat] Error', { message: err.message, name: err.name, stack: err.stack });
-    proxy.send(JSON.stringify({ type: 'error', error: err.message }));
+    proxy.send(JSON.stringify({ type: 'error', error: err.message, tabId: sessionId }));
   } finally {
     activeTasks.delete(sessionId);
     chatBuffers.delete(sessionId);

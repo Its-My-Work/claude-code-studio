@@ -1646,6 +1646,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg-reply-quote .rq-role { font-size: 10px; font-weight: 700; color: var(--accent2); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 2px; }
 .msg-reply-quote .rq-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ─── Mobile UI Components (hidden on desktop) ─── */
+.mob-hdr { display: none; }
+.mob-sheet-overlay { display: none; }
+.mob-sheet { display: none; }
+.mob-tabs-overlay { display: none; }
+.mob-files-btn { display: none; }
+.mob-swipe-edge { display: none; }
+
 /* ─── Responsive / Mobile ─── */
 #mobileBackdrop {
   display: none; position: fixed; inset: 0; z-index: 45;
@@ -1654,10 +1662,73 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 @media (max-width: 800px) {
   /* Prevent iOS rubber-banding on fixed-layout app */
   body { overscroll-behavior: none; }
-  /* Sidebars: fixed overlay instead of shrinking */
+
+  /* ══════════════════════════════════════════════════════
+     MOBILE HEADER — replaces desktop header + toolbar
+     ══════════════════════════════════════════════════════ */
+  .mob-hdr {
+    display: flex !important; align-items: center; gap: 8px;
+    padding: 6px 10px; padding-top: calc(6px + env(safe-area-inset-top, 0px));
+    background: var(--s1); border-bottom: 1px solid var(--border);
+    flex-shrink: 0; z-index: 10; min-height: 48px;
+  }
+  .mob-hdr-btn {
+    width: 40px; height: 40px; border: none; background: none;
+    color: var(--muted); cursor: pointer; display: flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+    border-radius: 10px; transition: background .12s, color .12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-hdr-btn:active { background: var(--s3); color: var(--text); }
+  .mob-hdr-btn svg { width: 20px; height: 20px; }
+  .mob-hdr-center {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    align-items: center; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-hdr-title {
+    font-size: 14px; font-weight: 700; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%; line-height: 1.2;
+  }
+  .mob-hdr-subtitle {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: var(--muted); line-height: 1.2;
+  }
+  .mob-hdr-subtitle .mob-status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--orange); flex-shrink: 0;
+  }
+  .mob-hdr-subtitle .mob-status-dot.ok { background: var(--green); }
+  .mob-hdr-subtitle .mob-status-dot.err { background: var(--red); }
+  .mob-hdr-subtitle .mob-status-dot.warn {
+    background: var(--orange);
+    animation: rlPulse 1.8s ease-in-out infinite;
+  }
+  .mob-hdr-actions { display: flex; gap: 2px; flex-shrink: 0; }
+  /* Tab counter badge next to title */
+  .mob-tab-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: 9px; background: var(--s3); border: 1px solid var(--border);
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    margin-left: 4px; vertical-align: middle;
+  }
+
+  /* ══════════════════════════════════════════════════════
+     HIDE DESKTOP CHROME ON MOBILE
+     ══════════════════════════════════════════════════════ */
+  .hdr-collapse-zone { display: none !important; }
+  .panel-tab { display: none !important; }
+  .tabs-bar { display: none !important; }
+  .sess-bar { display: none !important; }
+
+  /* ══════════════════════════════════════════════════════
+     SIDEBARS — fixed overlay (same as before but improved)
+     ══════════════════════════════════════════════════════ */
   .left {
     position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
-    width: min(85vw, 300px) !important;
+    width: min(85vw, 320px) !important;
     transform: translateX(0);
     transition: transform .28s var(--ease-out), opacity .28s;
     box-shadow: 6px 0 40px rgba(0,0,0,.55);
@@ -1666,71 +1737,209 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   .left.collapsed { transform: translateX(-105%); opacity: 0 !important; pointer-events: none; }
   .right {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 50;
-    width: min(85vw, 300px) !important;
+    width: min(85vw, 320px) !important;
     transform: translateX(0);
     transition: transform .28s var(--ease-out), opacity .28s;
     box-shadow: -6px 0 40px rgba(0,0,0,.55);
     opacity: 1 !important;
   }
   .right.collapsed { transform: translateX(105%); opacity: 0 !important; pointer-events: none; }
-  /* Panel tabs — touch-friendly targets */
-  .panel-tab { width: 44px; }
-  .panel-tab-inner { width: 44px; height: 56px; }
-  /* Center area adjustments */
-  .msgs { padding: 12px 10px 40px; }
-  .mw { max-width: 94%; }
-  .mw.assistant { padding-left: 28px; }
-  .mw.assistant::before { width: 22px; height: 22px; font-size: 8px; }
-  .mw.user { padding-right: 28px; }
-  .mw.user::after { width: 22px; height: 22px; font-size: 7px; }
-  .mw.user .cpb, .mw.user .reply-btn { right: 33px; }
-  .mw.user .cpmd { right: 66px; }
-  /* Toolbar: scrollable with gradient fade hint */
-  .toolbar { gap: 5px; padding: 5px 10px; -webkit-mask-image: linear-gradient(to right, transparent 0, black 8px, black calc(100% - 16px), transparent 100%); mask-image: linear-gradient(to right, transparent 0, black 8px, black calc(100% - 16px), transparent 100%); }
-  .tb-group .label { display: none; }
-  .tb-btn { min-height: 36px; padding: 6px 12px; }
-  .hdr { padding: 8px 12px; }
-  .hdr h1 { font-size: 14px; }
-  /* Touch-sized action buttons */
-  .sb { width: 44px; height: 44px; border-radius: 10px; }
-  .attach-btn { width: 44px; height: 44px; }
-  .hb { min-height: 40px; }
-  .hdr-toggle { width: 44px; height: 44px; }
-  .tab-close { width: 24px; height: 24px; font-size: 14px; }
-  /* Input area — font-size ≥ 16px prevents iOS auto-zoom on focus */
-  .ia { padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
-  .iw textarea { font-size: 16px; }
+
+  /* ══════════════════════════════════════════════════════
+     SETTINGS BOTTOM SHEET
+     ══════════════════════════════════════════════════════ */
+  .mob-sheet-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.5); backdrop-filter: blur(3px);
+    opacity: 0; transition: opacity .2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-sheet-overlay.open { display: block; opacity: 1; }
+  .mob-sheet {
+    display: flex !important; flex-direction: column;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 201;
+    background: var(--s1); border-top: 1px solid var(--border);
+    border-radius: 20px 20px 0 0;
+    max-height: 85vh; max-height: 85dvh;
+    transform: translateY(100%);
+    transition: transform .32s var(--ease-out);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -8px 40px rgba(0,0,0,.5);
+    overflow: hidden;
+  }
+  .mob-sheet.open { transform: translateY(0); }
+  .mob-sheet-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: var(--border); margin: 10px auto 6px;
+    flex-shrink: 0;
+  }
+  .mob-sheet-scroll {
+    flex: 1; overflow-y: auto; padding: 4px 16px 20px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mob-sheet-section { margin-bottom: 16px; }
+  .mob-sheet-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .8px; color: var(--muted); margin-bottom: 8px;
+  }
+  .mob-sheet-chips {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .mob-chip {
+    padding: 10px 18px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--s2); color: var(--muted); font-size: 14px;
+    font-weight: 600; cursor: pointer; transition: all .12s;
+    font-family: inherit; min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-chip:active { transform: scale(0.95); }
+  .mob-chip.on {
+    background: var(--accent); color: white; border-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(124,106,239,.4);
+  }
+  .mob-sheet-turns {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .mob-sheet-turns input {
+    width: 70px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--s2);
+    color: var(--text); font-size: 16px; font-family: inherit;
+    text-align: center; outline: none; min-height: 44px;
+  }
+  .mob-sheet-turns input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+  .mob-sheet-divider {
+    height: 1px; background: var(--border); margin: 12px -16px;
+  }
+  .mob-sheet-link {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 4px; font-size: 15px; color: var(--text);
+    text-decoration: none; border: none; background: none;
+    width: 100%; cursor: pointer; font-family: inherit;
+    border-radius: 8px; transition: background .1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-sheet-link:active { background: var(--s2); }
+  .mob-sheet-link svg { width: 18px; height: 18px; color: var(--muted); flex-shrink: 0; }
+  .mob-sheet-link-icon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
+
+  /* ══════════════════════════════════════════════════════
+     TABS OVERLAY
+     ══════════════════════════════════════════════════════ */
+  .mob-tabs-overlay {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: var(--bg); flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .mob-tabs-overlay.open { display: flex; }
+  .mob-tabs-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    min-height: 48px;
+  }
+  .mob-tabs-hdr h3 { font-size: 17px; font-weight: 700; color: var(--text); }
+  .mob-tabs-close {
+    width: 40px; height: 40px; border: none; background: none;
+    color: var(--muted); cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    border-radius: 10px; font-size: 20px;
+  }
+  .mob-tabs-close:active { background: var(--s2); }
+  .mob-tabs-list {
+    flex: 1; overflow-y: auto; padding: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mob-tab-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 12px; border-radius: 12px;
+    cursor: pointer; transition: background .1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-tab-item:active { background: var(--s2); }
+  .mob-tab-item.active { background: var(--abg); border: 1px solid rgba(124,106,239,.2); }
+  .mob-tab-item .mob-tab-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+  }
+  .mob-tab-item.active .mob-tab-dot { background: var(--accent); }
+  .mob-tab-item .mob-tab-name {
+    flex: 1; font-size: 15px; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mob-tab-item .mob-tab-close {
+    width: 32px; height: 32px; border: none; background: none;
+    color: var(--muted); cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    border-radius: 8px; font-size: 16px; flex-shrink: 0;
+    opacity: 0.5;
+  }
+  .mob-tab-item .mob-tab-close:active { opacity: 1; background: rgba(248,81,73,.1); color: var(--red); }
+
+  /* ══════════════════════════════════════════════════════
+     CHAT AREA — MAXIMIZED
+     ══════════════════════════════════════════════════════ */
+  .msgs { padding: 10px 8px 32px; }
+  .mw { max-width: 96%; }
+  .mw.assistant { padding-left: 26px; }
+  .mw.assistant::before { width: 20px; height: 20px; font-size: 7px; }
+  .mw.user { padding-right: 26px; }
+  .mw.user::after { width: 20px; height: 20px; font-size: 7px; }
+  .mw.user .cpb, .mw.user .reply-btn { right: 30px; }
+  .mw.user .cpmd { right: 60px; }
+
+  /* ══════════════════════════════════════════════════════
+     INPUT AREA — OPTIMIZED FOR MOBILE
+     ══════════════════════════════════════════════════════ */
+  .ia { padding: 8px 10px; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .iw { border-radius: 14px; padding: 4px 4px 4px 12px; gap: 6px; }
+  .iw textarea { font-size: 16px; padding: 8px 0; }
+  .sb { width: 40px; height: 40px; border-radius: 10px; }
+  .attach-btn { width: 40px; height: 40px; }
+  /* Right sidebar toggle in input area */
+  .mob-files-btn {
+    width: 40px; height: 40px; border: none;
+    background: var(--s3); color: var(--muted);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; border-radius: 10px; transition: all .12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-files-btn:active { background: var(--accent); color: white; }
+  .mob-files-btn svg { width: 16px; height: 16px; }
   .af input, .af textarea, .af select { font-size: 16px; }
   .rh-form-row input, .rh-form-row select { font-size: 16px; }
-  /* Tabs bar */
-  .tabs-bar { overflow-x: auto; }
-  .tab { max-width: 140px; }
-  /* Notifications: fit mobile screen */
+
+  /* ══════════════════════════════════════════════════════
+     SWIPE GESTURE HINT AREAS
+     ══════════════════════════════════════════════════════ */
+  .mob-swipe-edge {
+    display: block !important;
+    position: fixed; top: 0; bottom: 0; width: 16px; z-index: 40;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-swipe-edge-left { left: 0; }
+  .mob-swipe-edge-right { right: 0; }
+  .mob-files-btn { display: flex !important; }
+
+  /* ══════════════════════════════════════════════════════
+     MISC MOBILE OVERRIDES
+     ══════════════════════════════════════════════════════ */
+  .hb { min-height: 40px; }
   #notifContainer { width: calc(100vw - 32px); right: 16px; left: 16px; }
   .notif-close { opacity: 1; }
-  /* Toast: allow wrapping on narrow screens */
   #toast { white-space: normal; max-width: calc(100vw - 32px); text-align: center; }
-  /* Welcome prompts: single column on narrow */
   .welcome-prompts { grid-template-columns: 1fr; max-width: 320px; }
-  /* Dropdowns: constrain to viewport */
   .proj-dd-menu { min-width: auto; max-width: calc(100vw - 32px); }
-  /* Agent/chain cards: constrain */
-  .agent-team-card { max-width: calc(100vw - 60px); }
-  .chain-progress-card { max-width: calc(100vw - 60px); }
-  /* Confirm dialog buttons: touch-sized */
+  .agent-team-card { max-width: calc(100vw - 40px); }
+  .chain-progress-card { max-width: calc(100vw - 40px); }
   .cd-btn-ok, .cd-btn-cancel { min-height: 44px; padding: 10px 20px; }
-  /* File preview: full screen on mobile */
   .fpv-modal { width: 100vw !important; max-width: 100vw !important; height: 100vh !important; height: 100dvh !important; max-height: 100vh !important; max-height: 100dvh !important; border-radius: 0 !important; }
-}
-@media (max-width: 480px) {
-  .hdr-btns .hb span { display: none; }
-  .hb { padding: 5px 8px; }
-  .nav-sw-btn { padding: 4px 8px; font-size: 12px; }
-  .nav-sw-btn span { display: none; }
-  .toolbar { font-size: 12px; }
-  .tb-btn { min-height: 34px; padding: 5px 10px; }
   .modal { max-height: 92vh; max-height: 92dvh; }
   .modal .modal-body textarea { min-height: 200px; }
+}
+@media (max-width: 480px) {
+  .mob-chip { padding: 8px 14px; font-size: 13px; }
+  .mob-sheet-link { font-size: 14px; padding: 12px 4px; }
   .cmd-modal input { font-size: 22px; }
   .cmd-modal textarea { min-height: 180px; font-size: 14px; }
 }
@@ -1990,6 +2199,99 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 <!-- CENTER PANEL -->
 <div class="center">
+
+  <!-- ══════ MOBILE HEADER (hidden on desktop) ══════ -->
+  <div class="mob-hdr" id="mobHdr">
+    <button class="mob-hdr-btn" onclick="toggle('leftPanel')" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mob-hdr-center" onclick="openMobTabs()">
+      <div class="mob-hdr-title">
+        <span id="mobTitleText">Claude Code Studio</span>
+        <span class="mob-tab-count" id="mobTabCount" style="display:none">1</span>
+      </div>
+      <div class="mob-hdr-subtitle">
+        <span class="mob-status-dot warn" id="mobStatusDot"></span>
+        <span id="mobSubtitle">Auto · Sonnet</span>
+      </div>
+    </div>
+    <div class="mob-hdr-actions">
+      <button class="mob-hdr-btn" onclick="newSession()" aria-label="New chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="mob-hdr-btn" id="mobSettingsBtn" onclick="toggleMobSheet()" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════ MOBILE SETTINGS BOTTOM SHEET ══════ -->
+  <div class="mob-sheet-overlay" id="mobSheetOverlay" onclick="closeMobSheet()"></div>
+  <div class="mob-sheet" id="mobSheet">
+    <div class="mob-sheet-handle" id="mobSheetHandle"></div>
+    <div class="mob-sheet-scroll">
+      <div class="mob-sheet-section">
+        <div class="mob-sheet-label" data-i18n="tb.mode">Mode</div>
+        <div class="mob-sheet-chips">
+          <button class="mob-chip on" data-mob="mode" data-v="auto" onclick="setMobOpt(this,'mode')">Auto</button>
+          <button class="mob-chip" data-mob="mode" data-v="planning" onclick="setMobOpt(this,'mode')">Plan</button>
+          <button class="mob-chip" data-mob="mode" data-v="task" onclick="setMobOpt(this,'mode')">Task</button>
+        </div>
+      </div>
+      <div class="mob-sheet-section">
+        <div class="mob-sheet-label" data-i18n="tb.agent">Agent</div>
+        <div class="mob-sheet-chips">
+          <button class="mob-chip on" data-mob="agent" data-v="single" onclick="setMobOpt(this,'agent')">Single</button>
+          <button class="mob-chip" data-mob="agent" data-v="multi" onclick="setMobOpt(this,'agent')">Multi</button>
+          <button class="mob-chip" data-mob="agent" data-v="dispatch" onclick="setMobOpt(this,'agent')">Dispatch</button>
+        </div>
+      </div>
+      <div class="mob-sheet-section">
+        <div class="mob-sheet-label" data-i18n="tb.model">Model</div>
+        <div class="mob-sheet-chips">
+          <button class="mob-chip" data-mob="model" data-v="haiku" onclick="setMobOpt(this,'model')">Haiku</button>
+          <button class="mob-chip on" data-mob="model" data-v="sonnet" onclick="setMobOpt(this,'model')">Sonnet</button>
+          <button class="mob-chip" data-mob="model" data-v="opus" onclick="setMobOpt(this,'model')">Opus</button>
+        </div>
+      </div>
+      <div class="mob-sheet-section">
+        <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
+        <div class="mob-sheet-turns">
+          <input type="number" id="mobMaxTurns" value="50" min="1" max="200">
+        </div>
+      </div>
+      <div class="mob-sheet-divider"></div>
+      <a class="mob-sheet-link" href="/kanban" data-i18n-tip="nav.kanban.tip">
+        <span class="mob-sheet-link-icon">📊</span> Kanban
+      </a>
+      <a class="mob-sheet-link" href="/schedule" data-i18n-tip="nav.schedule.tip">
+        <span class="mob-sheet-link-icon">📅</span> Schedule
+      </a>
+      <div class="mob-sheet-divider"></div>
+      <button class="mob-sheet-link" onclick="toggle('rightPanel');closeMobSheet()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        <span data-i18n="mob.files">Files</span>
+      </button>
+      <button class="mob-sheet-link" onclick="openCfgEditor();closeMobSheet()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        <span data-i18n="btn.cfg">Config</span>
+      </button>
+      <button class="mob-sheet-link" onclick="logout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span data-i18n="btn.logout">Logout</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════ MOBILE TABS OVERLAY ══════ -->
+  <div class="mob-tabs-overlay" id="mobTabsOverlay">
+    <div class="mob-tabs-hdr">
+      <h3 data-i18n="mob.tabs">Sessions</h3>
+      <button class="mob-tabs-close" onclick="closeMobTabs()">✕</button>
+    </div>
+    <div class="mob-tabs-list" id="mobTabsList"></div>
+  </div>
+
   <div class="hdr-collapse-zone" id="hdrZone">
   <div class="hdr">
     <div class="hdr-l">
@@ -2153,6 +2455,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
         <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+      <button class="mob-files-btn" id="mobFilesBtn" onclick="toggle('rightPanel')" aria-label="Files">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
       </button>
       <button class="sb" id="sendBtn" onclick="send()" data-i18n-title="send.msg" title="Send (Enter)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2805,7 +3110,8 @@ const TRANSLATIONS = {
     'skills.upload':'＋ Завантажити .md файл','sec.projects':'Проекти','proj.add':'＋ Додати проект',
     'tip.new':'Новий чат','tip.cfg':'Налаштування','tip.logout':'Вийти',
     'tip.panels.left':'Сховати/показати ліву панель','tip.panels.right':'Сховати/показати праву панель',
-    'btn.new':'Чат','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
+    'btn.new':'Чат','btn.cfg':'Конфіг','btn.logout':'Вийти','mob.files':'Файли','mob.tabs':'Сесії',
+    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
     'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
     'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
     'input.ph':'Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл',
@@ -2991,7 +3297,8 @@ const TRANSLATIONS = {
     'skills.upload':'＋ Upload .md file','sec.projects':'Projects','proj.add':'＋ Add project',
     'tip.new':'New chat','tip.cfg':'Configuration','tip.logout':'Logout',
     'tip.panels.left':'Toggle left panel','tip.panels.right':'Toggle right panel',
-    'btn.new':'Chat','tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
+    'btn.new':'Chat','btn.cfg':'Config','btn.logout':'Logout','mob.files':'Files','mob.tabs':'Sessions',
+    'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
     'welcome.title':'New session','welcome.ready':'Ready to work',
     'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
     'input.ph':'Write a task... Ctrl+V — screenshot · @ — files · # — SSH · 📎 — any file',
@@ -3177,7 +3484,8 @@ const TRANSLATIONS = {
     'skills.upload':'＋ Загрузить .md файл','sec.projects':'Проекты','proj.add':'＋ Добавить проект',
     'tip.new':'Новый чат','tip.cfg':'Настройки','tip.logout':'Выйти',
     'tip.panels.left':'Скрыть/показать левую панель','tip.panels.right':'Скрыть/показать правую панель',
-    'btn.new':'Чат','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
+    'btn.new':'Чат','btn.cfg':'Конфиг','btn.logout':'Выйти','mob.files':'Файлы','mob.tabs':'Сессии',
+    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
     'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
     'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
     'input.ph':'Напишите задание... Ctrl+V — скриншот · @ — файлы · # — SSH · 📎 — любой файл',
@@ -4145,26 +4453,36 @@ function handleWsMsg(d) {
         streaming.toolCounts = {};
         streaming.toolLog = [];
       } else {
-      streaming.el = null; streaming.txt = '';
-      streaming.toolCounts = {}; streaming.toolLog = []; // reset tool tracking
-        // Clear retry badge on successful completion
-        { const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove(); }
+        // Only clear global streaming state if the done event is for the currently
+        // generating tab. Without this guard, a done event from a background tab
+        // (e.g. chain session, other project) would destroy the active tab's streaming
+        // bubble, causing orphaned/duplicated message elements.
+        if (tabId === generatingTabId) {
+          streaming.el = null; streaming.txt = '';
+          streaming.toolCounts = {}; streaming.toolLog = [];
+        }
+        // Clear retry badge on successful completion (only for visible messages area)
+        if (tabId === activeTabId) {
+          const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove();
+        }
         if (d.taskId) {
-          setStatus(t('status.connected'), 'ok');
+          if (tabId === activeTabId) setStatus(t('status.connected'), 'ok');
         } else {
-          if (activeTabId === generatingTabId) {
-            const first = [...msgsEl.querySelectorAll('.mw.user')].find(m => !m.querySelector('.msg-ack'));
-            if (first) { const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; first.appendChild(a); }
+          if (tabId === generatingTabId) {
+            if (activeTabId === generatingTabId) {
+              const first = [...msgsEl.querySelectorAll('.mw.user')].find(m => !m.querySelector('.msg-ack'));
+              if (first) { const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; first.appendChild(a); }
+            }
+            isGen = false;
+            setSendStop(false);
+            setStatus(t('status.connected'), 'ok');
           }
-          isGen = false;
-          setSendStop(false);
-          setStatus(t('status.connected'), 'ok');
         }
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
       if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
-      if (isCurrent) { renderTabs(); if (tabId === activeTabId && !d.taskId) generatingTabId = null; }
+      if (isCurrent) { renderTabs(); if ((tabId === activeTabId || tabId === generatingTabId) && !d.taskId) generatingTabId = null; }
       else renderProjects(); // background: remove busy dot from project
       loadHist();
       if (tabId === activeTabId) updateSessBar();
@@ -4211,8 +4529,10 @@ function handleWsMsg(d) {
     case 'notification':
       // Update chain progress widget from chain task notifications
       if (d.chainTaskId && d.chainStatus) _chainProgressUpdate(d.chainTaskId, d.chainStatus);
-      // Only show notification if it belongs to the current tab
-      if (isVisible || !d.tabId) {
+      // Only show notification if this tab is currently visible.
+      // Without the guard, notifications from background sessions would leak
+      // to whatever tab happens to be active (d.tabId missing → tabId = activeTabId).
+      if (isVisible) {
         showNotification(d);
       }
       break;
@@ -4433,7 +4753,7 @@ function handleWsMsg(d) {
       break;
 
     case 'task_resumed':
-      toast('🔄 ' + t('toast.task_resumed'));
+      if (isVisible) toast('🔄 ' + t('toast.task_resumed'));
       // Re-show generating state for this tab
       { const tr = openTabs.find(x => x.id === tabId); if (tr) { tr.generating = true; renderTabs(); } }
       if (isVisible) { isGen = true; generatingTabId = tabId; setSendStop(true); }
@@ -4442,8 +4762,7 @@ function handleWsMsg(d) {
     case 'task_lost': {
       const tl = openTabs.find(x => x.id === tabId);
       if (tl) { tl.generating = false; renderTabs(); saveUIState(); }
-      if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
-      toast(t('toast.task_lost'), true, 4000);
+      if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); toast(t('toast.task_lost'), true, 4000); }
       break;
     }
 
@@ -4522,6 +4841,8 @@ function setStatus(text, cls) {
   const el = $i('statusEl');
   el.textContent = text;
   el.className = `status-dot ${cls}`;
+  // Sync mobile status dot
+  if (typeof updateMobStatus === 'function') updateMobStatus(cls);
 }
 
 // ─── Rate limit badge + alerts ───────────────────────────────────────────────
@@ -5804,6 +6125,8 @@ function renderTabs() {
   bar.appendChild(fsWrap);
   fsWrap.querySelector('.font-slider').addEventListener('input', function() { setFontSize(parseFloat(this.value)); });
   updateHistSpinners();
+  // Sync mobile header title
+  if (typeof updateMobTitle === 'function') updateMobTitle();
 }
 
 function updateHistSpinners() {
@@ -6096,6 +6419,8 @@ function setOpt(btn, group) {
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') curModel = v;
   updInd();
+  // Sync mobile UI
+  if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
 }
 
 function updInd() { /* removed — mode indicator no longer in toolbar */ }
@@ -6140,12 +6465,18 @@ function updateSessBarSkills() {
 function syncBtn(group, val) {
   const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: ['haiku','sonnet','opus'] };
   if (!groups[group]?.includes(val)) return;
+  // Sync desktop toolbar
   document.querySelectorAll('.tb-group .tb-btn').forEach(b => {
     if (b.dataset.v === val) {
       b.closest('.tb-group').querySelectorAll('.tb-btn').forEach(x => x.classList.remove('on'));
       b.classList.add('on');
     }
   });
+  // Sync mobile bottom sheet chips
+  document.querySelectorAll(`.mob-chip[data-mob="${group}"]`).forEach(c => {
+    c.classList.toggle('on', c.dataset.v === val);
+  });
+  if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
 }
 
 // ─── Attachments (@ files + clipboard screenshots) ───────────────────────
@@ -9867,6 +10198,212 @@ function restoreUIState() {
   } catch {}
 }
 
+// ─── Mobile UI: bottom sheet, tabs overlay, swipe gestures, state sync ────
+const _isMob = () => window.innerWidth <= 800;
+
+// ── Bottom Sheet ──
+function toggleMobSheet() {
+  const sheet = $i('mobSheet');
+  const overlay = $i('mobSheetOverlay');
+  if (!sheet || !overlay) return;
+  const opening = !sheet.classList.contains('open');
+  if (opening) {
+    syncMobSheetFromDesktop();
+    overlay.classList.add('open');
+    requestAnimationFrame(() => sheet.classList.add('open'));
+  } else {
+    closeMobSheet();
+  }
+}
+function closeMobSheet() {
+  const sheet = $i('mobSheet');
+  const overlay = $i('mobSheetOverlay');
+  if (sheet) sheet.classList.remove('open');
+  if (overlay) {
+    overlay.classList.remove('open');
+    setTimeout(() => { if (!overlay.classList.contains('open')) overlay.style.display = ''; }, 300);
+  }
+}
+function setMobOpt(btn, group) {
+  // Update mobile chips
+  btn.closest('.mob-sheet-chips').querySelectorAll('.mob-chip').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  const v = btn.dataset.v;
+  // Sync to desktop toolbar
+  if (group === 'mode') curMode = v;
+  else if (group === 'agent') curAgent = v;
+  else if (group === 'model') curModel = v;
+  syncBtn(group, v);
+  updateMobSubtitle();
+  saveUIState();
+}
+function syncMobSheetFromDesktop() {
+  // Sync mob chips from current state
+  document.querySelectorAll('.mob-chip[data-mob]').forEach(chip => {
+    const group = chip.dataset.mob;
+    const v = chip.dataset.v;
+    let cur = '';
+    if (group === 'mode') cur = curMode;
+    else if (group === 'agent') cur = curAgent;
+    else if (group === 'model') cur = curModel;
+    chip.classList.toggle('on', v === cur);
+  });
+  // Sync turns
+  const mobTurns = $i('mobMaxTurns');
+  const deskTurns = $i('maxTurns');
+  if (mobTurns && deskTurns) mobTurns.value = deskTurns.value;
+}
+
+// ── Mobile Title + Subtitle ──
+function updateMobTitle() {
+  if (!_isMob()) return;
+  const titleEl = $i('mobTitleText');
+  if (!titleEl) return;
+  // Find active tab title
+  const activeTab = openTabs?.find(t => t.id === activeTabId);
+  titleEl.textContent = activeTab?.title || 'Claude Code Studio';
+  // Update tab count
+  const countEl = $i('mobTabCount');
+  if (countEl) {
+    const count = openTabs?.length || 0;
+    countEl.textContent = count;
+    countEl.style.display = count > 1 ? '' : 'none';
+  }
+}
+function updateMobSubtitle() {
+  const el = $i('mobSubtitle');
+  if (!el) return;
+  const modeLabel = { auto: 'Auto', planning: 'Plan', task: 'Task' }[curMode] || curMode;
+  const modelLabel = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' }[curModel] || curModel;
+  el.textContent = modeLabel + ' · ' + modelLabel;
+}
+function updateMobStatus(status) {
+  const dot = $i('mobStatusDot');
+  if (!dot) return;
+  dot.className = 'mob-status-dot';
+  if (status === 'ok' || status === 'connected') dot.classList.add('ok');
+  else if (status === 'error' || status === 'err') dot.classList.add('err');
+  else dot.classList.add('warn');
+}
+
+// ── Tabs Overlay ──
+function openMobTabs() {
+  if (!_isMob()) return;
+  const overlay = $i('mobTabsOverlay');
+  if (!overlay) return;
+  renderMobTabs();
+  overlay.classList.add('open');
+}
+function closeMobTabs() {
+  const overlay = $i('mobTabsOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+function renderMobTabs() {
+  const list = $i('mobTabsList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!openTabs || openTabs.length === 0) {
+    list.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--muted)">No open sessions</div>';
+    return;
+  }
+  openTabs.forEach(tab => {
+    const item = document.createElement('div');
+    item.className = 'mob-tab-item' + (tab.id === activeTabId ? ' active' : '');
+    item.innerHTML = `
+      <div class="mob-tab-dot"></div>
+      <div class="mob-tab-name">${escH(tab.title || 'New Chat')}</div>
+      <button class="mob-tab-close" onclick="event.stopPropagation();closeMobTabItem('${escH(tab.id)}')">✕</button>
+    `;
+    item.onclick = (e) => {
+      if (e.target.closest('.mob-tab-close')) return;
+      switchTab(tab.id);
+      closeMobTabs();
+      updateMobTitle();
+    };
+    list.appendChild(item);
+  });
+}
+function closeMobTabItem(tabId) {
+  closeTab(tabId);
+  renderMobTabs();
+  updateMobTitle();
+}
+
+// ── Swipe Gestures for Sidebars ──
+(function initMobSwipe() {
+  let _sx = 0, _sy = 0, _swiping = false, _dir = '';
+  const THRESHOLD = 40;
+
+  document.addEventListener('touchstart', (e) => {
+    if (!_isMob()) return;
+    _sx = e.touches[0].clientX;
+    _sy = e.touches[0].clientY;
+    _swiping = false;
+    _dir = '';
+    // Detect edge start
+    if (_sx < 24) _dir = 'from-left';
+    else if (_sx > window.innerWidth - 24) _dir = 'from-right';
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!_isMob() || !_dir) return;
+    const dx = e.touches[0].clientX - _sx;
+    const dy = Math.abs(e.touches[0].clientY - _sy);
+    if (dy > Math.abs(dx)) { _dir = ''; return; }
+    if (Math.abs(dx) > THRESHOLD && !_swiping) {
+      _swiping = true;
+      if (_dir === 'from-left' && dx > 0) {
+        // Swipe right from left edge → open left sidebar
+        const left = $i('leftPanel');
+        if (left?.classList.contains('collapsed')) toggle('leftPanel');
+      } else if (_dir === 'from-right' && dx < 0) {
+        // Swipe left from right edge → open right sidebar
+        const right = $i('rightPanel');
+        if (right?.classList.contains('collapsed')) toggle('rightPanel');
+      }
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => { _swiping = false; _dir = ''; }, { passive: true });
+})();
+
+// ── Sync turns between mobile and desktop ──
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'mobMaxTurns') {
+    const deskTurns = $i('maxTurns');
+    if (deskTurns) deskTurns.value = e.target.value;
+  } else if (e.target.id === 'maxTurns') {
+    const mobTurns = $i('mobMaxTurns');
+    if (mobTurns) mobTurns.value = e.target.value;
+  }
+});
+
+// ── Initialize mobile UI on load ──
+const _mobPlaceholders = { uk: 'Напишіть завдання...', en: 'Write a task...', ru: 'Напишите задачу...' };
+let _desktopPlaceholder = '';
+function initMobUI() {
+  if (!_isMob()) return;
+  updateMobTitle();
+  updateMobSubtitle();
+  // Shorten input placeholder on mobile
+  const inp = $i('input');
+  if (inp) {
+    if (!_desktopPlaceholder) _desktopPlaceholder = inp.placeholder;
+    const lang = (typeof curLang !== 'undefined' && curLang) || 'en';
+    inp.placeholder = _mobPlaceholders[lang] || _mobPlaceholders.en;
+  }
+}
+function restoreDesktopPlaceholder() {
+  const inp = $i('input');
+  if (inp && _desktopPlaceholder) inp.placeholder = _desktopPlaceholder;
+}
+// Call after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMobUI);
+} else {
+  setTimeout(initMobUI, 0);
+}
+
 // ─── Responsive: collapse sidebars when crossing mobile breakpoint ────────
 let _prevMobile = window.innerWidth <= 800;
 window.addEventListener('resize', () => {
@@ -9881,11 +10418,17 @@ window.addEventListener('resize', () => {
     };
     collapse('leftPanel');
     collapse('rightPanel');
+    // Init mobile header state
+    if (typeof initMobUI === 'function') initMobUI();
   }
   // Remove stale mobile backdrop when going to desktop, restore saved panel state
   if (!isMobile && _prevMobile) {
     const bd = $i('mobileBackdrop');
     if (bd) bd.style.display = 'none';
+    // Close mobile overlays and restore desktop state
+    if (typeof closeMobSheet === 'function') closeMobSheet();
+    if (typeof closeMobTabs === 'function') closeMobTabs();
+    if (typeof restoreDesktopPlaceholder === 'function') restoreDesktopPlaceholder();
     // Re-apply saved desktop panel state
     try {
       const s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
