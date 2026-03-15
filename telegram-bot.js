@@ -3376,13 +3376,14 @@ class TelegramBot extends EventEmitter {
       if (!Array.isArray(projects)) return;
 
       for (const project of projects) {
-        const workdir = typeof project === 'string' ? project : project?.path;
+        const workdir = typeof project === 'string' ? project : (project?.workdir || project?.path);
         if (!workdir) continue;
 
         const existing = this._stmts.getForumTopicByWorkdir.get(chatId, 'project', workdir);
         if (existing) continue;
 
-        await this._createProjectTopic(chatId, workdir);
+        const name = (typeof project === 'object' && project?.name) || null;
+        await this._createProjectTopic(chatId, workdir, name);
       }
     } catch {
       // projects.json may not exist — that's fine
@@ -3392,8 +3393,8 @@ class TelegramBot extends EventEmitter {
   /**
    * Create a single project topic in the forum.
    */
-  async _createProjectTopic(chatId, workdir) {
-    const name = workdir.split('/').filter(Boolean).pop() || workdir;
+  async _createProjectTopic(chatId, workdir, displayName) {
+    const name = displayName || workdir.split('/').filter(Boolean).pop() || workdir;
     try {
       const topic = await this._callApi('createForumTopic', {
         chat_id: chatId,
