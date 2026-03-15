@@ -2202,6 +2202,7 @@ class TelegramBot extends EventEmitter {
       if (data.startsWith('ch:'))     return this._screenChatSelect(chatId, userId, data);
       if (data.startsWith('cm:'))     return this._routeChatMenu(chatId, userId, data);
       if (data.startsWith('d:'))      return this._routeDialog(chatId, userId, data);
+      if (data.startsWith('fs:'))     return this._handleForumSessionCallback(chatId, userId, data);
       if (data.startsWith('f:'))      return this._screenFiles(chatId, userId, data);
       if (data === 't:list' || data === 't:all') return this._screenTasks(chatId, userId, data);
       if (data === 't:new')         return this._handleNewTask(chatId, userId);
@@ -3592,16 +3593,37 @@ class TelegramBot extends EventEmitter {
     }
 
     let text = this._t('forum_history_title', { count: rows.length });
+    const keyboard = [];
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const active = r.id === ctx.sessionId ? ' ◀️' : '';
       const title = (r.title || 'Untitled').substring(0, 40);
       const ago = this._timeAgo(r.updated_at);
       text += `\n${i + 1}. ${this._escHtml(title)}  ·  ${r.msg_count} msgs  ·  ${ago}${active}`;
+      // Inline button for quick switching (2 buttons per row)
+      const btn = { text: `${i + 1}. ${title.substring(0, 25)}${active}`, callback_data: `fs:${i}` };
+      if (i % 2 === 0) keyboard.push([btn]); else keyboard[keyboard.length - 1].push(btn);
     }
-    text += '\n\n/session <i>N</i> — switch to session';
 
-    await this._sendMessage(chatId, text);
+    await this._sendMessage(chatId, text, {
+      reply_markup: JSON.stringify({ inline_keyboard: keyboard }),
+    });
+  }
+
+  /**
+   * Handle forum session switch callback (fs:N).
+   */
+  async _handleForumSessionCallback(chatId, userId, data) {
+    const idx = parseInt(data.slice(3));
+    if (isNaN(idx) || idx < 0) return;
+
+    // Get workdir from the topic this callback originated in
+    const threadId = this._currentThreadId;
+    if (!threadId) return;
+    const topicInfo = this._getTopicInfo(chatId, threadId);
+    if (!topicInfo?.workdir) return;
+
+    return this._forumSwitchSession(chatId, userId, topicInfo.workdir, idx);
   }
 
   /**
