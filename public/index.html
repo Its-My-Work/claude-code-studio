@@ -895,7 +895,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Welcome ─── */
 .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); text-align: center; gap: 10px; }
-.wi { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 4px; box-shadow: 0 4px 20px rgba(124,106,239,.35); }
+.wi { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: white; margin-bottom: 4px; box-shadow: 0 4px 20px rgba(124,106,239,.35); }
 .welcome h2 { color: var(--text); font-size: 18px; font-weight: 700; }
 .welcome p { font-size: 13px; max-width: 300px; line-height: 1.65; }
 .welcome-prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px; margin-top: 20px; }
@@ -2401,7 +2401,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
   <div class="msgs" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
     <div class="welcome">
-      <div class="wi">CC</div>
+      <div class="wi">CCS</div>
       <h2>Claude Code Studio</h2>
       <p data-i18n="welcome.desc">Виберіть MCP та Навички зліва, файли — справа.</p>
       <div class="welcome-prompts">
@@ -5300,7 +5300,7 @@ function _chainProgressUpdate(taskId, status) {
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
   streaming.el = null;
-  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CC</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div></div>`;
+  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CCS</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div></div>`;
 }
 
 function showStatus(txt) {
