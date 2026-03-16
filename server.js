@@ -2100,7 +2100,7 @@ function buildSystemPrompt(skillIds, config) {
 // Single haiku call returns both specialist skills AND a short chat title.
 // Replaces client-side keyword matching + ugly message truncation.
 // Haiku via CLI → ~10-15s (CLI overhead), but runs before main agent.
-const CLASSIFY_TIMEOUT_MS = 30000;
+const CLASSIFY_TIMEOUT_MS = 45000;
 
 async function classifyTask(userMessage, currentSkills, config, workdir) {
   // Filter out meta/system skills that are never useful for task classification
@@ -2135,7 +2135,7 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
       prompt,
       model: 'haiku',
       maxTurns: 1,
-      allowedTools: ['_none'],
+      tools: '',           // disable all built-in tools (--tools "")
       mcpServers: {},
       systemPrompt: 'You are a task classifier. Analyze the user task and:\n1. Select 1-4 most relevant specialist IDs from the list\n2. Generate a short chat title (3-7 words, in the SAME language as user\'s message)\n\nRules:\n- Match the INTENT and DOMAIN of the task to specialists. The user may write in any language — match meaning, not exact words.\n- When the task clearly relates to a domain (design, UI, UX, security, backend, frontend, etc.) — always select ALL matching specialists from the list, including plugin specialists (IDs starting with "plugin:").\n- For coding tasks — select the most relevant engineering specialist(s).\n- Prefer selecting a relevant specialist over skipping. When in doubt, include it.\n- Plugin skills (IDs like "plugin:name:skill") are equally valid — select them when their description matches the task.\n- Skip only: generic meta/system/setup/cancel skills, and pure general-knowledge questions with no coding/design/engineering aspect.\n- Use the keywords field [in brackets] (if present) to improve matching — they describe typical tasks for each specialist.\n- Return the EXACT skill IDs as shown in the list. Copy them precisely, including any "plugin:" prefix.\n\nReturn ONLY a JSON object: {"skills":["id1","id2"],"title":"Short title here"}\nNo explanation, no markdown.',
     })
@@ -4727,9 +4727,21 @@ wss.on('connection', (ws) => {
       try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
 
-      // Auto-title: use LLM-generated title if available, otherwise truncate message
+      // Auto-title: use LLM-generated title if available, otherwise smart-truncate message
       if (isNewSession || DEFAULT_SESSION_TITLES.has(existSess?.title)) {
-        const title = classifiedTitle || (userMessage.substring(0,60)+(userMessage.length>60?'...':''));
+        let title = classifiedTitle;
+        if (!title) {
+          // Smart truncation: break at word boundary, max 40 chars
+          const raw = userMessage.replace(/\s+/g, ' ').trim();
+          if (!raw) {
+            title = i18nSession();
+          } else if (raw.length <= 40) {
+            title = raw;
+          } else {
+            const cut = raw.lastIndexOf(' ', 40);
+            title = raw.substring(0, cut > 15 ? cut : 40) + '…';
+          }
+        }
         try { stmts.updateTitle.run(title, localSessionId); } catch (e) { log.error('updateTitle failed', { err: e.message }); }
         ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
       }

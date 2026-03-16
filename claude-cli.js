@@ -117,7 +117,7 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, abortController }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController }) {
     const args = ['--print'];
 
     // Session resumption: --resume <sessionId> (not --session-id + --resume separately)
@@ -134,6 +134,10 @@ class ClaudeCLI {
     // already baked into the session history. Changing it invalidates cryptographic
     // signatures on thinking blocks, causing API 400 "Invalid signature in thinking block".
     if (systemPrompt && !sessionId) args.push('--system-prompt', systemPrompt);
+
+    // --tools: control which built-in tools are available.
+    // "" disables all tools, "default" enables all, or specify names (e.g. "Bash,Edit,Read").
+    if (typeof tools === 'string') args.push('--tools', tools);
 
     // allowedTools: pass each tool as separate arg (variadic)
     if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
