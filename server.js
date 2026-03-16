@@ -362,6 +362,10 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN task_retry_count INTEGER DEFAULT 0`)
 try { db.exec(`ALTER TABLE tasks ADD COLUMN scheduled_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence_end_at INTEGER`); } catch {}
+// Task Manager MCP: autonomous task creation by Claude during task execution
+try { db.exec(`ALTER TABLE tasks ADD COLUMN task_output TEXT`); } catch {}        // Structured result from report_result
+try { db.exec(`ALTER TABLE tasks ADD COLUMN context TEXT`); } catch {}            // Curated context passed by parent task
+try { db.exec(`ALTER TABLE tasks ADD COLUMN parent_task_id TEXT`); } catch {}     // Task that created this task via MCP
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
@@ -617,6 +621,9 @@ const NOTIFY_SECRET = require('crypto').randomBytes(16).toString('hex');
 // ─── Set UI State (Internal MCP) ──────────────────────────────────────────
 const SET_UI_STATE_SECRET = require('crypto').randomBytes(16).toString('hex');
 
+// ─── Task Manager (Internal MCP) ─────────────────────────────────────────
+const TASK_MANAGER_SECRET = require('crypto').randomBytes(16).toString('hex');
+
 function broadcastToSession(sessionId, data) {
   const watchers = sessionWatchers.get(sessionId);
   if (!watchers?.size) return;
@@ -729,10 +736,23 @@ async function startTask(task) {
     let lastTaskResult = null;
     const effectiveTaskMaxTurns = task.max_turns || 30;
 
+    // Build MCP config for task execution — inject internal task-manager MCP
+    const taskMcpServers = {};
+    taskMcpServers['_ccs_task_manager'] = {
+      command: 'node',
+      args: [path.join(__dirname, 'mcp-task-manager.js')],
+      env: {
+        TASK_MANAGER_SERVER_URL: `http://127.0.0.1:${PORT}`,
+        TASK_MANAGER_TASK_ID: task.id,
+        TASK_MANAGER_SESSION_ID: sessionId,
+        TASK_MANAGER_SECRET: TASK_MANAGER_SECRET,
+      },
+    };
+
     while (true) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
-      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort });
+      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort });
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -880,12 +900,16 @@ async function startTask(task) {
             }).catch(() => {});
           }
           // Cascade cancel of dependents happens in next processQueue() run
+          // 🔄 Recurring tasks: schedule next run even after failure (fresh session)
+          scheduleNextRun(task, { inheritSession: false });
         }
       } else {
         // User manually stopped — mark as user_cancelled, cascade will follow
         db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='user_cancelled', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
           .run(task.id);
         log.info(`[taskWorker] task ${task.id}: stopped by user`);
+        // 🔄 Recurring tasks: stopping one run should not kill the entire schedule
+        scheduleNextRun(task, { inheritSession: false });
       }
     } catch (e) {
       console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
@@ -902,6 +926,8 @@ async function startTask(task) {
         log.warn(`[taskWorker] task ${task.id}: exception → auto-retry`);
       } else {
         db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(failureMsg, task.id);
+        // 🔄 Recurring tasks: schedule next run even after exception (fresh session)
+        scheduleNextRun(task, { inheritSession: false });
       }
     } catch {}
     // Send done so the client doesn't wait forever for an event that will never arrive.
@@ -924,7 +950,7 @@ function calcNextRun(scheduled_at, recurrence) {
   return Math.floor(d.getTime() / 1000);
 }
 
-function scheduleNextRun(task) {
+function scheduleNextRun(task, { inheritSession = true } = {}) {
   if (!task.recurrence || !task.scheduled_at) return;
   const now = Math.floor(Date.now() / 1000);
   // Find next future occurrence — handles server downtime gaps gracefully.
@@ -941,7 +967,7 @@ function scheduleNextRun(task) {
   const newId = genId();
   stmts.createTask.run(
     newId, task.title, task.description || '', task.notes || '', 'todo', task.sort_order || 0,
-    task.session_id || null, task.workdir || null, task.model || 'sonnet',
+    inheritSession ? (task.session_id || null) : null, task.workdir || null, task.model || 'sonnet',
     task.mode || 'auto', task.agent_mode || 'single', task.max_turns || 30,
     null, null, null, null,
     next, task.recurrence, task.recurrence_end_at || null
@@ -1091,7 +1117,11 @@ setTimeout(() => {
       const assistantMsg = db.prepare(
         `SELECT id FROM messages WHERE session_id=? AND role='assistant' AND type='text' LIMIT 1`
       ).get(task.session_id);
-      if (assistantMsg) newStatus = 'done'; // completed before/during restart
+      if (assistantMsg) {
+        newStatus = 'done'; // completed before/during restart
+        // 🔄 Recurring tasks: ensure next run is scheduled after crash recovery
+        if (task.recurrence) scheduleNextRun(task);
+      }
     }
     db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
       .run(newStatus, task.id);
@@ -2774,6 +2804,298 @@ app.post('/api/internal/set-ui-state', express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Task Manager endpoint (internal MCP — autonomous task creation) ─────────
+// Safety limits: prevent runaway task creation by a single task execution
+const MAX_TASK_CHILDREN_PER_RUN = 10;
+const MAX_CHAIN_DEPTH = 5;
+
+app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader !== `Bearer ${TASK_MANAGER_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { action, taskId: callerTaskId, sessionId: callerSessionId } = req.body;
+  if (!action) return res.status(400).json({ error: 'Missing action' });
+
+  try {
+    switch (action) {
+
+      // ── create_task ────────────────────────────────────────────────────
+      case 'create_task': {
+        const { title, description = '', context = null, model, mode, agent_mode,
+                skills, mcp_servers, depends_on, chain_id, scheduled_at, max_turns } = req.body;
+        if (!title) return res.status(400).json({ error: 'Missing title' });
+
+        // Safety: count how many children this task has already created
+        if (callerTaskId) {
+          const childCount = db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=?`).get(callerTaskId);
+          if (childCount.cnt >= MAX_TASK_CHILDREN_PER_RUN) {
+            return res.status(429).json({ error: `Child task limit reached (${MAX_TASK_CHILDREN_PER_RUN}). Cannot create more tasks in this run.` });
+          }
+        }
+
+        // Safety: check chain depth to prevent infinite recursion
+        if (callerTaskId) {
+          let depth = 0, cursor = callerTaskId;
+          while (cursor && depth < MAX_CHAIN_DEPTH + 1) {
+            const parent = db.prepare(`SELECT parent_task_id FROM tasks WHERE id=?`).get(cursor);
+            if (!parent?.parent_task_id) break;
+            cursor = parent.parent_task_id;
+            depth++;
+          }
+          if (depth >= MAX_CHAIN_DEPTH) {
+            return res.status(429).json({ error: `Chain depth limit reached (${MAX_CHAIN_DEPTH}). Cannot create deeper nested tasks.` });
+          }
+        }
+
+        // Inherit workdir from caller task
+        const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
+        const workdir = callerTask?.workdir || null;
+
+        const id = genId();
+        const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)) : null;
+        const depsJson = depends_on ? JSON.stringify(depends_on) : null;
+        const skillsJson = skills ? JSON.stringify(skills) : null;
+        const mcpJson = mcp_servers ? JSON.stringify(mcp_servers) : null;
+
+        stmts.createTask.run(
+          id, String(title).substring(0, 200), String(description).substring(0, 2000),
+          '', // notes
+          'todo', // status — immediately eligible for processQueue
+          0,  // sort_order
+          callerTask?.session_id || null, // session_id — inherit shared session if in chain
+          workdir,
+          model || callerTask?.model || 'sonnet',
+          mode || callerTask?.mode || 'auto',
+          agent_mode || callerTask?.agent_mode || 'single',
+          max_turns || callerTask?.max_turns || 30,
+          null, // attachments
+          depsJson,
+          chain_id || null,
+          callerTask?.source_session_id || null,
+          scheduled_at || null,
+          null, // recurrence
+          null  // recurrence_end_at
+        );
+
+        // Set new columns that aren't in createTask prepared statement
+        db.prepare(`UPDATE tasks SET context=?, parent_task_id=? WHERE id=?`)
+          .run(contextJson, callerTaskId || null, id);
+
+        // Trigger queue to pick up new task
+        setImmediate(processQueue);
+
+        // Notify UI
+        if (callerTask?.source_session_id) {
+          const _ctx = getNotificationContext(callerTask.source_session_id);
+          broadcastToSession(callerTask.source_session_id, {
+            type: 'notification', level: 'info',
+            title: `New task created: "${String(title).substring(0, 60)}"`,
+            detail: `Created by task "${callerTask.title}"`,
+            tabId: callerTask.source_session_id,
+            sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+          });
+        }
+
+        const task = stmts.getTask.get(id);
+        log.info('[task-manager] create_task', { id, title, parentId: callerTaskId });
+        return res.json({ task_id: id, status: task.status, title: task.title });
+      }
+
+      // ── create_chain ───────────────────────────────────────────────────
+      case 'create_chain': {
+        const { title = 'Task Chain', tasks: taskDefs, model: chainModel,
+                scheduled_at: chainScheduledAt, recurrence, recurrence_end_at } = req.body;
+        if (!Array.isArray(taskDefs) || !taskDefs.length) {
+          return res.status(400).json({ error: 'Missing or empty tasks array' });
+        }
+        if (taskDefs.length > MAX_TASK_CHILDREN_PER_RUN) {
+          return res.status(429).json({ error: `Too many tasks in chain (max ${MAX_TASK_CHILDREN_PER_RUN})` });
+        }
+
+        const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
+        const workdir = callerTask?.workdir || null;
+
+        // Create chain + shared session
+        const chainId = genId();
+        const chainSessionId = genId();
+        const effectiveModel = chainModel || callerTask?.model || 'sonnet';
+
+        stmts.createSession.run(chainSessionId, String(title).substring(0, 200), '[]', '[]',
+          'auto', 'single', effectiveModel, 'cli', workdir);
+        stmts.createChain.run(chainId, String(title).substring(0, 200), workdir,
+          effectiveModel, 'auto', 'single', 30,
+          chainSessionId, chainScheduledAt || null, recurrence || null,
+          recurrence_end_at || null, callerTask?.source_session_id || null, 0);
+
+        // Create tasks with auto-linked depends_on
+        const taskIds = [];
+        const localIdMap = {}; // maps local ref index → real task ID
+
+        for (let i = 0; i < taskDefs.length; i++) {
+          const td = taskDefs[i];
+          const taskId = genId();
+          taskIds.push(taskId);
+          localIdMap[i] = taskId;
+
+          // Resolve depends_on: can reference by index (0-based) in the chain
+          let depsJson = null;
+          if (td.depends_on_index && Array.isArray(td.depends_on_index)) {
+            const resolved = td.depends_on_index.map(idx => localIdMap[idx]).filter(Boolean);
+            if (resolved.length) depsJson = JSON.stringify(resolved);
+          } else if (i > 0) {
+            // Default: sequential — depends on previous task
+            depsJson = JSON.stringify([taskIds[i - 1]]);
+          }
+
+          const contextJson = td.context ? (typeof td.context === 'string' ? td.context : JSON.stringify(td.context)) : null;
+
+          stmts.createTask.run(
+            taskId, String(td.title || `Step ${i + 1}`).substring(0, 200),
+            String(td.description || '').substring(0, 2000),
+            '', // notes
+            'todo',
+            i * 1000, // sort_order
+            chainSessionId,
+            workdir,
+            td.model || effectiveModel,
+            'auto', 'single',
+            td.max_turns || 30,
+            null, // attachments
+            depsJson,
+            chainId,
+            callerTask?.source_session_id || null,
+            chainScheduledAt || null,
+            null, null
+          );
+
+          db.prepare(`UPDATE tasks SET context=?, parent_task_id=? WHERE id=?`)
+            .run(contextJson, callerTaskId || null, taskId);
+        }
+
+        setImmediate(processQueue);
+        log.info('[task-manager] create_chain', { chainId, taskCount: taskIds.length, parentId: callerTaskId });
+        return res.json({ chain_id: chainId, task_ids: taskIds });
+      }
+
+      // ── list_tasks ─────────────────────────────────────────────────────
+      case 'list_tasks': {
+        const { status: filterStatus, chain_id: filterChain, limit = 20 } = req.body;
+        let query = 'SELECT id, title, status, sort_order, chain_id, depends_on, parent_task_id, scheduled_at, created_at FROM tasks WHERE 1=1';
+        const params = [];
+
+        // Scope to same workdir as caller
+        const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
+        if (callerTask?.workdir) {
+          query += ' AND workdir=?';
+          params.push(callerTask.workdir);
+        }
+        if (filterStatus) { query += ' AND status=?'; params.push(filterStatus); }
+        if (filterChain) { query += ' AND chain_id=?'; params.push(filterChain); }
+
+        query += ' ORDER BY created_at DESC LIMIT ?';
+        params.push(Math.min(limit, 50));
+
+        const tasks = db.prepare(query).all(...params);
+        return res.json({ tasks });
+      }
+
+      // ── get_current_task ───────────────────────────────────────────────
+      case 'get_current_task': {
+        if (!callerTaskId) return res.status(400).json({ error: 'No task ID provided (not running as a task?)' });
+        const task = stmts.getTask.get(callerTaskId);
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+
+        // Parse context
+        let context = task.context;
+        if (context) {
+          try { context = JSON.parse(context); } catch { /* keep as string */ }
+        }
+
+        return res.json({
+          task_id: task.id,
+          title: task.title,
+          description: task.description,
+          context,
+          chain_id: task.chain_id,
+          parent_task_id: task.parent_task_id,
+          depends_on: task.depends_on ? JSON.parse(task.depends_on) : [],
+          workdir: task.workdir,
+          model: task.model,
+          status: task.status,
+        });
+      }
+
+      // ── report_result ──────────────────────────────────────────────────
+      case 'report_result': {
+        const { data } = req.body;
+        if (!callerTaskId) return res.status(400).json({ error: 'No task ID' });
+        if (data === undefined) return res.status(400).json({ error: 'Missing data' });
+
+        const outputJson = typeof data === 'string' ? data : JSON.stringify(data);
+        db.prepare(`UPDATE tasks SET task_output=?, updated_at=datetime('now') WHERE id=?`)
+          .run(outputJson, callerTaskId);
+
+        log.info('[task-manager] report_result', { taskId: callerTaskId, outputLen: outputJson.length });
+        return res.json({ ok: true });
+      }
+
+      // ── get_task_result ────────────────────────────────────────────────
+      case 'get_task_result': {
+        const { task_id } = req.body;
+        if (!task_id) return res.status(400).json({ error: 'Missing task_id' });
+        const task = stmts.getTask.get(task_id);
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+
+        let output = task.task_output;
+        if (output) {
+          try { output = JSON.parse(output); } catch { /* keep as string */ }
+        }
+
+        return res.json({
+          task_id: task.id,
+          title: task.title,
+          status: task.status,
+          output,
+          completed_at: task.status === 'done' ? task.updated_at : null,
+        });
+      }
+
+      // ── cancel_task ────────────────────────────────────────────────────
+      case 'cancel_task': {
+        const { task_id, reason } = req.body;
+        if (!task_id) return res.status(400).json({ error: 'Missing task_id' });
+        const task = stmts.getTask.get(task_id);
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+
+        if (task.status === 'done') {
+          return res.status(400).json({ error: 'Cannot cancel a completed task' });
+        }
+
+        // Abort running process if in_progress
+        if (task.status === 'in_progress') {
+          const ctrl = runningTaskAborts.get(task_id);
+          if (ctrl) { stoppingTasks.add(task_id); ctrl.abort(); }
+          else if (task.worker_pid) { stoppingTasks.add(task_id); killByPid(task.worker_pid); }
+        }
+
+        db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, updated_at=datetime('now') WHERE id=?`)
+          .run(reason || 'Cancelled by task-manager MCP', task_id);
+
+        log.info('[task-manager] cancel_task', { taskId: task_id, reason, cancelledBy: callerTaskId });
+        return res.json({ ok: true, task_id, status: 'cancelled' });
+      }
+
+      default:
+        return res.status(400).json({ error: `Unknown action: ${action}` });
+    }
+  } catch (err) {
+    log.error('[task-manager] endpoint error', { action, err: err.message, stack: err.stack });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.use(auth.authMiddleware);
 
 // Prevent browser caching for all API responses.
@@ -3365,6 +3687,8 @@ app.delete('/api/sessions/:id', (req,res) => {
     activeTasks.delete(sid);
   }
   chatBuffers.delete(sid);
+  // Unlink recurring tasks from session (preserve the schedule), delete the rest
+  db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
   stmts.deleteTasksBySession.run(sid);
   stmts.deleteSession.run(sid);
   sessionQueues.delete(sid);
@@ -3383,7 +3707,13 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
     }
     chatBuffers.delete(id);
   }
-  const del = db.transaction(() => { for (const id of ids) { stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); sessionQueues.delete(id); } });
+  const del = db.transaction(() => {
+    for (const id of ids) {
+      // Unlink recurring tasks from session (preserve the schedule), delete the rest
+      db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(id);
+      stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); sessionQueues.delete(id);
+    }
+  });
   del();
   res.json({ ok: true, deleted: ids.length });
 });
