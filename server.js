@@ -220,6 +220,11 @@ const CLEANUP_INTERVAL_HOURS = parseInt(process.env.CLEANUP_INTERVAL_HOURS || '2
  */
 function cleanOldSessions() {
   try {
+    // Archive dashboard stats before deletion (ON DELETE CASCADE removes messages)
+    const toDelete = db.prepare(`SELECT id FROM sessions WHERE updated_at < datetime('now', '-' || ? || ' days')`).all(SESSION_TTL_DAYS);
+    if (toDelete.length > 0) {
+      archiveSessionStats(toDelete.map(r => r.id));
+    }
     const result = db.prepare(`DELETE FROM sessions WHERE updated_at < datetime('now', '-' || ? || ' days')`).run(SESSION_TTL_DAYS);
     if (result.changes > 0) {
       log.info(`[cleanup] Deleted ${result.changes} sessions older than ${SESSION_TTL_DAYS} days`);
@@ -374,6 +379,27 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); 
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_created   ON messages(created_at)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`); } catch {}
+// Stats archive: preserve dashboard data when sessions are deleted
+db.exec(`
+  CREATE TABLE IF NOT EXISTS stats_archived (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    total_sessions INTEGER DEFAULT 0,
+    total_messages INTEGER DEFAULT 0,
+    total_tool_calls INTEGER DEFAULT 0,
+    assistant_messages INTEGER DEFAULT 0,
+    total_chars INTEGER DEFAULT 0,
+    agent_messages INTEGER DEFAULT 0,
+    max_messages_in_session INTEGER DEFAULT 0
+  );
+  INSERT OR IGNORE INTO stats_archived (id) VALUES (1);
+  CREATE TABLE IF NOT EXISTS stats_archived_detail (
+    category TEXT NOT NULL,
+    key TEXT NOT NULL,
+    count INTEGER DEFAULT 0,
+    tool_count INTEGER DEFAULT 0,
+    PRIMARY KEY (category, key)
+  );
+`);
 // Telegram bot: telegram_devices table is created by TelegramBot constructor (single source of truth)
 // Telegram Phase 2: session persistence + message source tracking
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_session_id TEXT`); } catch(e) {}
@@ -557,12 +583,184 @@ const stmts = {
   dashSessionStats: db.prepare(`SELECT ROUND(AVG(cnt),1) AS avg_messages_per_session, MAX(cnt) AS max_messages_in_session FROM (SELECT COUNT(*) AS cnt FROM messages GROUP BY session_id)`),
   dashMultiAgentStats: db.prepare(`SELECT COUNT(DISTINCT agent_id) AS unique_agents, COUNT(*) AS agent_messages FROM messages WHERE agent_id IS NOT NULL`),
   dashWeeklyTrend: db.prepare(`SELECT strftime('%Y-W%W', created_at) AS week, COUNT(*) AS count, SUM(CASE WHEN type='tool' THEN 1 ELSE 0 END) AS tool_count FROM messages WHERE created_at >= date('now', '-84 days') GROUP BY week ORDER BY week ASC`),
+  // Archived stats (merged into dashboard for deleted sessions)
+  archSummary: db.prepare(`SELECT * FROM stats_archived WHERE id = 1`),
+  archTools: db.prepare(`SELECT key AS name, count FROM stats_archived_detail WHERE category='tool' ORDER BY count DESC`),
+  archModels: db.prepare(`SELECT key AS model, count FROM stats_archived_detail WHERE category='model'`),
+  archAgentModes: db.prepare(`SELECT key AS agent_mode, count FROM stats_archived_detail WHERE category='agent_mode'`),
+  archModes: db.prepare(`SELECT key AS mode, count FROM stats_archived_detail WHERE category='mode'`),
+  archDailyActivity: db.prepare(`SELECT key AS date, count FROM stats_archived_detail WHERE category='daily' AND key >= date('now', '-90 days') ORDER BY key ASC`),
+  archHourlyDist: db.prepare(`SELECT CAST(key AS INTEGER) AS hour, count FROM stats_archived_detail WHERE category='hourly' ORDER BY hour`),
+  archWeeklyTrend: db.prepare(`SELECT key AS week, count, tool_count FROM stats_archived_detail WHERE category='weekly' AND key >= strftime('%Y-W%W', date('now', '-84 days')) ORDER BY key ASC`),
+  // Task Manager MCP prepared statements
+  countChildTasks: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=?`),
+  getParentTaskId: db.prepare(`SELECT parent_task_id FROM tasks WHERE id=?`),
+  setTaskContext: db.prepare(`UPDATE tasks SET context=?, parent_task_id=?, updated_at=datetime('now') WHERE id=?`),
+  setTaskOutput: db.prepare(`UPDATE tasks SET task_output=?, updated_at=datetime('now') WHERE id=?`),
+  cancelTask: db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, updated_at=datetime('now') WHERE id=?`),
 };
 // Auto-sanitize ALL prepared statements — prevents "Too few parameter values"
 // on every code path (chat, tasks, queue, reconnect, telegram, etc.)
 for (const [name, stmt] of Object.entries(stmts)) wrapStmt(stmt, name);
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+/**
+ * Merge two arrays of row objects by a key field, summing numeric fields.
+ * Used to combine live dashboard data with archived stats from deleted sessions.
+ * @param {Array} liveRows - Rows from live sessions/messages tables
+ * @param {Array} archivedRows - Rows from stats_archived_detail
+ * @param {string} keyField - Field to group by (e.g. 'name', 'model', 'date')
+ * @param {string[]} sumFields - Numeric fields to sum (e.g. ['count', 'tool_count'])
+ * @returns {Array} Merged rows
+ */
+function mergeDashRows(liveRows, archivedRows, keyField, sumFields) {
+  const map = new Map();
+  for (const row of liveRows) map.set(String(row[keyField]), { ...row });
+  for (const row of archivedRows) {
+    const k = String(row[keyField]);
+    const existing = map.get(k);
+    if (existing) {
+      for (const f of sumFields) existing[f] = (existing[f] || 0) + (row[f] || 0);
+    } else {
+      map.set(k, { ...row });
+    }
+  }
+  return [...map.values()];
+}
+
+/**
+ * Archive dashboard statistics for sessions about to be deleted.
+ * Must be called BEFORE deleting sessions (ON DELETE CASCADE removes messages).
+ * Preserves cumulative stats so the dashboard remains accurate after cleanup.
+ */
+function archiveSessionStats(sessionIds) {
+  if (!sessionIds || sessionIds.length === 0) return;
+  const json = JSON.stringify(sessionIds);
+
+  const archiveTxn = db.transaction((jsonIds) => {
+    // Count ALL sessions being deleted (including those with no messages)
+    const sessionCount = db.prepare(`
+      SELECT COUNT(*) AS cnt FROM sessions WHERE id IN (SELECT value FROM json_each(?))
+    `).get(jsonIds)?.cnt || 0;
+
+    if (sessionCount === 0) return;
+
+    // Aggregate message-level stats (may be zero if sessions had no messages)
+    const stats = db.prepare(`
+      SELECT
+        COUNT(*) AS total_messages,
+        SUM(CASE WHEN type='tool' THEN 1 ELSE 0 END) AS total_tool_calls,
+        SUM(CASE WHEN role='assistant' AND type='text' THEN 1 ELSE 0 END) AS assistant_messages,
+        COALESCE(SUM(LENGTH(content)), 0) AS total_chars,
+        SUM(CASE WHEN agent_id IS NOT NULL THEN 1 ELSE 0 END) AS agent_messages
+      FROM messages
+      WHERE session_id IN (SELECT value FROM json_each(?))
+    `).get(jsonIds);
+
+    const totalMessages = stats?.total_messages || 0;
+
+    // Max messages in a single session (0 if no messages)
+    const maxRow = totalMessages > 0 ? db.prepare(`
+      SELECT MAX(cnt) AS max_msg FROM (
+        SELECT COUNT(*) AS cnt FROM messages
+        WHERE session_id IN (SELECT value FROM json_each(?))
+        GROUP BY session_id
+      )
+    `).get(jsonIds) : null;
+
+    // Upsert cumulative counters (singleton row)
+    db.prepare(`
+      INSERT INTO stats_archived (id, total_sessions, total_messages, total_tool_calls, assistant_messages, total_chars, agent_messages, max_messages_in_session)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        total_sessions = total_sessions + excluded.total_sessions,
+        total_messages = total_messages + excluded.total_messages,
+        total_tool_calls = total_tool_calls + excluded.total_tool_calls,
+        assistant_messages = assistant_messages + excluded.assistant_messages,
+        total_chars = total_chars + excluded.total_chars,
+        agent_messages = agent_messages + excluded.agent_messages,
+        max_messages_in_session = MAX(max_messages_in_session, excluded.max_messages_in_session)
+    `).run(
+      sessionCount,
+      totalMessages,
+      stats?.total_tool_calls || 0,
+      stats?.assistant_messages || 0,
+      stats?.total_chars || 0,
+      stats?.agent_messages || 0,
+      maxRow?.max_msg || 0
+    );
+
+    // Reusable upsert for dimensional data
+    const upsertDetail = db.prepare(`
+      INSERT INTO stats_archived_detail (category, key, count, tool_count)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(category, key) DO UPDATE SET
+        count = count + excluded.count,
+        tool_count = tool_count + excluded.tool_count
+    `);
+
+    // Session-level distributions (always archive, even for sessions with no messages)
+    const models = db.prepare(`
+      SELECT model AS key, COUNT(*) AS count
+      FROM sessions WHERE id IN (SELECT value FROM json_each(?)) AND model IS NOT NULL GROUP BY model
+    `).all(jsonIds);
+    for (const m of models) upsertDetail.run('model', m.key, m.count, 0);
+
+    const agentModes = db.prepare(`
+      SELECT agent_mode AS key, COUNT(*) AS count
+      FROM sessions WHERE id IN (SELECT value FROM json_each(?)) AND agent_mode IS NOT NULL GROUP BY agent_mode
+    `).all(jsonIds);
+    for (const a of agentModes) upsertDetail.run('agent_mode', a.key, a.count, 0);
+
+    const modes = db.prepare(`
+      SELECT mode AS key, COUNT(*) AS count
+      FROM sessions WHERE id IN (SELECT value FROM json_each(?)) AND mode IS NOT NULL GROUP BY mode
+    `).all(jsonIds);
+    for (const m of modes) upsertDetail.run('mode', m.key, m.count, 0);
+
+    // Message-level distributions (only if messages exist)
+    if (totalMessages > 0) {
+      const tools = db.prepare(`
+        SELECT tool_name AS key, COUNT(*) AS count
+        FROM messages
+        WHERE session_id IN (SELECT value FROM json_each(?)) AND type='tool' AND tool_name IS NOT NULL
+        GROUP BY tool_name
+      `).all(jsonIds);
+      for (const t of tools) upsertDetail.run('tool', t.key, t.count, 0);
+
+      const daily = db.prepare(`
+        SELECT date(created_at) AS key, COUNT(*) AS count,
+          SUM(CASE WHEN type='tool' THEN 1 ELSE 0 END) AS tool_count
+        FROM messages WHERE session_id IN (SELECT value FROM json_each(?))
+        GROUP BY date(created_at)
+      `).all(jsonIds);
+      for (const d of daily) upsertDetail.run('daily', d.key, d.count, d.tool_count);
+
+      const hourly = db.prepare(`
+        SELECT CAST(strftime('%H', created_at) AS INTEGER) AS key, COUNT(*) AS count
+        FROM messages WHERE session_id IN (SELECT value FROM json_each(?)) GROUP BY key
+      `).all(jsonIds);
+      for (const h of hourly) upsertDetail.run('hourly', String(h.key), h.count, 0);
+
+      const weekly = db.prepare(`
+        SELECT strftime('%Y-W%W', created_at) AS key, COUNT(*) AS count,
+          SUM(CASE WHEN type='tool' THEN 1 ELSE 0 END) AS tool_count
+        FROM messages WHERE session_id IN (SELECT value FROM json_each(?)) GROUP BY key
+      `).all(jsonIds);
+      for (const w of weekly) upsertDetail.run('weekly', w.key, w.count, w.tool_count);
+    }
+
+    log.info(`[archive] Archived stats for ${sessionCount} sessions (${totalMessages} messages)`);
+  });
+
+  try {
+    archiveTxn(json);
+  } catch (err) {
+    log.error('[archive] Failed to archive session stats:', err.message);
+    // Don't block deletion on archive failure
+  }
+}
 
 // Derive chain status from its child tasks (no stored status — eliminates sync bugs)
 function deriveChainStatusFromTasks(tasks) {
@@ -698,6 +896,14 @@ async function startTask(task) {
         }
       } catch {}
     }
+    // Parent context: if this task was created by another task via MCP, include the curated context
+    if (task.context) {
+      let contextStr = task.context;
+      try { const parsed = JSON.parse(task.context); contextStr = typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2); } catch {}
+      parts.push(`---\nContext from parent task:\n${contextStr}`);
+    }
+    // Task manager instruction: inform Claude about available task management tools
+    parts.push(TASK_MANAGER_INSTRUCTION);
     const prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
     _taskStartedAt = Date.now(); // reset to accurate time after prompt building
     // Check if this is a restart: only skip saving if the LAST user message
@@ -736,8 +942,21 @@ async function startTask(task) {
     let lastTaskResult = null;
     const effectiveTaskMaxTurns = task.max_turns || 30;
 
-    // Build MCP config for task execution — inject internal task-manager MCP
+    // Build MCP config for task execution — user MCPs from config + internal task-manager
     const taskMcpServers = {};
+    // Include user-configured MCPs from config.json (all enabled servers)
+    try {
+      const cfg = loadConfig();
+      for (const [mid, m] of Object.entries(cfg.mcpServers || {})) {
+        if (!m || m.enabled === false) continue;
+        if (m.type === 'http' || m.type === 'sse' || m.url) {
+          taskMcpServers[mid] = { type: m.type || 'http', url: m.url, ...(m.headers ? { headers: m.headers } : {}), ...(m.env ? { env: expandTildeInObj(m.env) } : {}) };
+        } else if (m.command) {
+          taskMcpServers[mid] = { command: m.command, args: m.args || [], env: expandTildeInObj(m.env || {}) };
+        }
+      }
+    } catch {}
+    // Always inject internal task-manager MCP
     taskMcpServers['_ccs_task_manager'] = {
       command: 'node',
       args: [path.join(__dirname, 'mcp-task-manager.js')],
@@ -2033,6 +2252,17 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
+const TASK_MANAGER_INSTRUCTION = `\n\nYou have access to task management tools (via MCP server "_ccs_task_manager"):
+- **create_task**: Create a new task for follow-up work. Pass curated context so the child task knows what to do.
+- **create_chain**: Create multiple sequential tasks in one call. Tasks run in order with shared session.
+- **list_tasks**: Check existing tasks (useful to avoid duplicates before creating new ones).
+- **get_current_task**: Read YOUR task details including context passed by the parent. Call this FIRST if you were created by another task.
+- **report_result**: Store structured output (JSON) so dependent tasks can read it via get_task_result.
+- **get_task_result**: Read the result of a completed task you depend on.
+- **cancel_task**: Cancel a task that is no longer needed.
+When creating child tasks, decide carefully what context to pass — include only what the child needs (issue details, file paths, error messages), not your entire conversation.
+Most tasks should be completed directly without creating subtasks. Only create child tasks when the work genuinely requires decomposition into independent units.`;
+
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
 - "✅ Done — [brief summary of what was completed]." when the task is fully finished.
@@ -2815,8 +3045,16 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { action, taskId: callerTaskId, sessionId: callerSessionId } = req.body;
+  const { action, taskId: callerTaskId } = req.body;
   if (!action) return res.status(400).json({ error: 'Missing action' });
+
+  // Helper: convert ISO string or Unix timestamp to integer seconds
+  const toUnixTs = (v) => {
+    if (!v) return null;
+    if (typeof v === 'number') return v > 1e12 ? Math.floor(v / 1000) : v; // ms → s
+    const ms = Date.parse(v);
+    return isNaN(ms) ? null : Math.floor(ms / 1000);
+  };
 
   try {
     switch (action) {
@@ -2824,12 +3062,12 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
       // ── create_task ────────────────────────────────────────────────────
       case 'create_task': {
         const { title, description = '', context = null, model, mode, agent_mode,
-                skills, mcp_servers, depends_on, chain_id, scheduled_at, max_turns } = req.body;
+                depends_on, chain_id, scheduled_at, max_turns } = req.body;
         if (!title) return res.status(400).json({ error: 'Missing title' });
 
         // Safety: count how many children this task has already created
         if (callerTaskId) {
-          const childCount = db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=?`).get(callerTaskId);
+          const childCount = stmts.countChildTasks.get(callerTaskId);
           if (childCount.cnt >= MAX_TASK_CHILDREN_PER_RUN) {
             return res.status(429).json({ error: `Child task limit reached (${MAX_TASK_CHILDREN_PER_RUN}). Cannot create more tasks in this run.` });
           }
@@ -2839,7 +3077,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         if (callerTaskId) {
           let depth = 0, cursor = callerTaskId;
           while (cursor && depth < MAX_CHAIN_DEPTH + 1) {
-            const parent = db.prepare(`SELECT parent_task_id FROM tasks WHERE id=?`).get(cursor);
+            const parent = stmts.getParentTaskId.get(cursor);
             if (!parent?.parent_task_id) break;
             cursor = parent.parent_task_id;
             depth++;
@@ -2854,17 +3092,15 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const workdir = callerTask?.workdir || null;
 
         const id = genId();
-        const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)) : null;
+        const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)).substring(0, 10000) : null;
         const depsJson = depends_on ? JSON.stringify(depends_on) : null;
-        const skillsJson = skills ? JSON.stringify(skills) : null;
-        const mcpJson = mcp_servers ? JSON.stringify(mcp_servers) : null;
 
         stmts.createTask.run(
           id, String(title).substring(0, 200), String(description).substring(0, 2000),
           '', // notes
           'todo', // status — immediately eligible for processQueue
           0,  // sort_order
-          callerTask?.session_id || null, // session_id — inherit shared session if in chain
+          (chain_id ? callerTask?.session_id : null) || null, // session_id — only inherit for chain tasks
           workdir,
           model || callerTask?.model || 'sonnet',
           mode || callerTask?.mode || 'auto',
@@ -2874,14 +3110,13 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           depsJson,
           chain_id || null,
           callerTask?.source_session_id || null,
-          scheduled_at || null,
+          toUnixTs(scheduled_at),
           null, // recurrence
           null  // recurrence_end_at
         );
 
         // Set new columns that aren't in createTask prepared statement
-        db.prepare(`UPDATE tasks SET context=?, parent_task_id=? WHERE id=?`)
-          .run(contextJson, callerTaskId || null, id);
+        stmts.setTaskContext.run(contextJson, callerTaskId || null, id);
 
         // Trigger queue to pick up new task
         setImmediate(processQueue);
@@ -2914,6 +3149,20 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           return res.status(429).json({ error: `Too many tasks in chain (max ${MAX_TASK_CHILDREN_PER_RUN})` });
         }
 
+        // Chain depth check (same as create_task)
+        if (callerTaskId) {
+          let depth = 0, cursor = callerTaskId;
+          while (cursor && depth < MAX_CHAIN_DEPTH + 1) {
+            const parent = stmts.getParentTaskId.get(cursor);
+            if (!parent?.parent_task_id) break;
+            cursor = parent.parent_task_id;
+            depth++;
+          }
+          if (depth >= MAX_CHAIN_DEPTH) {
+            return res.status(429).json({ error: `Chain depth limit reached (${MAX_CHAIN_DEPTH}). Cannot create deeper nested tasks.` });
+          }
+        }
+
         const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
         const workdir = callerTask?.workdir || null;
 
@@ -2926,8 +3175,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           'auto', 'single', effectiveModel, 'cli', workdir);
         stmts.createChain.run(chainId, String(title).substring(0, 200), workdir,
           effectiveModel, 'auto', 'single', 30,
-          chainSessionId, chainScheduledAt || null, recurrence || null,
-          recurrence_end_at || null, callerTask?.source_session_id || null, 0);
+          chainSessionId, toUnixTs(chainScheduledAt), recurrence || null,
+          toUnixTs(recurrence_end_at), callerTask?.source_session_id || null, 0);
 
         // Create tasks with auto-linked depends_on
         const taskIds = [];
@@ -2949,7 +3198,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             depsJson = JSON.stringify([taskIds[i - 1]]);
           }
 
-          const contextJson = td.context ? (typeof td.context === 'string' ? td.context : JSON.stringify(td.context)) : null;
+          const contextJson = td.context ? (typeof td.context === 'string' ? td.context : JSON.stringify(td.context)).substring(0, 10000) : null;
 
           stmts.createTask.run(
             taskId, String(td.title || `Step ${i + 1}`).substring(0, 200),
@@ -2966,12 +3215,11 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             depsJson,
             chainId,
             callerTask?.source_session_id || null,
-            chainScheduledAt || null,
+            toUnixTs(chainScheduledAt),
             null, null
           );
 
-          db.prepare(`UPDATE tasks SET context=?, parent_task_id=? WHERE id=?`)
-            .run(contextJson, callerTaskId || null, taskId);
+          stmts.setTaskContext.run(contextJson, callerTaskId || null, taskId);
         }
 
         setImmediate(processQueue);
@@ -2985,11 +3233,13 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         let query = 'SELECT id, title, status, sort_order, chain_id, depends_on, parent_task_id, scheduled_at, created_at FROM tasks WHERE 1=1';
         const params = [];
 
-        // Scope to same workdir as caller
+        // Scope to same workdir as caller (explicit NULL handling)
         const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
         if (callerTask?.workdir) {
           query += ' AND workdir=?';
           params.push(callerTask.workdir);
+        } else if (callerTask) {
+          query += ' AND workdir IS NULL';
         }
         if (filterStatus) { query += ' AND status=?'; params.push(filterStatus); }
         if (filterChain) { query += ' AND chain_id=?'; params.push(filterChain); }
@@ -3033,9 +3283,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         if (!callerTaskId) return res.status(400).json({ error: 'No task ID' });
         if (data === undefined) return res.status(400).json({ error: 'Missing data' });
 
-        const outputJson = typeof data === 'string' ? data : JSON.stringify(data);
-        db.prepare(`UPDATE tasks SET task_output=?, updated_at=datetime('now') WHERE id=?`)
-          .run(outputJson, callerTaskId);
+        const outputJson = (typeof data === 'string' ? data : JSON.stringify(data)).substring(0, 10000);
+        stmts.setTaskOutput.run(outputJson, callerTaskId);
 
         log.info('[task-manager] report_result', { taskId: callerTaskId, outputLen: outputJson.length });
         return res.json({ ok: true });
@@ -3047,6 +3296,12 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         if (!task_id) return res.status(400).json({ error: 'Missing task_id' });
         const task = stmts.getTask.get(task_id);
         if (!task) return res.status(404).json({ error: 'Task not found' });
+
+        // Workdir scoping: only allow reading results from same project
+        const _callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
+        if (_callerTask && ((_callerTask.workdir || null) !== (task.workdir || null))) {
+          return res.status(403).json({ error: 'Cannot read task results outside your project' });
+        }
 
         let output = task.task_output;
         if (output) {
@@ -3069,6 +3324,12 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const task = stmts.getTask.get(task_id);
         if (!task) return res.status(404).json({ error: 'Task not found' });
 
+        // Workdir scoping: only allow cancelling tasks in same project
+        const _callerTask2 = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
+        if (_callerTask2 && ((_callerTask2.workdir || null) !== (task.workdir || null))) {
+          return res.status(403).json({ error: 'Cannot cancel tasks outside your project' });
+        }
+
         if (task.status === 'done') {
           return res.status(400).json({ error: 'Cannot cancel a completed task' });
         }
@@ -3080,8 +3341,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           else if (task.worker_pid) { stoppingTasks.add(task_id); killByPid(task.worker_pid); }
         }
 
-        db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, updated_at=datetime('now') WHERE id=?`)
-          .run(reason || 'Cancelled by task-manager MCP', task_id);
+        stmts.cancelTask.run(reason || 'Cancelled by task-manager MCP', task_id);
 
         log.info('[task-manager] cancel_task', { taskId: task_id, reason, cancelledBy: callerTaskId });
         return res.json({ ok: true, task_id, status: 'cancelled' });
@@ -3244,19 +3504,54 @@ app.get('/dashboard', (_,res) => res.sendFile(path.join(__dirname,'public','dash
 app.get('/api/dashboard', (req, res) => {
   try {
     const summary = stmts.dashSummary.get();
+    const archived = stmts.archSummary.get();
+
+    // Merge archived stats from deleted sessions into live totals
+    if (archived) {
+      summary.total_sessions += archived.total_sessions;
+      summary.total_messages += archived.total_messages;
+      summary.total_tool_calls += archived.total_tool_calls;
+      summary.assistant_messages += archived.assistant_messages;
+      summary.total_chars += archived.total_chars;
+    }
+
     // Estimated time saved: tool calls ~30s manual work each, assistant messages ~2min research each
     summary.estimated_hours_saved = Math.round(((summary.total_tool_calls * 0.5) + (summary.assistant_messages * 2)) / 60 * 10) / 10;
 
-    const tools = stmts.dashTools.all();
-    const models = stmts.dashModels.all();
-    const agentModes = stmts.dashAgentModes.all();
-    const modes = stmts.dashModes.all();
-    const dailyActivity = stmts.dashDailyActivity.all();
-    const hourlyDist = stmts.dashHourlyDist.all();
+    // Merge dimensional data: live + archived
+    const tools = mergeDashRows(stmts.dashTools.all(), stmts.archTools.all(), 'name', ['count']);
+    tools.sort((a, b) => b.count - a.count);
+    const topTools = tools.slice(0, 15);
+
+    const models = mergeDashRows(stmts.dashModels.all(), stmts.archModels.all(), 'model', ['count']);
+    const agentModes = mergeDashRows(stmts.dashAgentModes.all(), stmts.archAgentModes.all(), 'agent_mode', ['count']);
+    const modes = mergeDashRows(stmts.dashModes.all(), stmts.archModes.all(), 'mode', ['count']);
+
+    const dailyActivity = mergeDashRows(stmts.dashDailyActivity.all(), stmts.archDailyActivity.all(), 'date', ['count']);
+    dailyActivity.sort((a, b) => a.date.localeCompare(b.date));
+
+    const hourlyDist = mergeDashRows(stmts.dashHourlyDist.all(), stmts.archHourlyDist.all(), 'hour', ['count']);
+    hourlyDist.sort((a, b) => a.hour - b.hour);
+
+    const weeklyTrend = mergeDashRows(stmts.dashWeeklyTrend.all(), stmts.archWeeklyTrend.all(), 'week', ['count', 'tool_count']);
+    weeklyTrend.sort((a, b) => a.week.localeCompare(b.week));
+
+    // Top sessions: only from live data (deleted sessions can't be navigated to)
     const topSessions = stmts.dashTopSessions.all();
-    const sessionStats = stmts.dashSessionStats.get();
-    const multiAgentStats = stmts.dashMultiAgentStats.get();
-    const weeklyTrend = stmts.dashWeeklyTrend.all();
+
+    // Session stats: recalculate avg/max across live + archived
+    const liveSessionStats = stmts.dashSessionStats.get();
+    const sessionStats = {
+      avg_messages_per_session: Math.round(summary.total_messages / Math.max(1, summary.total_sessions) * 10) / 10,
+      max_messages_in_session: Math.max(liveSessionStats?.max_messages_in_session || 0, archived?.max_messages_in_session || 0)
+    };
+
+    // Multi-agent stats: merge live + archived
+    const liveMulti = stmts.dashMultiAgentStats.get();
+    const multiAgentStats = {
+      unique_agents: liveMulti?.unique_agents || 0,
+      agent_messages: (liveMulti?.agent_messages || 0) + (archived?.agent_messages || 0)
+    };
 
     // Automation Index (0-100): weighted score of tool usage, multi-agent adoption, and activity
     // 60% = tool-to-message ratio (higher = more automated), 25% = multi-agent usage, 15% = session count (capped at 30)
@@ -3268,7 +3563,7 @@ app.get('/api/dashboard', (req, res) => {
     ));
 
     res.json({
-      summary, tools, models, agentModes, modes,
+      summary, tools: topTools, models, agentModes, modes,
       dailyActivity, hourlyDist, topSessions,
       sessionStats, multiAgentStats, weeklyTrend,
       efficiencyScore
@@ -3687,6 +3982,8 @@ app.delete('/api/sessions/:id', (req,res) => {
     activeTasks.delete(sid);
   }
   chatBuffers.delete(sid);
+  // Archive dashboard stats before deletion (ON DELETE CASCADE removes messages)
+  archiveSessionStats([sid]);
   // Unlink recurring tasks from session (preserve the schedule), delete the rest
   db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
   stmts.deleteTasksBySession.run(sid);
@@ -3707,6 +4004,8 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
     }
     chatBuffers.delete(id);
   }
+  // Archive dashboard stats before deletion (ON DELETE CASCADE removes messages)
+  archiveSessionStats(ids);
   const del = db.transaction(() => {
     for (const id of ids) {
       // Unlink recurring tasks from session (preserve the schedule), delete the rest
