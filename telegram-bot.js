@@ -1934,13 +1934,19 @@ class TelegramBot extends EventEmitter {
    */
   async notifyTunnelUrl(url) {
     if (!this.running) return;
+    const text = this._t('tn_notify_started', { url });
     const devices = this._stmts.getAllDevices.all();
     for (const dev of devices) {
-      if (dev.notifications_enabled) {
+      if (!dev.notifications_enabled) continue;
+      if (dev.forum_chat_id) {
         try {
-          await this._sendMessage(dev.telegram_chat_id,
-            this._t('tn_notify_started', { url }));
-        } catch {}
+          const ok = await this._notifyForumActivity(dev.forum_chat_id, text);
+          if (!ok) await this._sendMessage(dev.telegram_chat_id, text);
+        } catch {
+          try { await this._sendMessage(dev.telegram_chat_id, text); } catch {}
+        }
+      } else {
+        try { await this._sendMessage(dev.telegram_chat_id, text); } catch {}
       }
     }
   }
@@ -1950,12 +1956,19 @@ class TelegramBot extends EventEmitter {
    */
   async notifyTunnelClosed() {
     if (!this.running) return;
+    const text = this._t('tn_notify_stopped');
     const devices = this._stmts.getAllDevices.all();
     for (const dev of devices) {
-      if (dev.notifications_enabled) {
+      if (!dev.notifications_enabled) continue;
+      if (dev.forum_chat_id) {
         try {
-          await this._sendMessage(dev.telegram_chat_id, this._t('tn_notify_stopped'));
-        } catch {}
+          const ok = await this._notifyForumActivity(dev.forum_chat_id, text);
+          if (!ok) await this._sendMessage(dev.telegram_chat_id, text);
+        } catch {
+          try { await this._sendMessage(dev.telegram_chat_id, text); } catch {}
+        }
+      } else {
+        try { await this._sendMessage(dev.telegram_chat_id, text); } catch {}
       }
     }
   }
@@ -2979,7 +2992,7 @@ class TelegramBot extends EventEmitter {
 
       text += '\n' + this._t('status_devices_short', { count: devices.length });
       text += '\n' + this._t('status_new_conn', { status: this._acceptNewConnections ? this._t('status_conn_on') : this._t('status_conn_off') });
-      text += '\n' + this._t('status_updated', { time: new Date().toLocaleTimeString() });
+      text += '\n' + this._t('status_updated', { time: new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }) });
 
       const keyboard = [
         [{ text: this._t('btn_refresh'), callback_data: 'm:status' }, { text: this._t('btn_back_menu'), callback_data: 'm:menu' }],

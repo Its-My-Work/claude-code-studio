@@ -4806,7 +4806,7 @@ wss.on('connection', (ws) => {
       // Register task in activeTasks so it survives client disconnect/reload
       try { stmts.setLastUserMsg.run(userMessage, localSessionId); } catch (e) { log.error('setLastUserMsg failed', { err: e.message }); }
       chatBuffers.set(localSessionId, ''); // reset buffer for this session
-      activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null });
+      activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null, source: 'web', startedAt: Date.now() });
 
       const params = {
         prompt: enginePrompt,

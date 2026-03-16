@@ -316,7 +316,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .chain-progress-text{ font-size:11px; font-weight:600; color:var(--muted); white-space:nowrap; }
 .chain-tasks{ border-top:1px solid var(--border); display:none; }
 .chain-tasks.open{ display:block; }
-.chain-task-item{ display:flex; align-items:center; gap:8px; padding:7px 12px 7px 20px; font-size:12px; border-bottom:1px solid rgba(42,51,71,.5); transition:background .1s; }
+.chain-task-item{ display:flex; align-items:center; gap:8px; padding:7px 12px 7px 20px; font-size:12px; border-bottom:1px solid rgba(42,51,71,.5); transition:background .1s; cursor:pointer; }
 .chain-task-item:last-child{ border-bottom:none; }
 .chain-task-item:hover{ background:rgba(255,255,255,.02); }
 .chain-task-icon{ width:14px; height:14px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:8px; }
@@ -326,9 +326,11 @@ textarea.inp{ resize:vertical; min-height:80px; }
 @keyframes pulse-ring{ 0%{ box-shadow:0 0 0 0 rgba(229,164,53,.4); } 70%{ box-shadow:0 0 0 4px rgba(229,164,53,0); } 100%{ box-shadow:0 0 0 0 rgba(229,164,53,0); } }
 .chain-task-title{ flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chain-task-title.done-text{ color:var(--muted); text-decoration:line-through; }
-.chain-task-del{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 4px; border-radius:3px; opacity:0; transition:opacity .1s,color .1s; }
-.chain-task-item:hover .chain-task-del{ opacity:1; }
+.chain-task-del,.chain-task-edit{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 4px; border-radius:3px; opacity:0; transition:opacity .1s,color .1s; }
+.chain-task-item:hover .chain-task-del,.chain-task-item:hover .chain-task-edit{ opacity:1; }
 .chain-task-del:hover{ color:var(--red); }
+.chain-task-edit:hover{ color:var(--accent); }
+.chain-task-actions{ display:flex; gap:2px; margin-left:auto; }
 .chain-footer{ display:flex; align-items:center; gap:5px; padding:7px 12px; border-top:1px solid var(--border); flex-wrap:wrap; }
 .chain-actions{ display:none; gap:3px; margin-left:auto; }
 .chain-card:hover .chain-actions{ display:flex; }
@@ -347,6 +349,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .chain-modal-task .task-fields textarea:focus{ border-color:var(--accent); outline:none; }
 .chain-modal-task .task-remove{ background:none; border:none; color:var(--muted); cursor:pointer; padding:2px 6px; font-size:14px; border-radius:3px; }
 .chain-modal-task .task-remove:hover{ color:var(--red); background:rgba(248,81,73,.1); }
+.chain-modal-task-locked{ opacity:.6; }
 </style>
 </head>
 <body>
@@ -479,6 +482,7 @@ const TR = {
     'group.empty':'Додайте завдання до групи','group.activate':'Запустити',
     'group.delete':'Видалити групу?','group.delete_body':'Буде видалено групу та всі її завдання.',
     'group.created':'✓ Групу створено','group.saved':'✓ Групу збережено','group.task_added':'✓ Завдання додано',
+    'group.edit_task':'Редагувати завдання','group.task_saved':'✓ Завдання збережено',
   },
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
@@ -514,6 +518,7 @@ const TR = {
     'group.empty':'Add tasks to the group','group.activate':'Run',
     'group.delete':'Delete group?','group.delete_body':'The group and all its tasks will be deleted.',
     'group.created':'✓ Group created','group.saved':'✓ Group saved','group.task_added':'✓ Task added',
+    'group.edit_task':'Edit task','group.task_saved':'✓ Task saved',
   },
   ru: {
     'hdr.title':'Kanban','hdr.add':'Задача',
@@ -549,6 +554,7 @@ const TR = {
     'group.empty':'Добавьте задания в группу','group.activate':'Запустить',
     'group.delete':'Удалить группу?','group.delete_body':'Группа и все её задания будут удалены.',
     'group.created':'✓ Группа создана','group.saved':'✓ Группа сохранена','group.task_added':'✓ Задание добавлено',
+    'group.edit_task':'Редактировать задание','group.task_saved':'✓ Задание сохранено',
   },
 };
 const lang = localStorage.getItem('lang') || 'uk';
@@ -975,10 +981,14 @@ function makeChainCard(chain){
       const iconCls=tk.status==='done'?'done':tk.status==='in_progress'?'in_progress':tk.status==='cancelled'?'cancelled':'';
       const iconContent=tk.status==='done'?'✓':tk.status==='cancelled'?'✕':'';
       const titleCls=tk.status==='done'?' done-text':'';
-      return `<div class="chain-task-item" data-task-id="${tk.id}">
+      const canEdit=tk.status==='backlog'||tk.status==='todo';
+      return `<div class="chain-task-item" data-task-id="${tk.id}"${canEdit?` onclick="openEditChainTaskModal('${chain.id}','${tk.id}')" style="cursor:pointer"`:''}>
         <div class="chain-task-icon ${iconCls}">${iconContent}</div>
         <span class="chain-task-title${titleCls}">${escH(tk.title)}</span>
-        <button class="chain-task-del" onclick="event.stopPropagation();deleteChainTask('${chain.id}','${tk.id}')" title="${t('modal.delete')}">✕</button>
+        <div class="chain-task-actions">
+          ${canEdit?`<button class="chain-task-edit" onclick="event.stopPropagation();openEditChainTaskModal('${chain.id}','${tk.id}')" title="${t('group.edit_task')}">✎</button>`:''}
+          <button class="chain-task-del" onclick="event.stopPropagation();deleteChainTask('${chain.id}','${tk.id}')" title="${t('modal.delete')}">✕</button>
+        </div>
       </div>`;
     }).join('');
   }else{
@@ -1197,21 +1207,30 @@ function buildChainForm(chain){
         </div>
         <button class="col-add" style="margin-top:4px" onclick="addChainFormTask()">${escH(t('group.add_task'))}</button>
       </div>`;
-  }else if(existingTasks.length){
+  }else if(modalMode!=='add_chain'){
+    const canEditTask=s=>s==='backlog'||s==='todo';
     tasksHtml=`
-      <div><label class="lbl">${t('group.tasks')} (${existingTasks.length})</label>
-        <div class="chain-modal-tasks">
-          ${existingTasks.map((tk,i)=>`
-            <div class="chain-modal-task">
+      <div><label class="lbl">${t('group.tasks')}${existingTasks.length?' ('+existingTasks.length+')':''}</label>
+        <div class="chain-modal-tasks" id="chainTasksContainer">
+          ${existingTasks.map((tk,i)=>canEditTask(tk.status)?`
+            <div class="chain-modal-task" data-task-id="${tk.id}" data-idx="${i}">
+              <span class="task-num">${i+1}.</span>
+              <div class="task-fields">
+                <input class="chain-task-input" placeholder="${escH(t('modal.name'))}" maxlength="200" value="${escH(tk.title)}">
+                <textarea class="chain-task-desc-input" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000">${escH(tk.description||'')}</textarea>
+              </div>
+              <button class="task-remove" onclick="removeChainFormTask(this)">✕</button>
+            </div>`:`
+            <div class="chain-modal-task chain-modal-task-locked" data-task-id="${tk.id}">
               <span class="task-num">${i+1}.</span>
               <div class="task-fields">
                 <span style="font-size:13px;color:var(--text)">${escH(tk.title)}</span>
                 ${tk.description?`<span style="font-size:12px;color:var(--muted)">${escH(tk.description.substring(0,100))}</span>`:''}
               </div>
               <span class="badge badge-muted" style="font-size:10px">${tk.status}</span>
-            </div>
-          `).join('')}
+            </div>`).join('')}
         </div>
+        <button class="col-add" style="margin-top:4px" onclick="addChainFormTask()">${escH(t('group.add_task'))}</button>
       </div>`;
   }
   return `
@@ -1268,7 +1287,10 @@ function addChainFormTask(){
 }
 function removeChainFormTask(btn){
   const container=$i('chainTasksContainer');
-  if(!container||container.children.length<=1)return;
+  if(!container)return;
+  // In add mode: keep at least 1 task; in edit mode: allow removing all editable tasks (locked ones stay)
+  const editableCount=container.querySelectorAll('.chain-modal-task:not(.chain-modal-task-locked)').length;
+  if(editableCount<=1&&modalMode==='add_chain')return;
   btn.closest('.chain-modal-task').remove();
   [...container.children].forEach((el,i)=>{
     const num=el.querySelector('.task-num');
@@ -1321,6 +1343,43 @@ async function saveChain(){
           agent_mode:cfg.agent||'single',max_turns:maxTurns,
         })
       });
+      // Save edited tasks & create new ones
+      const container=$i('chainTasksContainer');
+      if(container){
+        // Collect IDs of tasks still in the form (not removed)
+        const remainingIds=new Set();
+        const taskEls=[...container.querySelectorAll('.chain-modal-task:not(.chain-modal-task-locked)')];
+        for(const taskEl of taskEls){
+          const taskId=taskEl.dataset.taskId;
+          const taskTitle=(taskEl.querySelector('.chain-task-input')?.value||'').trim();
+          const taskDesc=(taskEl.querySelector('.chain-task-desc-input')?.value||'').trim();
+          if(!taskTitle)continue;
+          if(taskId){
+            // Existing task — update
+            remainingIds.add(taskId);
+            await apiFetch(`/api/tasks/${taskId}`,{
+              method:'PUT',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({title:taskTitle,description:taskDesc})
+            });
+          }else{
+            // New task — create
+            await apiFetch(`/api/task-chains/${editingId}/tasks`,{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({title:taskTitle,description:taskDesc})
+            });
+          }
+        }
+        // Delete tasks that were removed from the form
+        const chain=chains.find(c=>c.id===editingId);
+        if(chain?.tasks){
+          for(const tk of chain.tasks){
+            const canEdit=tk.status==='backlog'||tk.status==='todo';
+            if(canEdit&&!remainingIds.has(tk.id)){
+              await apiFetch(`/api/task-chains/${editingId}/tasks/${tk.id}`,{method:'DELETE'});
+            }
+          }
+        }
+      }
       toast(t('group.saved'));
     }
     closeModal();
@@ -1337,6 +1396,39 @@ async function saveChainTask(){
       body:JSON.stringify({title,description:desc})
     });
     toast(t('group.task_added'));
+    closeModal();
+    await refresh(true);
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+}
+function openEditChainTaskModal(chainId,taskId){
+  const chain=chains.find(c=>c.id===chainId);
+  const tk=chain?.tasks?.find(t=>t.id===taskId);
+  if(!tk)return;
+  modalMode='edit_chain_task';editingId=taskId;
+  $i('modalTitle').textContent=t('group.edit_task');
+  $i('modalBody').innerHTML=`
+    <div><label class="lbl">${t('modal.name')}</label>
+      <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200" value="${escH(tk.title)}">
+    </div>
+    <div><label class="lbl">${t('modal.desc')}</label>
+      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
+    </div>`;
+  $i('modalFt').innerHTML=`
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
+    <button class="btn btn-primary btn-sm" onclick="saveChainTaskEdit()">${t('modal.save')}</button>`;
+  openOverlay('taskOv',{initialFocus:'#fChainTaskTitle',onEscape:closeModal});
+}
+async function saveChainTaskEdit(){
+  const title=($i('fChainTaskTitle')?.value||'').trim();
+  if(!title){toast(t('modal.name'),true);$i('fChainTaskTitle')?.focus();return;}
+  const desc=($i('fChainTaskDesc')?.value||'').trim();
+  try{
+    await apiFetch(`/api/tasks/${editingId}`,{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title,description:desc})
+    });
+    try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'task_changed',id:editingId});bc.close();}catch{}
+    toast(t('group.task_saved'));
     closeModal();
     await refresh(true);
   }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
