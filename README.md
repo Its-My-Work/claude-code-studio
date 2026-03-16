@@ -2,378 +2,54 @@
 
 # Claude Code Studio
 
-**The browser interface for Claude Code CLI.** Chat with AI, run tasks automatically, and manage your work — all from one tab, without touching the terminal.
+**The browser interface for Claude Code CLI.** Chat with AI, run tasks on autopilot, and manage your projects — all from one tab.
 
-> Available in: [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
+> [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
 
-> 📖 [Read on Medium: From Terminal to Dashboard — How Claude Code Studio Changes AI-Assisted Development](https://medium.com/@tiberiy20101/from-terminal-to-dashboard-how-claude-code-studio-changes-ai-assisted-development-749c077469d2)
->
-> 📖 [Read on Medium: Claude Code Studio — The Remote Access Revolution for AI-Assisted Development](https://medium.com/@tiberiy20101/claude-code-studio-the-remote-access-revolution-for-ai-assisted-development-b6c6dc5a5548)
+> 📖 [Medium: From Terminal to Dashboard](https://medium.com/@tiberiy20101/from-terminal-to-dashboard-how-claude-code-studio-changes-ai-assisted-development-749c077469d2) | [Medium: Remote Access Revolution](https://medium.com/@tiberiy20101/claude-code-studio-the-remote-access-revolution-for-ai-assisted-development-b6c6dc5a5548)
 
-> **Works on Windows, macOS, and Linux** — zero platform-specific setup.
+> Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
 ---
 
-## What is this?
+## Why Claude Code Studio?
 
-Claude Code CLI is Anthropic's AI that writes code, runs commands, edits files, and ships features — not just talks about them. It's genuinely powerful.
+Claude Code CLI is powerful — it writes code, runs tests, edits files, and ships features. But it lives in the terminal, and the terminal has limits: context gets lost between sessions, parallel work means juggling tabs, and there's no way to queue tasks and walk away.
 
-The problem: it lives in your terminal. And the terminal has limits.
+Claude Code Studio fixes this:
 
-**Context gets lost.** Switch projects, and you lose your place. Come back tomorrow and you're scrolling through history to remember where you were.
-
-**Parallel work is painful.** Want Claude working on three things at once? That means three terminal tabs, three sessions, three things to manage manually.
-
-**No visibility.** Queue five tasks and walk away. Two hours later — which ones finished? Which ones failed? You're reading scrollback to find out.
-
-**Screenshots and files are clunky.** "Look at this error" means uploading an image somewhere, getting a URL, pasting it. It works, but it's friction.
-
-Claude Code Studio is the missing interface. You open it in your browser, and your AI starts working.
+- **Queue work and walk away** — Kanban board + Scheduler. Claude works while you sleep. Come back to everything done.
+- **Control from anywhere** — Telegram bot + Remote Access. Check results from your phone at the gym.
+- **Autonomous pipelines** — Tasks create child tasks during execution. One "check issues" task spawns fix tasks automatically.
+- **Context never gets lost** — SQLite-backed sessions with self-healing replay. Resume days later, right where you left off.
+- **True parallel execution** — Multiple tasks run simultaneously in the same project. No manual tab juggling.
 
 ---
 
-## Terminal vs Web UI
+## Get Started in 60 Seconds
 
-![Workflow comparison](public/screenshots/workflow-comparison.png)
-
-The difference isn't just visual. A web interface changes how you think about delegating work to AI — from one-off prompts to a queue of managed tasks.
-
----
-
-## What it actually does
-
-### 💬 Chat that does things
-
-Not a chatbot. When you type "refactor this function and add tests", Claude opens files, edits them, runs the tests, fixes errors, and reports back — in real time, right in the chat. Paste a screenshot with Ctrl+V and Claude sees it.
-
-When Claude asks you a question mid-task, the card collapses into a sleek inline pill after you answer — keeping your chat clean and focused on what matters.
-
-### 📋 Kanban board for your AI tasks
-
-Create a card. Describe what you want. Move it to "To Do". Claude picks it up automatically and starts working.
-
-![Kanban workflow](public/screenshots/kanban-diagram.png)
-
-Queue 10 tasks, walk away, come back to all of them done. Cards can run **in parallel** (independent tasks) or **sequentially** (linked sessions, so Claude remembers what the previous task built). **Cross-tab sync** — edit or move a task in one browser tab and every other open tab updates instantly, no refresh needed.
-
-**True parallel execution** — independent tasks now run simultaneously even in the same project directory. No artificial workdir locks holding them back. Chain tasks still respect sequential order, but standalone cards run at full speed, in parallel, the way you'd expect.
-
-![Kanban screenshot](public/screenshots/03-kanban.png)
-
-### 🕐 Scheduler — Your AI on Autopilot
-
-What if Claude could work while you sleep?
-
-Scheduler turns Claude Code Studio into a **self-running automation platform**. Create a task, set a time — Claude picks it up exactly when you need it. No cron jobs, no scripts, no babysitting.
-
-**One-time tasks** — "Deploy to staging tomorrow at 6am before the team wakes up." Create the task, set the date, go home. Claude handles it at 6:00 sharp.
-
-**Recurring tasks** — "Run a full security audit every Monday morning." Set recurrence to **weekly** and walk away. Claude runs the same task every week, creates a fresh session each time, and sends you a Telegram notification when it's done.
-
-Four recurrence intervals: **hourly**, **daily**, **weekly**, **monthly**. Optional end date — the series stops automatically when you don't need it anymore.
-
-**Examples:** Nightly test runs. Weekly dependency audits. Hourly server health checks. Monday morning code reviews that scan the week's commits. Daily standup reports from git activity. Not a dumb shell script — an AI that understands context, adapts to what it finds, and reports back with analysis. If you can describe it in a prompt, you can schedule it.
-
-**How it works:**
-
-1. Open the **Schedule** tab — you'll see an agenda timeline with color-coded sections: overdue (red), today (orange), upcoming (blue), recurring (purple)
-2. Click **Add Task**, pick a date/time, choose recurrence if needed
-3. Claude picks up the task when the time comes — up to **5 tasks run in parallel**
-4. When a recurring task finishes, the next occurrence is created automatically
-5. Server restarts? No problem — scheduled tasks survive in SQLite, and missed times are skipped gracefully (no accidental replay)
-
-The **"Run Now"** button lets you override the schedule and execute any task immediately — useful for testing your setup before leaving it on autopilot.
-
-### ⚡ Slash commands — your personal shortcuts
-
-Type `/` in the chat input and a menu appears with your saved prompts. Pick one, hit Enter.
-
-Instead of typing "Do a thorough code review: readability, performance, security, and adherence to best practices. Point out issues with severity levels" every time — you just type `/review`.
-
-**8 commands ready out of the box:**
-
-| Command | What it does |
-|---------|-------------|
-| `/check` | Check syntax, logic, edge cases, and bugs step by step |
-| `/review` | Full code review with severity levels (critical / warning / suggestion) |
-| `/fix` | Find the bug, fix it, explain what changed |
-| `/explain` | Explain the code clearly with examples |
-| `/refactor` | Clean up the code, keep the same behavior |
-| `/test` | Write tests: happy path, edge cases, error scenarios |
-| `/docs` | Write documentation with examples and gotchas |
-| `/optimize` | Find bottlenecks, propose improvements, estimate gains |
-
-Add your own, edit them, delete them. As many as you want.
-
-### 📱 Telegram Bot — Control Claude from Your Phone
-
-Your laptop is closed. You're at the gym, in a meeting, across the world. But your AI is still working. And now — so are you.
-
-Pair your phone with Claude Code Studio in 30 seconds (6-character code from Settings), and your phone becomes a full remote control:
-
-**Queue & Monitor**
-- `/projects` — browse all your sessions
-- `/chats` — pick up where you left off
-- `/chat` — start a new session right now
-- `/tasks` — see your Kanban board. Which tasks are running? Which are done?
-
-**See Results Instantly**
-- `/last` — show Claude's last action (code written, tests run, files changed)
-- `/full` — get the complete output of the last task
-- **Kanban task notifications** — your phone buzzes when each queued task finishes or fails, with the task name, status, and how long it took. No more checking the browser to see if it's done.
-
-**Manage on the Go**
-- `/files`, `/cat` — browse project files and peek at code without opening an editor
-- `/diff` — see exactly what changed in the last commit
-- `/log` — recent git history — who changed what, and when
-- `/tunnel` — start or stop Remote Access right from your phone (also available as a button in the main menu)
-- `/url` — get the current public URL
-- `/new` — start a new task queue
-- `/stop` — stop a running task
-
-**Claude Asks — You Answer from Your Phone**
-Claude sometimes needs your input mid-task: "Should I refactor this function or rewrite it?" With ask_user forwarding, these questions appear instantly in Telegram as inline buttons. Tap your choice, or type a free-text answer — Claude gets it immediately and keeps working. No need to open the browser. You stay in the loop without breaking your flow.
-
-**Inline Stop — One Tap to Cancel**
-Every progress message in Telegram has a built-in [🛑 Stop] button. See Claude going in the wrong direction? Tap it. No commands to type, no menus to navigate — the button is right there, on every "Processing..." update. Combined with [🏠 Menu], you always have full control at your fingertips.
-
-**Send Messages, Get Answers Instantly**
-Type a message to Claude directly from Telegram. You see a real-time typing indicator while Claude thinks, and the response streams back to both your phone AND your browser simultaneously. The conversation is unified — continue in Telegram, pick it up on your laptop five minutes later, everything is there. And it works both ways: messages sent from Telegram appear in the web UI in real-time too.
-
-**Multi-Device Pairing**
-Pair your phone, your tablet, your laptop — all at once. Control the same Claude Code Studio instance from anywhere. Each device gets push notifications when tasks finish, with inline buttons: [View Result] [Continue] [Menu].
-
-**Forum Mode — Telegram as Your Project Dashboard**
-
-Your Telegram supergroup becomes a structured project workspace. Each project gets its own topic thread. Tasks live in a dedicated Tasks topic. Activity notifications flow into an Activity topic. It's not just a remote control — it's an organized command center for all your projects.
-
-![Telegram Forum Mode](public/screenshots/tg_forum.jpg)
-
-**How to set up:**
-1. Create a Telegram supergroup with Topics enabled
-2. Type `/connect` in the group — Studio pairs instantly
-3. Studio auto-creates the structure: a **Tasks** topic for task management, an **Activity** topic for notifications, and a separate topic for each of your projects
-
-**Project topics** — each project directory gets its own thread. Send a message in a project topic and Claude works in that project's context. Use `/new` to start a fresh session, `/history` to see past sessions with clickable switch buttons, `/session N` to switch, `/files` to browse, `/cat` to read files, `/diff` for changes, `/log` for git history, `/last` and `/full` for recent messages, `/stop` to halt. Every done/error message has contextual buttons — [📜 History] [🆕 New] — so you navigate without typing commands. Type `/help` in any topic for a full command reference.
-
-**Tasks topic** — your Kanban board, inside Telegram. Type a task title and it's created instantly. Full lifecycle management: `/list` to see all tasks, `/start ID` to begin, `/done ID` to complete, `/todo ID`, `/block ID`, `/backlog ID` to change status, `/delete ID` to remove. Manage your entire backlog without ever opening the browser.
-
-**Activity topic** — every notification (task completed, task failed, session events) gets posted here with interactive buttons: [💬 Open chat] jumps to the session in its project topic, [📁 Project] navigates directly to the project thread. Not just a log — a navigation hub.
-
-**Inline creation** — in your private chat with the bot, use the **New Chat** and **New Task** buttons to create items directly. No commands to memorize — just tap and type.
-
-**Why This Matters**
-
-You queue 10 refactoring tasks at 9pm. Instead of staring at your laptop, you go to the gym. At 10:15pm, your phone buzzes: "Task 3 complete". You tap [View] and see the changes. You add a comment: "Next, add error handling for the network case." Claude gets it immediately and starts task 4. Two hours later, everything is done. You tap [View Final] and review the full output in Telegram before you even sit at your desk.
-
-No laptop required. No constant monitoring. Just work, delegated.
-
-### 👥 Agent Modes
-
-Claude Code Studio offers three ways to organize work: one agent, a team in-chat, or a full task dispatch system.
-
-**Single** — one agent, one task, one conversation. Default mode. Best for focused work, debugging, and interactive back-and-forth.
-
-**Multi** — the orchestrator decomposes the task into 2–5 subtasks with specialized agents. All run in-chat with real-time streaming. Agents can depend on each other (via `depends_on`), so one task's output feeds into the next. You see a team card with a progress bar. If planning fails, it falls back to Single automatically. You can also send a Multi plan to the Kanban board with the 📋 Kanban button.
-
-**Dispatch** — like Multi, but instead of running in-chat, the subtasks are sent directly to the **Kanban board** as individual task cards. Each gets its own Claude session. Key differences from Multi:
-- Tasks run as persistent Kanban cards (survive server restarts)
-- Full dependency graph with `depends_on` — tasks start when their dependencies complete
-- Auto-retry on failure (with exponential backoff)
-- Cascade cancellation — if a dependency fails, all downstream tasks are cancelled
-- Doesn't block the chat — you can keep chatting while tasks execute in the background
-- Workdir lock — prevents two tasks from editing the same directory simultaneously
-
-Comparison:
-
-| | Single | Multi | Dispatch |
-|---|---|---|---|
-| Where it runs | Chat | Chat | Kanban board |
-| Agents | 1 | 2–5, parallel | 2–5, as task cards |
-| Dependencies | — | Basic (`depends_on`) | Full graph with `depends_on` |
-| Auto-retry | No | No | Yes (with backoff) |
-| Survives restart | No | No | Yes (SQLite-persisted) |
-| Best for | Focused work | Complex tasks you want to watch | Background batch work |
-
-**How to switch:** Click Single / Multi / Dispatch in the toolbar's "Agent" group.
-
-### 🎛 Chat Modes
-
-Three modes in the "Mode" toolbar group control what Claude is allowed to do:
-
-**Auto** — the default. Claude has full access to all tools: reading files, writing code, running commands, editing. No guardrails — Claude decides what actions are needed.
-
-**Plan** — read-only mode. Claude can explore the project, analyze code, and produce a plan, but **cannot modify files or run commands**. The tool list is restricted to read-only operations (View, Grep, Glob, ListDir). Use this when you want analysis and a plan of action before committing to changes — especially on unfamiliar codebases or risky refactorings.
-
-When Claude produces a plan in Plan mode, an **"Execute Plan"** button appears at the bottom of the response. Click it — and Studio automatically switches to Auto mode and instructs Claude to execute the plan step by step. This creates a smooth workflow: analyze first, then execute with one click.
-
-**Auto Plan Detection** — Studio now watches for plan completion signals in Claude's response. When Claude says "plan complete" or "starting execution", Studio automatically switches from Plan to Auto mode without you lifting a finger. You don't even need to click Execute Plan — the transition just happens.
-
-**Task** — explicit execution mode. Same full tool access as Auto, with an added system instruction signaling this is an execution task. Practically similar to Auto but makes intent clear.
-
-**How to switch:** Click Auto / Plan / Task in the toolbar's "Mode" group.
-
-### 🧠 Skills & Auto-Skills
-
-Skills are `.md` files that give Claude a specialist persona. When a skill is active, its full content is injected into the system prompt — like briefing an expert before they start work. Claude doesn't just "know about" the domain — it thinks from within it: applies the right patterns, avoids known anti-patterns, and stays within the skill's scope.
-
-**28 skills bundled out of the box:** frontend, backend, api-designer, security, devops, docker, kubernetes, postgres, debugging, code-review, fullstack, UI/UX design, technical writing, and more.
-
-**Auto-skills (⚡ Auto)** — enabled by default. When you send a message, Studio classifies your request with a fast Haiku call and activates 1–4 relevant skills automatically:
-
-- "Fix this React rendering bug" → activates `frontend` + `debugging-master`
-- "Set up Kubernetes deployment" → activates `devops` + `kubernetes` + `docker`
-- "Review this API for security" → activates `security` + `api-designer` + `code-review`
-
-Think of it as **hiring the right specialist for each job**. Instead of a generalist answering everything, Claude adopts the mindset, experience, and vocabulary of the relevant domain expert. A frontend question gets answered by someone who has debugged hydration mismatches at 3am, not by a generalist who read the React docs once.
-
-**Plugin skills (🧩)** — Claude Code Studio automatically discovers skills from your installed Claude Code plugins. Skills from marketplace and cached plugins appear in the sidebar grouped by plugin name. No configuration needed — install a plugin in Claude Code, and its skills show up in Studio immediately.
-
-You can also pick skills manually in the sidebar — this turns off Auto mode. Add your own `.md` files to the `skills/` directory for custom specializations.
-
-### ⚙️ Model & Turns
-
-**Model** — which Claude processes your request. Three options in the "Model" toolbar group:
-
-| Model | Strengths | Best for |
-|-------|-----------|----------|
-| **Haiku** | Fastest, cheapest | Simple questions, formatting, quick checks |
-| **Sonnet** | Balance of speed and depth (default) | Most everyday tasks |
-| **Opus** | Most capable, deepest reasoning | Complex architecture, difficult bugs, nuanced analysis |
-
-**Turns** — how many steps Claude can take before stopping (default: **50**, range: 1–200). One turn ≈ one action: read a file, write code, run a test. Complex tasks need more turns.
-
-Rough guide:
-- Simple question → 5–10 turns
-- Bug fix → 15–30 turns
-- Feature implementation → 50–100 turns
-- Large refactoring → 100–200 turns
-
-If Claude hits the turn limit mid-task, it **auto-continues up to 3 times** — so a 50-turn budget effectively allows up to 200 steps before it asks you to continue manually.
-
-### 🌐 Remote servers over SSH
-
-Add a remote server, create a project pointing to a directory on it, and Claude works there — as if local. Useful for GPU machines, staging environments, or managing a server fleet without SSH sessions.
-
-**Quick attach with `#`** — type `#` in the chat input and a popup shows your configured SSH servers. Pick one (or several — the popup stays open for multi-select), it attaches as a chip, and Claude receives full connection details including stored credentials. No context switching, no sidebar clicking — just `#` and go.
-
-**Attachments work remotely too** — Paste screenshots, upload PDFs, or drag any file into chat. Claude Code Studio automatically uploads them to the remote server via SFTP before processing. Your remote Claude sessions have full vision and file access, just like local ones.
-
-### 🔗 Remote Access — Open Your Studio to the World
-
-Your Studio runs on `localhost:3000`. But what if you need to access it from a coffee shop, your phone's browser, or share a link with a teammate?
-
-One click. That's it. Open the **Remote Access** panel in the sidebar, pick a provider — **cloudflared** (no signup, works instantly) or **ngrok** (if you already use it) — and hit Start. You get a public HTTPS URL in seconds.
-
-- **Zero configuration** — cloudflared needs no account, no token, no DNS setup
-- **Secure by default** — your Studio password protects everything, the tunnel is just a pipe
-- **Telegram integration** — the URL is sent straight to your paired Telegram devices with one tap
-- **Start and stop from your phone** — `/tunnel` and `/url` commands in the Telegram bot
-- **Works behind NAT, firewalls, corporate VPNs** — if your machine has internet, it works
-
-Why does this matter? Because your AI doesn't need to be chained to your desk. Start a batch of tasks at home, grab the URL from Telegram, and check results from anywhere.
-
-### 📱 Mobile-Ready — Use It from Your Phone's Browser
-
-Not just Telegram. Open your Studio's public URL (via Remote Access) in any mobile browser — and you get an experience that feels like a native app.
-
-**Native-feel mobile UI** — a full redesign for small screens. A mobile header with live status indicator (pulsing orange while Claude works, green when idle, red on error). A settings bottom sheet slides up from the edge — switch modes, models, and agent types with one tap. Session tabs live in a full-screen overlay with individual close buttons and a tab counter badge.
-
-- **Touch-optimized** — 44px tap targets, scroll-snap Kanban columns, swipeable panels
-- **iOS-safe** — no auto-zoom on focus, safe area insets for notched devices, no rubber-banding
-- **Responsive layout** — sidebars auto-collapse on mobile, restore on desktop
-- **All pages** — Chat, Kanban, Schedule, Auth — every screen adapts to narrow viewports
-- **Accessibility** — all modals use ARIA-compliant focus traps with Escape-to-close and focus restoration
-
-You're on a train, your tunnel is running, you open the URL on your phone. Full Kanban board with snap-scrolling columns. Full chat with streaming. Settings a swipe away. Not a "mobile version" — the real interface, redesigned for touch.
-
-### 🔄 Self-Healing Sessions
-
-If a Claude session is lost — server restart, network issue, expired session — Studio automatically rebuilds the full conversation context from its SQLite history and replays it into a fresh session. Claude continues coherently from where it left off. No manual intervention, no lost context. Works for both local and SSH sessions.
-
-When Claude exhausts its auto-continues, a **Restart Session** button appears right in the chat. One click clears the broken session and lets you keep going.
-
-### 📊 Dashboard — Your Productivity at a Glance
-
-How productive is your AI workflow? The Dashboard page gives you a visual answer — no guessing, just data.
-
-![Dashboard](public/screenshots/dashboard.jpg)
-
-**What you see:**
-- **Hero cards** — total sessions, tool calls, messages, and estimated time saved (based on average manual execution time per operation)
-- **Activity heatmap** — GitHub-style contribution grid showing your last 90 days of activity
-- **Tool usage breakdown** — which Claude tools do the heavy lifting (Read, Bash, Edit, Grep...) — the iceberg of hidden automation
-- **Automation Index** — a 0–100 score combining tool usage ratio, multi-agent adoption, and activity consistency
-- **Model distribution** — donut chart showing Haiku / Sonnet / Opus usage split
-- **Peak hours** — when you're most active, hour by hour
-- **Top sessions** — your most intensive conversations, ranked by message count, with project badges and one-click navigation back to the chat
-
-Every number links back to the real data. Click a top session and you land directly in that conversation, in the right project context.
-
-The Dashboard is a marketing tool for your own productivity — the kind of screen you screenshot and share.
-
-### 💾 Everything is saved
-
-Sessions, chats, task history — all stored locally in SQLite. Come back tomorrow, continue exactly where you left off.
-
----
-
-## Who is it for?
-
-**Individual developers** — manage multiple projects, queue tasks, resume sessions days later without losing context. Schedule nightly test runs and code quality checks. Let Claude work the night shift.
-
-**Teams** — shared Claude Code Studio instance with project visibility, Kanban showing who's doing what, and session history as an audit trail. Set up recurring Monday reviews that scan the week's commits automatically.
-
-**System administrators** — manage your server fleet from one browser tab. Schedule hourly health checks, daily log cleanup, weekly security scans. Delegate complex operations ("update nginx on all 5 servers, verify each one, rollback if tests fail") and get Telegram alerts when they finish. This is your operations platform, not just a chat.
-
-**ML / AI engineers** — run Claude on powerful remote GPU servers via SSH. Queue training jobs and preprocessing tasks. Schedule recurring data pipeline runs. Check results from your phone via Telegram.
-
----
-
-## What this is (and isn't)
-
-- **Not a SaaS** — runs on your machine, your data never leaves. No account, no telemetry, no vendor lock-in.
-- **Not an IDE replacement** — it manages Claude sessions. Keep using VS Code, Cursor, or whatever you prefer.
-- **Not a Claude Code fork** — it wraps the official CLI. When Anthropic ships improvements, you get them automatically.
-
-This is infrastructure you own. MIT licensed, no strings.
-
----
-
-## Chat interface
-
-![Chat Interface](public/screenshots/02-main-chat.png)
-
----
-
-## Get started in 60 seconds
-
-**Prerequisites:**
-- Windows, macOS, or Linux (all fully supported)
-- [Node.js 18+](https://nodejs.org)
-- [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in (requires a Claude Pro or Max subscription)
+**Prerequisites:** [Node.js 18+](https://nodejs.org) + [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in (Claude Pro or Max subscription)
 
 ```bash
 npx github:Lexus2016/claude-code-studio
 ```
 
-Open `http://localhost:3000`, set your password on first launch, start chatting.
+Open `http://localhost:3000`, set a password, start chatting.
 
-**To update:**
+<details>
+<summary><b>Other install methods</b></summary>
+
+**Update:**
 ```bash
 npx github:Lexus2016/claude-code-studio@latest
 ```
 
----
-
-## Other ways to install
-
-**Install globally** — run `claude-code-studio` from anywhere:
+**Install globally:**
 ```bash
 npm install -g github:Lexus2016/claude-code-studio
 ```
 
-**Clone the repo** — for developers who want to dig in:
+**Clone the repo:**
 ```bash
 git clone https://github.com/Lexus2016/claude-code-studio.git
 cd claude-code-studio
@@ -388,96 +64,214 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+</details>
+
 ---
 
-## Using OpenRouter models
+![Chat Interface](public/screenshots/02-main-chat.png)
 
-Want to use GPT-4o, Gemini, Llama, Mistral, or any other model available on [OpenRouter](https://openrouter.ai) — instead of (or alongside) Anthropic's own models?
+---
 
-Use **[Claude Flow](https://github.com/Lexus2016/claude-flow)** — a companion project that configures Claude Code CLI to route requests through OpenRouter. Set it up once before launching Claude Code Studio, and any model available on OpenRouter becomes usable in Studio's chat, Kanban tasks, and Scheduler.
+## Features
+
+### 💬 Real-Time Chat
+
+Not a chatbot. "Refactor this function and add tests" → Claude opens files, edits them, runs tests, fixes errors, reports back — in real time. Paste screenshots with Ctrl+V. When Claude asks a question mid-task, the card collapses into a compact pill after you answer.
+
+### 📋 Kanban Board
+
+Create a card, describe what you want, move to "To Do" — Claude picks it up automatically.
+
+![Kanban workflow](public/screenshots/kanban-diagram.png)
+
+Queue 10 tasks, walk away, come back to all done. Cards run **in parallel** (independent tasks) or **sequentially** (chained sessions — Claude remembers what the previous task built). **Cross-tab sync** updates every open browser tab instantly. True parallel execution — no artificial directory locks for independent tasks.
+
+![Kanban Board](public/screenshots/03-kanban.png)
+
+### 🕐 Scheduler — AI on Autopilot
+
+Create a task, set a time — Claude runs it exactly when needed. No cron, no scripts, no babysitting.
+
+- **One-time:** "Deploy to staging at 6am" — done at 6:00 sharp
+- **Recurring:** hourly, daily, weekly, monthly — with optional end date
+- **Up to 5 parallel workers** — missed times after restart are skipped gracefully
+
+Color-coded agenda: overdue (red), today (orange), upcoming (blue), recurring (purple). **Run Now** button for instant testing.
+
+### 🤖 Autonomous Task Manager
+
+During task execution, Claude has access to a built-in MCP server for autonomous task management — turning single tasks into self-directing pipelines.
+
+| Tool | What it does |
+|------|-------------|
+| `create_task` | Spawn a follow-up task. Found 5 bugs? Create 5 fix tasks automatically |
+| `create_chain` | Create sequential pipelines (Build → Test → Deploy) in one call |
+| `list_tasks` | Check existing tasks — avoid duplicates, monitor progress |
+| `get_current_task` | Read your mission and context from the parent task |
+| `report_result` | Store structured results for downstream tasks |
+| `get_task_result` | Read output from completed dependency tasks |
+| `cancel_task` | Cancel redundant tasks (bug already fixed, duplicate work) |
+
+**Example:** Schedule a nightly "check GitHub issues" task. It reads open issues, creates a fix task for each bug, chains a verification task after each fix, and reports a summary. No human in the loop.
+
+Tasks inherit the project directory. Context is passed explicitly — children know exactly what to do. Chain depth is limited to prevent runaway recursion.
+
+### 📱 Telegram Bot — Control from Your Phone
+
+Pair in 30 seconds (6-digit code from Settings). Your phone becomes a full remote control:
+
+- **Queue & monitor:** `/projects`, `/chats`, `/tasks`, `/chat`, `/new`
+- **See results:** `/last`, `/full` — plus push notifications when tasks finish or fail
+- **Manage:** `/files`, `/cat`, `/diff`, `/log`, `/stop`, `/tunnel`, `/url`
+- **Ask User forwarding:** Claude's mid-task questions appear as Telegram buttons — tap to answer
+- **Inline Stop:** 🛑 button on every progress message — one tap to cancel
+- **Session bridge:** Messages sync to both phone and browser simultaneously
+- **Multi-device:** Pair phone, tablet, laptop — all at once
+
+**Forum Mode** — Telegram supergroup with Topics. Each project gets its own thread. Tasks topic for Kanban management. Activity topic for notifications with interactive navigation buttons.
+
+![Telegram Forum Mode](public/screenshots/tg_forum.jpg)
+
+### 👥 Agent Modes
+
+| | Single | Multi | Dispatch |
+|---|---|---|---|
+| Where | Chat | Chat | Kanban board |
+| Agents | 1 | 2–5 parallel | 2–5 as task cards |
+| Dependencies | — | Basic | Full DAG |
+| Auto-retry | No | No | Yes (with backoff) |
+| Survives restart | No | No | Yes (SQLite) |
+| Best for | Focused work | Complex tasks to watch | Background batch work |
+
+**Multi** — orchestrator decomposes into 2–5 subtasks with real-time streaming. Send plan to Kanban with 📋 button.
+**Dispatch** — subtasks go to Kanban as persistent cards with dependency graphs, auto-retry, and cascade cancellation.
+
+### 🎛 Chat Modes
+
+**Auto** — full tool access (default). **Plan** — read-only analysis; produces an **Execute Plan** button to switch to Auto and run it. Auto Plan Detection switches modes automatically when Claude signals completion. **Task** — explicit execution mode.
+
+### 🧠 Skills & Auto-Skills
+
+28 built-in specialist personas (frontend, security, devops, kubernetes, debugging, code-review...). **Auto mode (⚡)** classifies each message and activates 1–4 relevant skills automatically:
+
+- "Fix this React bug" → `frontend` + `debugging-master`
+- "Set up K8s deployment" → `devops` + `kubernetes` + `docker`
+
+Plugin skills auto-discovered from installed Claude Code plugins. Add custom `.md` files to `skills/`.
+
+### ⚡ Slash Commands
+
+Type `/` — pick a saved prompt. 8 built-in:
+
+| `/check` | `/review` | `/fix` | `/explain` |
+|-----------|-----------|--------|------------|
+| Syntax & bugs | Full code review | Find & fix bug | Explain with examples |
+| **`/refactor`** | **`/test`** | **`/docs`** | **`/optimize`** |
+| Clean up code | Write tests | Write docs | Find bottlenecks |
+
+Add your own, edit them, delete them. As many as you want.
+
+### ⚙️ Model & Turns
+
+| Model | Best for |
+|-------|----------|
+| **Haiku** | Fast — simple questions, quick checks |
+| **Sonnet** | Balanced (default) — most everyday tasks |
+| **Opus** | Most capable — complex architecture, hard bugs |
+
+Turn budget: 1–200 (default 50). Auto-continues up to 3x — so 50 turns effectively means up to 200 steps.
+
+### 🌐 Remote Access & SSH
+
+**SSH** — add remote servers, create projects pointing to directories on them. Claude works there as if local. Type `#` in chat for quick multi-server attachment. Screenshots and files auto-upload via SFTP.
+
+**Remote Access** — one click: cloudflared (no signup) or ngrok. Public HTTPS URL in seconds. Works behind NAT, firewalls, corporate VPNs. URL sent to Telegram automatically.
+
+### 📊 Dashboard
+
+![Dashboard](public/screenshots/dashboard.jpg)
+
+Activity heatmap (90 days), tool usage breakdown, model distribution, Automation Index (0–100), peak hours, top sessions with one-click navigation. Every number links to real data.
+
+### 📱 Mobile-Ready
+
+Open the URL on your phone — native-feel interface. Mobile header with live status indicator, bottom sheet settings, scroll-snap Kanban columns, touch-optimized 44px targets, iOS-safe. Not a "mobile version" — the real interface, redesigned for touch.
+
+---
+
+## Who is it for?
+
+**Developers** — Multiple projects, task queues, session continuity. Schedule nightly tests. Let Claude work the night shift.
+
+**Teams** — Shared instance with project visibility, Kanban audit trail, recurring Monday code reviews.
+
+**Sysadmins** — Server fleet management from one tab. Scheduled health checks, security scans, multi-server operations with Telegram alerts.
+
+**ML/AI Engineers** — Remote GPU servers via SSH. Queued training jobs. Scheduled data pipelines. Phone monitoring via Telegram.
+
+---
+
+## What this is (and isn't)
+
+- **Not a SaaS** — runs on your machine. No account, no telemetry, no vendor lock-in.
+- **Not an IDE** — manages Claude sessions. Keep using VS Code, Cursor, or whatever you prefer.
+- **Not a fork** — wraps the official CLI. Anthropic updates flow through automatically.
+
+MIT licensed. Your infrastructure, your data.
+
+---
+
+## Using OpenRouter Models
+
+Use **[Claude Flow](https://github.com/Lexus2016/claude-flow)** to route through [OpenRouter](https://openrouter.ai) — GPT-4o, Gemini, Llama, Mistral, and more:
 
 ```bash
-# 1. Set up Claude Flow (one-time)
-npx github:Lexus2016/claude-flow
-
-# 2. Launch Studio as usual
-npx github:Lexus2016/claude-code-studio
+npx github:Lexus2016/claude-flow          # one-time setup
+npx github:Lexus2016/claude-code-studio    # launch as usual
 ```
-
-After setup, Claude Code CLI will use your OpenRouter API key and the model you selected. Studio inherits these settings automatically — no additional configuration needed.
 
 ---
 
-## Full feature list
+## Feature Reference
 
-| Feature | What it means |
-|---------|--------------|
-| 💬 Real-time chat | Responses stream in as Claude thinks and works |
-| 📋 Kanban board | Queue tasks → Claude runs them automatically |
-| 🕐 Scheduler | Time-based automation: one-time or recurring (hourly/daily/weekly/monthly), up to 5 parallel workers |
-| ⚡ Slash commands | Saved prompt shortcuts with `/` autocomplete |
-| 📱 Telegram bot | Control Claude from your phone — notifications, commands, live session bridge, ask_user forwarding |
-| 🏛 Telegram Forum Mode | Supergroup Topics integration — each project gets its own thread, with Tasks and Activity topics for structured management |
-| 🔔 Push notifications | Task finished? Get a notification with [View] [Continue] buttons |
-| 📡 Session bridge | Send messages from Telegram, responses stream to both phone and browser simultaneously |
-| ❓ Ask User in Telegram | Claude's questions forwarded to Telegram — answer with buttons or free text |
-| 👥 Agent modes | Single, Multi (in-chat team), Dispatch (tasks → Kanban board) |
-| 🔄 Auto-continue | Hits turn limit mid-task? Resumes automatically |
-| ↗️ Fork conversation | Continue from any message in a new chat |
-| 🔌 MCP servers | Connect GitHub, Slack, databases, and more — redesigned modal with Form & JSON editor, full field editing |
-| 🎯 Execute Plan button | In Plan mode, click to auto-switch to Auto mode and run the plan |
-| 🎛 Chat modes | Auto (full access), Plan (read-only analysis), Task (explicit execution) |
-| 🧠 Skills & auto-skills | 28 specialist personas; auto-classified per message with ⚡ Auto |
-| 🧩 Plugin skills | Auto-discovers skills from installed Claude Code plugins — zero configuration |
-| ⚙️ Model & turns | Haiku / Sonnet / Opus; adjustable turn budget (1–200) with auto-continue |
-| 🔀 Auto mode switch | Claude can switch modes mid-task (e.g., planning → execution) |
-| 📁 File browser | Browse, preview, and attach files with `@filename` — multi-select: popup stays open for picking several files |
-| 🖼 Vision | Paste screenshots — Claude sees and analyzes them |
-| 🗂 Projects | Separate workspaces with their own file directories |
-| 🌐 Remote SSH | Work on remote servers as if local — type `#` in chat to quickly attach any SSH host |
-| 🔗 Remote Access | One-click public URL via cloudflared or ngrok — access Studio from anywhere |
-| 📱 Mobile UI | Native-feel mobile interface — bottom sheet settings, status indicator, tabs overlay, swipe gestures |
-| 🔒 File locks | Multiple agents on same codebase — no conflicts |
-| 🔄 Cross-tab Kanban sync | Edit or move a task in one tab — every other open tab updates instantly |
-| 🔄 Tab drag-and-drop | Reorder chat tabs by dragging — organize your workspace your way |
-| 💾 History | Everything saved to SQLite, resume anytime |
-| 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
-| 📊 Dashboard | Visual analytics — activity heatmap, tool usage, model distribution, automation score, top sessions with one-click navigation |
-| 🔒 Auth | Password login, 30-day tokens, data stays on your machine |
-| 🧠 Language-aware AI | Claude reasons in English for precision, responds in your language — full native experience in every conversation |
-| 🛡 Self-healing sessions | Full session replay from SQLite history when session is lost — auto-rebuilds context, continues seamlessly |
-| ⚡ True parallel tasks | Independent Kanban tasks run simultaneously in the same project — no artificial workdir locks |
-| 🛡 Database crash protection | All SQLite operations auto-sanitize inputs — no more "Too few parameter values" crashes |
-| ⏹ Instant Stop | Stop button works immediately, even during skill classification — no 10-second delay |
-| 🛡 Crash-proof storage | Atomic file writes for auth data + MCP protocol guards — no data corruption on unexpected shutdown |
-| 🌍 3 languages | English, Ukrainian, Russian — auto-detected on first visit, switch anytime |
-| 🖥 Cross-platform | Windows, macOS, Linux — no compatibility headaches |
-| 🛡 Security hardened | XSS, path traversal, SQL injection protection built-in |
-| 🐳 Docker | Deploy anywhere |
+| Category | Features |
+|----------|----------|
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x) |
+| **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs |
+| **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted |
+| **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
+| **Telegram** | Bot control, push notifications, ask_user forwarding, session bridge, Forum Mode, inline stop |
+| **Agents** | Single, Multi (2–5 in-chat), Dispatch (Kanban), auto-retry, cascade cancellation |
+| **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
+| **Skills** | 28 built-in, auto-classification, plugin discovery, custom `.md` files |
+| **Commands** | 8 built-in slash commands, custom commands |
+| **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels |
+| **Mobile** | Native-feel UI, bottom sheet, scroll-snap Kanban, iOS-safe, touch-optimized |
+| **Dashboard** | Activity heatmap, tool usage, model distribution, Automation Index, peak hours |
+| **Reliability** | Self-healing sessions, crash protection, atomic writes, instant stop |
+| **Security** | bcrypt auth, AES-256-GCM SSH, Helmet.js, path traversal protection, XSS/SQLi prevention |
+| **Platform** | Windows/macOS/Linux, Docker, 3 languages (EN/UA/RU), OpenRouter support |
 
 ---
 
-## Technical details
+## Technical Details
 
-For developers who want to understand or modify how it works.
-
-### Architecture
-
-Single Node.js process. No build step. No TypeScript. No framework.
+**Architecture** — Single Node.js process. No build step. No TypeScript. No framework.
 
 ```
-server.js         — Express HTTP + WebSocket
-auth.js           — bcrypt passwords, 32-byte session tokens
-claude-cli.js     — spawns `claude` subprocess, parses JSON stream
-telegram-bot.js   — Telegram bot: remote control, notifications, session bridge
-public/index.html — entire frontend (HTML + CSS + JS in one file)
-config.json       — MCP server definitions + skills catalog
-data/chats.db     — SQLite: sessions + messages
-skills/           — .md skill files loaded into system prompt
-workspace/        — Claude's working directory
+server.js              — Express HTTP + WebSocket
+auth.js                — bcrypt passwords, 32-byte session tokens
+claude-cli.js          — spawns `claude` subprocess, parses JSON stream
+telegram-bot.js        — Telegram bot + Forum Mode
+mcp-task-manager.js    — MCP server for autonomous task management
+mcp-notify.js          — MCP server for non-blocking notifications
+public/index.html      — entire frontend (HTML + CSS + JS)
+config.json            — MCP servers + skills catalog
+data/chats.db          — SQLite (WAL mode)
+skills/                — .md skill files → system prompt
 ```
 
-### Environment variables
+**Environment:**
 
 ```env
 PORT=3000
@@ -488,18 +282,9 @@ TRUST_PROXY=false
 LOG_LEVEL=info
 ```
 
-### Security
+**Security:** bcrypt (12 rounds), 32-byte tokens (30-day TTL), AES-256-GCM for SSH passwords, Helmet.js headers, path traversal protection, XSS filtering, parameterized SQL queries, 2MB buffer caps.
 
-- Passwords: bcrypt, 12 rounds
-- Tokens: 32-byte random hex, 30-day TTL, server-side storage
-- SSH passwords: AES-256-GCM encrypted at rest
-- Headers: Helmet.js on all responses
-- File access: path traversal protection on all file operations
-- XSS prevention: JavaScript URL filtering in markdown renderer
-- SQL injection: fully parametrized queries, no string interpolation
-- Memory protection: 2MB buffer caps with sliding window, capped message queues
-
-### Development
+**Development:**
 
 ```bash
 npm run dev   # auto-reload (node --watch)

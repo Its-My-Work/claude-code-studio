@@ -6762,7 +6762,7 @@ inEl.addEventListener('input', () => {
   // / slash commands
   if ((config.slashCommands || []).length) {
     const slashIdx = before.lastIndexOf('/');
-    if (slashIdx >= 0 && (slashIdx === 0 || /[\s]/.test(val[slashIdx - 1]))) {
+    if (slashIdx === 0) {
       const afterSlash = before.slice(slashIdx + 1);
       if (!afterSlash.includes(' ') && !afterSlash.includes('\n')) {
         _openSlashPopup(afterSlash); return;
