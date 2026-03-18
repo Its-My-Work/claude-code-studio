@@ -30,6 +30,8 @@ Claude Code Studio fixes this:
 
 **Prerequisites:** [Node.js 18+](https://nodejs.org) + [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in (Claude Pro or Max subscription)
 
+> **Node.js 22.5+** — zero native compilation. Uses built-in `node:sqlite`, no C++ toolchain needed. Older Node.js versions fall back to `better-sqlite3` (requires build tools).
+
 ```bash
 npx github:Lexus2016/claude-code-studio
 ```

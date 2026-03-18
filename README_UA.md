@@ -30,6 +30,8 @@ Claude Code Studio вирішує це:
 
 **Вимоги:** [Node.js 18+](https://nodejs.org) + [Claude Code CLI](https://docs.anthropic.com/en/claude-code) встановлено та авторизовано (підписка Claude Pro або Max)
 
+> **Node.js 22.5+** — нуль нативної компіляції. Використовує вбудований `node:sqlite`, не потрібен C++ тулчейн. Старіші версії Node.js використовують `better-sqlite3` (потребує build tools).
+
 ```bash
 npx github:Lexus2016/claude-code-studio
 ```
