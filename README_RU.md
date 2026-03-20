@@ -6,7 +6,7 @@
 
 > [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
 
-> 📖 [Medium: От терминала к дашборду](https://medium.com/@tiberiy20101/from-terminal-to-dashboard-how-claude-code-studio-changes-ai-assisted-development-749c077469d2) | [Medium: Революция удалённого доступа](https://medium.com/@tiberiy20101/claude-code-studio-the-remote-access-revolution-for-ai-assisted-development-b6c6dc5a5548)
+> 📖 [От терминала к дашборду](https://www.notion.so/From-Terminal-to-Dashboard-How-Claude-Code-Studio-Changes-AI-Assisted-Development-329676bbc5b6809f9c63e29ca66d8135) | [Революция удалённого доступа](https://www.notion.so/Claude-Code-Studio-The-Remote-Access-Revolution-for-AI-Assisted-Development-329676bbc5b68097a5aefac4db29a60d)
 
 > Работает на **Windows, macOS и Linux** — никакой платформозависимой настройки.
 
