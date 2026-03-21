@@ -1413,7 +1413,15 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 /* ─── Directory browser ─── */
 .dir-modal { width: 520px; }
 .dir-path-bar { padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg); display: flex; align-items: center; gap: 6px; }
-.dir-path-bar .path-text { font-size: 12px; color: var(--accent2); font-family: var(--font-mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; word-break: break-all; }
+.dir-path-input { flex: 1; background: var(--s2); border: 1px solid var(--border); color: var(--accent2); padding: 6px 10px; border-radius: 6px; font-size: 12px; font-family: var(--font-mono); outline: none; min-width: 0; }
+.dir-path-input:focus { border-color: var(--accent); }
+.dir-path-input::placeholder { color: var(--muted); font-family: inherit; }
+.dir-path-go { padding: 6px 12px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; font-weight: 600; flex-shrink: 0; transition: opacity .15s; }
+.dir-path-go:hover { opacity: .85; }
+.dir-filter-bar { padding: 6px 16px; border-bottom: 1px solid var(--border); }
+.dir-filter-input { width: 100%; background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 5px 10px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; box-sizing: border-box; }
+.dir-filter-input:focus { border-color: var(--accent); }
+.dir-filter-input::placeholder { color: var(--muted); }
 .dir-list { flex: 1; overflow-y: auto; max-height: 340px; padding: 4px 6px; }
 .dir-list::-webkit-scrollbar { width: 3px; }
 .dir-list::-webkit-scrollbar-thumb { background: var(--border); }
@@ -2720,7 +2728,11 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <!-- LOCAL section -->
     <div id="projLocalSection">
       <div class="dir-path-bar">
-        <span class="path-text" id="dirCurrentPath">/</span>
+        <input type="text" class="dir-path-input" id="dirPathInput" data-i18n-ph="dir.path.ph" placeholder="Введіть шлях, напр. /Users/you/projects" spellcheck="false">
+        <button class="dir-path-go" onclick="navigateToPath()" data-i18n="dir.path.go">Перейти</button>
+      </div>
+      <div class="dir-filter-bar">
+        <input type="text" class="dir-filter-input" id="dirFilterInput" data-i18n-ph="dir.filter.ph" placeholder="Фільтрувати папки..." spellcheck="false">
       </div>
       <div class="dir-list" id="dirList">
         <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Завантаження...</div>
@@ -3187,6 +3199,7 @@ const TRANSLATIONS = {
     'toast.no_connection':'Немає з\'єднання','toast.sess_not_found':'Сесію не знайдено','toast.cfg_load_err':'Помилка завантаження конфігурації','toast.skill_uploaded':'✓ Скіл завантажено','toast.link_copied':'✓ Посилання скопійовано','toast.img_copied':'✓ Зображення скопійовано','toast.select_dir':'Виберіть директорію','toast.link_prompt':'Скопіюйте посилання:',
     'at.no_project':'Оберіть проект, щоб шукати файли','at.searching':'Пошук...','at.search_err':'Помилка пошуку','at.no_files':'Файлів не знайдено','ssh.search':'Пошук SSH-сервера...','ssh.no_hosts':'SSH-сервери не налаштовано',
     'dir.this_dir':'. (ця директорія)','dir.no_subdirs':'Немає підпапок','dir.drives':'💻 Всі диски',
+    'dir.path.ph':'Введіть шлях, напр. /Users/you/projects','dir.path.go':'Перейти','dir.filter.ph':'Фільтрувати папки...',
     'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
     'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
@@ -3375,6 +3388,7 @@ const TRANSLATIONS = {
     'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.img_copied':'✓ Image copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
     'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found','ssh.search':'Search SSH server...','ssh.no_hosts':'No SSH servers configured',
     'dir.this_dir':'. (this directory)','dir.no_subdirs':'No subdirectories','dir.drives':'💻 All Drives',
+    'dir.path.ph':'Enter path, e.g. /Users/you/projects','dir.path.go':'Go','dir.filter.ph':'Filter folders...',
     'toast.read_err':'Failed to read: ','toast.err_prefix':'Error: ','dir.proj_name':'Project name (auto if empty)',
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
     'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_retry':'retry',
@@ -3563,6 +3577,7 @@ const TRANSLATIONS = {
     'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.img_copied':'✓ Изображение скопировано','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
     'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено','ssh.search':'Поиск SSH-сервера...','ssh.no_hosts':'SSH-серверы не настроены',
     'dir.this_dir':'. (эта директория)','dir.no_subdirs':'Нет подпапок','dir.drives':'💻 Все диски',
+    'dir.path.ph':'Введите путь, напр. /Users/you/projects','dir.path.go':'Перейти','dir.filter.ph':'Фильтровать папки...',
     'toast.read_err':'Не удалось прочитать: ','toast.err_prefix':'Ошибка: ','dir.proj_name':'Название проекта (авто если пусто)',
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
     'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_retry':'retry',
@@ -9405,12 +9420,14 @@ async function renameProject(id, btnEl) {
 // ─── Directory browser ───────────────────────────────────────────────────
 function openAddProject() {
   openModalOverlay('dirModal', {
-    initialFocus: '#projNameInput',
+    initialFocus: '#dirPathInput',
     labelId: 'dirModalTitle',
     onEscape: () => closeDirModal(),
   });
   $i('gitInitChk').checked = false;
   $i('projNameInput').value = '';
+  $i('dirPathInput').value = '';
+  $i('dirFilterInput').value = '';
   dirBrowsePath = null;
   // Reset to local mode
   setProjType('local');
@@ -9428,7 +9445,8 @@ async function browseDirs(dirPath) {
 
     const isDrivesList = d.path === '__drives__';
     dirBrowsePath = isDrivesList ? null : d.path;
-    $i('dirCurrentPath').textContent = isDrivesList ? t('dir.drives') : d.path;
+    $i('dirPathInput').value = isDrivesList ? '' : d.path;
+    $i('dirFilterInput').value = '';
 
     // Auto-fill name if empty (skip for drives list)
     if (!isDrivesList) {
@@ -9454,7 +9472,7 @@ async function browseDirs(dirPath) {
       const self = document.createElement('div');
       self.className = 'dii selected';
       self.innerHTML = `<span class="di" style="color:var(--accent2)">▸</span><span class="dn"><strong>${t('dir.this_dir')}</strong></span>`;
-      self.onclick = () => { dirBrowsePath = d.path; $i('dirCurrentPath').textContent = d.path; highlightSelected(self); };
+      self.onclick = () => { dirBrowsePath = d.path; $i('dirPathInput').value = d.path; highlightSelected(self); };
       list.appendChild(self);
     }
 
@@ -9470,7 +9488,7 @@ async function browseDirs(dirPath) {
         else { el._t = setTimeout(() => {
           el._t = null;
           dirBrowsePath = it.path;
-          $i('dirCurrentPath').textContent = it.path;
+          $i('dirPathInput').value = it.path;
           if (!isDrivesList) $i('projNameInput').value = it.name;
           highlightSelected(el);
         }, 220); }
@@ -9491,6 +9509,31 @@ function highlightSelected(el) {
   $i('dirList').querySelectorAll('.dii').forEach(d => d.classList.remove('selected'));
   el.classList.add('selected');
 }
+
+function navigateToPath() {
+  const raw = ($i('dirPathInput').value || '').trim();
+  if (!raw) return;
+  browseDirs(raw);
+}
+
+// Path input: Enter → navigate
+$i('dirPathInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); navigateToPath(); }
+});
+
+// Filter input: real-time folder filtering
+$i('dirFilterInput').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  const items = $i('dirList').querySelectorAll('.dii');
+  items.forEach(el => {
+    const nameEl = el.querySelector('.dn');
+    if (!nameEl) return;
+    const name = nameEl.textContent.toLowerCase();
+    // Always show ".." (up) and "current dir" rows
+    const isNav = name === '..' || name === t('dir.drives').toLowerCase() || nameEl.querySelector('strong');
+    el.style.display = (isNav || !q || name.includes(q)) ? '' : 'none';
+  });
+});
 
 async function selectDir() {
   // Remote project
