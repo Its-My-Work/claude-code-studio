@@ -2171,6 +2171,22 @@ class TelegramBot extends EventEmitter {
       // ask_user option selection
       if (data.startsWith('ask:')) return this._handleAskCallback(chatId, userId, msgId, data);
 
+      // Forum project topic guard — prevent cross-project navigation
+      if (this._currentThreadId) {
+        const topicInfo = this._getTopicInfo(chatId, this._currentThreadId);
+        if (topicInfo?.type === 'project') {
+          // "Back to menu" goes to forum project info, not the global menu
+          if (data === 'm:menu' || data === 'm:status')
+            return this._forumShowInfo(chatId, userId, topicInfo.workdir);
+          // Block global project navigation (p:list, p:sel:N) — no project switching from forum topics
+          if (data === 'p:list' || data.startsWith('p:list:') || data.startsWith('p:sel:'))
+            return;
+          // Scope chats / new-chat navigation to this topic's project
+          if (data.startsWith('c:') || data.startsWith('ch:'))
+            ctx.projectWorkdir = topicInfo.workdir;
+        }
+      }
+
       // Route by prefix
       if (data === 'm:menu')       return this._screenMainMenu(chatId, userId);
       if (data === 'm:status')     return this._screenStatus(chatId, userId);
@@ -3639,7 +3655,7 @@ class TelegramBot extends EventEmitter {
     }
 
     // Persistent keyboard buttons send their label text into the topic — intercept before Claude
-    if (text === this._t('kb_menu'))   return this._screenMainMenu(chatId, userId);
+    if (text === this._t('kb_menu'))   return this._forumShowInfo(chatId, userId, workdir);
     if (text === this._t('kb_status')) return this._cmdStatus(chatId, userId);
     if (text === this._t('kb_write'))  return; // In forum mode, just type directly in the topic
 
