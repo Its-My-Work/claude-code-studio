@@ -3946,6 +3946,138 @@ app.post('/api/sessions', (req, res) => {
   res.json(stmts.getSession.get(id));
 });
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
+
+// ─── CLI Session Import ───────────────────────────────────────────────────────
+// Convert workdir path to Claude Code CLI project directory name
+// e.g. /Users/admin/_Projects/foo  →  -Users-admin--Projects-foo
+function cwdToCliProjectName(cwd) { return cwd.replace(/[/_]/g, '-'); }
+
+app.get('/api/sessions/cli-list', (req, res) => {
+  const workdir = String(req.query.workdir || WORKDIR || '');
+  const homeDir = os.homedir();
+  const safeBase = path.resolve(path.join(homeDir, '.claude', 'projects'));
+  const projectPath = path.resolve(path.join(safeBase, cwdToCliProjectName(workdir)));
+  if (!projectPath.startsWith(safeBase)) return res.status(400).json({ error: 'invalid workdir' });
+  if (!fs.existsSync(projectPath)) return res.json({ sessions: [], projectPath });
+
+  let filenames;
+  try { filenames = fs.readdirSync(projectPath).filter(f => f.endsWith('.jsonl')); }
+  catch (e) { return res.status(500).json({ error: e.message }); }
+
+  const importedIds = new Set(
+    db.prepare(`SELECT claude_session_id FROM sessions WHERE claude_session_id IS NOT NULL`).all()
+      .map(r => r.claude_session_id)
+  );
+
+  const sessions = [];
+  for (const fname of filenames) {
+    const sessionId = fname.replace('.jsonl', '');
+    // Basic UUID format check
+    if (!/^[a-f0-9-]{8,}$/i.test(sessionId)) continue;
+    const filePath = path.join(projectPath, fname);
+    try {
+      const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(Boolean);
+      let timestamp = '', title = '', titleFound = false, userCount = 0, assistantCount = 0;
+      for (const line of lines) {
+        let d; try { d = JSON.parse(line); } catch { continue; }
+        if (!timestamp && d.timestamp) timestamp = d.timestamp;
+        if (d.type === 'user') {
+          userCount++;
+          if (!titleFound) {
+            const mc = d.message?.content;
+            if (typeof mc === 'string' && mc.trim()) { title = mc.substring(0, 100); titleFound = true; }
+            else if (Array.isArray(mc)) {
+              const tb = mc.find(b => b.type === 'text' && b.text);
+              if (tb) { title = tb.text.substring(0, 100); titleFound = true; }
+            }
+          }
+        } else if (d.type === 'assistant') assistantCount++;
+      }
+      if (!title) title = sessionId.substring(0, 8) + '…';
+      sessions.push({ sessionId, title, timestamp, messageCount: userCount + assistantCount, alreadyImported: importedIds.has(sessionId) });
+    } catch { /* skip unreadable */ }
+  }
+  sessions.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+  res.json({ sessions, projectPath });
+});
+
+app.post('/api/sessions/cli-import', (req, res) => {
+  const { sessionIds, workdir } = req.body || {};
+  if (!Array.isArray(sessionIds) || sessionIds.length === 0) return res.status(400).json({ error: 'no sessionIds' });
+  const targetWorkdir = String(workdir || WORKDIR || '');
+  const homeDir = os.homedir();
+  const safeBase = path.resolve(path.join(homeDir, '.claude', 'projects'));
+  const projectPath = path.resolve(path.join(safeBase, cwdToCliProjectName(targetWorkdir)));
+  if (!projectPath.startsWith(safeBase)) return res.status(400).json({ error: 'invalid workdir' });
+
+  const imported = [], skipped = [], errors = [];
+  const updateClaudeId = db.prepare(`UPDATE sessions SET claude_session_id=? WHERE id=?`);
+  const updateTimestamps = db.prepare(`UPDATE sessions SET created_at=?, updated_at=? WHERE id=?`);
+  const insertMsg = db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,created_at) VALUES (?,?,?,?,?,?,?)`);
+
+  const tx = db.transaction(() => {
+    for (const sessionId of sessionIds) {
+      if (!/^[a-f0-9-]{8,}$/i.test(sessionId)) { errors.push({ sessionId, error: 'invalid id' }); continue; }
+      const existing = db.prepare(`SELECT id FROM sessions WHERE claude_session_id=?`).get(sessionId);
+      if (existing) { skipped.push(sessionId); continue; }
+
+      const filePath = path.resolve(path.join(projectPath, sessionId + '.jsonl'));
+      if (!filePath.startsWith(projectPath)) { errors.push({ sessionId, error: 'path traversal' }); continue; }
+      try {
+        const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(Boolean);
+        let title = '', titleFound = false, sessionTs = null, cwd = targetWorkdir;
+        const msgs = [];
+
+        for (const line of lines) {
+          let d; try { d = JSON.parse(line); } catch { continue; }
+          if (!sessionTs && d.timestamp) sessionTs = d.timestamp;
+          if (d.cwd && !cwd) cwd = d.cwd;
+
+          if (d.type === 'user') {
+            const mc = d.message?.content;
+            const ts = d.timestamp || sessionTs;
+            if (Array.isArray(mc)) {
+              const nonTool = mc.filter(b => b.type !== 'tool_result');
+              if (nonTool.length === 0) continue; // skip pure tool_result entries
+              const text = nonTool.filter(b => b.type === 'text').map(b => b.text).join('\n');
+              if (text.trim()) {
+                if (!titleFound) { title = text.substring(0, 100); titleFound = true; }
+                msgs.push({ role: 'user', type: 'text', content: text, tool_name: null, ts });
+              }
+            } else if (typeof mc === 'string' && mc.trim()) {
+              if (!titleFound) { title = mc.substring(0, 100); titleFound = true; }
+              msgs.push({ role: 'user', type: 'text', content: mc, tool_name: null, ts });
+            }
+          } else if (d.type === 'assistant') {
+            const mc = d.message?.content;
+            const ts = d.timestamp || sessionTs;
+            if (!Array.isArray(mc)) continue;
+            for (const block of mc) {
+              if (block.type === 'text' && block.text)
+                msgs.push({ role: 'assistant', type: 'text', content: block.text, tool_name: null, ts });
+              else if (block.type === 'tool_use' && block.name)
+                msgs.push({ role: 'assistant', type: 'tool_use', content: JSON.stringify(block.input || {}), tool_name: block.name, ts });
+              // skip thinking blocks
+            }
+          }
+        }
+
+        if (msgs.length === 0) { skipped.push(sessionId); continue; }
+        if (!title) title = 'CLI: ' + sessionId.substring(0, 8);
+
+        const newId = genId();
+        stmts.createSession.run(newId, title.substring(0, 200), '[]', '[]', 'auto', 'single', 'sonnet', cwd || null);
+        updateClaudeId.run(sessionId, newId);
+        if (sessionTs) updateTimestamps.run(sessionTs, sessionTs, newId);
+        for (const m of msgs) insertMsg.run(newId, m.role, m.type, m.content, m.tool_name, null, m.ts || sessionTs);
+        imported.push({ sessionId, newId, title, messageCount: msgs.length });
+      } catch (e) { errors.push({ sessionId, error: e.message }); }
+    }
+  });
+
+  try { tx(); res.json({ imported, skipped, errors }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.post('/api/sessions/reorder', (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'no ids' });
