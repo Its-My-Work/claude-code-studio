@@ -87,7 +87,7 @@ Not a chatbot. "Refactor this function and add tests" → Claude opens files, ed
 
 **Claude CLI session import** — import existing sessions from Claude Code CLI (`~/.claude/projects/`) directly into Studio. Click the ↓ button in the header, pick a project path, select sessions, import. Already-imported sessions are marked so you don't duplicate them. Works on Windows (`C:\...`), macOS, and Linux; supports `~` path expansion.
 
-**Extended thinking** — when Claude uses extended thinking, each thinking block appears as a "Chain of thought" badge showing estimated word count. Click to open the full reasoning in a modal with a copy button.
+**Extended thinking** — when Claude uses extended thinking, each thinking block appears as a "Chain of thought" badge showing estimated word count. Click to open the full reasoning in a modal with a copy button. The CLI import modal and thinking modal are fully localized (EN/UA/RU) — all labels, status messages, and dates adapt to the selected interface language.
 
 ### 📋 Kanban Board
 

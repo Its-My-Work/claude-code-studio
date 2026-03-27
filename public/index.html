@@ -2425,7 +2425,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </div>
       </div>
       <button class="hb" onclick="newSession()" data-tip="Новий чат" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Чат</span></button>
-      <button class="hb" onclick="openCliImport()" data-tip="Імпорт сесій Claude CLI"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+      <button class="hb" onclick="openCliImport()" data-tip="Імпорт сесій Claude CLI" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
       <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
       <select class="lang-sel" id="langSel" onchange="setLang(this.value)" aria-label="Interface language" data-tip="Мова інтерфейсу" data-i18n-tip="tip.lang">
         <option value="en">EN</option>
@@ -2841,7 +2841,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="modal-hdr">
       <h2 style="font-size:14px;display:flex;align-items:center;gap:7px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        Chain of thought
+        <span data-i18n="thinking.title">Chain of thought</span>
         <span id="thinkingModalMeta" style="font-size:11px;font-weight:400;color:var(--muted)"></span>
       </h2>
       <button class="modal-close" onclick="closeThinkingModal()">✕</button>
@@ -2851,10 +2851,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     </div>
     <div class="modal-footer" style="flex-shrink:0">
       <span style="font-size:11px;color:var(--muted)" id="thinkingCopyFeedback"></span>
-      <button class="bg" onclick="closeThinkingModal()">Закрити</button>
+      <button class="bg" onclick="closeThinkingModal()" data-i18n="cfg.close">Close</button>
       <button class="bp" onclick="copyThinkingContent()" style="margin-left:auto">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        Копіювати
+        <span data-i18n="thinking.copy">Copy</span>
       </button>
     </div>
   </div>
@@ -2866,28 +2866,28 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="modal-hdr">
       <h2 style="font-size:14px;display:flex;align-items:center;gap:6px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Імпорт сесій Claude CLI
+        <span data-i18n="cli.import.title">Import Claude CLI Sessions</span>
       </h2>
       <button class="modal-close" onclick="closeCliImport()">✕</button>
     </div>
     <div style="padding:10px 16px 6px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0">
-      <span style="font-size:12px;color:var(--muted);white-space:nowrap">Проект:</span>
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="cli.import.project">Project:</span>
       <input id="cliImportWorkdir" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;font-family:monospace;outline:none" placeholder="/path/to/project" oninput="cliImportWorkdirChanged()">
-      <button class="bp" onclick="loadCliSessions()" style="white-space:nowrap;padding:5px 10px;font-size:12px">Завантажити</button>
+      <button class="bp" onclick="loadCliSessions()" style="white-space:nowrap;padding:5px 10px;font-size:12px" data-i18n="cli.import.load">Load</button>
     </div>
     <div id="cliImportStatus" style="padding:8px 16px;font-size:12px;color:var(--muted);flex-shrink:0;display:none"></div>
     <div style="padding:6px 16px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid var(--border)" id="cliImportSelRow">
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;user-select:none">
-        <input type="checkbox" id="cliImportSelAll" onchange="cliImportToggleAll(this.checked)"> Вибрати всі
+        <input type="checkbox" id="cliImportSelAll" onchange="cliImportToggleAll(this.checked)"> <span data-i18n="cli.import.sel_all">Select all</span>
       </label>
       <span id="cliImportSelCount" style="font-size:12px;color:var(--muted);margin-left:auto"></span>
     </div>
     <div id="cliImportList" style="flex:1;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:2px;min-height:120px">
-      <div style="padding:32px;text-align:center;color:var(--muted);font-size:12px">Вкажіть проект і натисніть «Завантажити»</div>
+      <div style="padding:32px;text-align:center;color:var(--muted);font-size:12px" data-i18n="cli.import.hint">Enter project path and click «Load»</div>
     </div>
     <div class="modal-footer" style="flex-shrink:0">
-      <button class="bg" onclick="closeCliImport()">Скасувати</button>
-      <button class="bp" id="cliImportBtn" onclick="doCliImport()" disabled style="margin-left:auto">Імпортувати вибрані</button>
+      <button class="bg" onclick="closeCliImport()" data-i18n="dir.cancel">Cancel</button>
+      <button class="bp" id="cliImportBtn" onclick="doCliImport()" disabled style="margin-left:auto" data-i18n="cli.import.do">Import selected</button>
     </div>
   </div>
 </div>
@@ -3438,6 +3438,16 @@ const TRANSLATIONS = {
     'hist.drag':'Перетягнути','tg.device.connected':'📱 Telegram: {name} підключено',
     'tg.bot.started':'✅ Telegram-бот запущено: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Стиснути чат і відкрити нову сесію','compact.loading':'Стиснення…','compact.success':'✅ Чат стиснено — відкриваю нову сесію','compact.err':'Помилка стиснення',
+    'cli.import.tip':'Імпорт сесій Claude CLI','cli.import.title':'Імпорт сесій Claude CLI',
+    'cli.import.project':'Проект:','cli.import.load':'Завантажити',
+    'cli.import.hint':'Вкажіть проект і натисніть «Завантажити»',
+    'cli.import.do':'Імпортувати вибрані','cli.import.sel_all':'Вибрати всі',
+    'cli.import.loading':'Завантаження…','cli.import.found_n':'Знайдено: {n} сесій у',
+    'cli.import.no_sessions':'Сесій не знайдено',
+    'cli.import.msgs':'повід.','cli.import.already':'Вже імпортовано','cli.import.already_done':'✓ імпортовано',
+    'cli.import.doing':'Імпортую…','cli.import.doing_n':'Імпортую {n} сесій…',
+    'cli.import.result':'Імпортовано: {n}','cli.import.skipped':' пропущено: {n}','cli.import.errors':' помилок: {n}',
+    'thinking.title':'Ланцюжок думок','thinking.copy':'Копіювати','thinking.copied':'✓ Скопійовано','thinking.copy_err':'Не вдалося скопіювати',
   },
   en: {
     'sec.proactive':'Status',
@@ -3627,6 +3637,16 @@ const TRANSLATIONS = {
     'hist.drag':'Drag to reorder','tg.device.connected':'📱 Telegram: {name} connected',
     'tg.bot.started':'✅ Telegram bot started: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Compact chat and start new session','compact.loading':'Compacting…','compact.success':'✅ Chat compacted — opening new session','compact.err':'Compact failed',
+    'cli.import.tip':'Import Claude CLI sessions','cli.import.title':'Import Claude CLI Sessions',
+    'cli.import.project':'Project:','cli.import.load':'Load',
+    'cli.import.hint':'Enter project path and click «Load»',
+    'cli.import.do':'Import selected','cli.import.sel_all':'Select all',
+    'cli.import.loading':'Loading…','cli.import.found_n':'Found: {n} sessions in',
+    'cli.import.no_sessions':'No sessions found',
+    'cli.import.msgs':'msgs','cli.import.already':'Already imported','cli.import.already_done':'✓ imported',
+    'cli.import.doing':'Importing…','cli.import.doing_n':'Importing {n} sessions…',
+    'cli.import.result':'Imported: {n}','cli.import.skipped':' skipped: {n}','cli.import.errors':' errors: {n}',
+    'thinking.title':'Chain of thought','thinking.copy':'Copy','thinking.copied':'✓ Copied','thinking.copy_err':'Failed to copy',
   },
   ru: {
     'sec.proactive':'Статус',
@@ -3816,6 +3836,16 @@ const TRANSLATIONS = {
     'hist.drag':'Перетащить','tg.device.connected':'📱 Telegram: {name} подключён',
     'tg.bot.started':'✅ Telegram-бот запущен: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Сжать чат и открыть новую сессию','compact.loading':'Сжатие…','compact.success':'✅ Чат сжат — открываю новую сессию','compact.err':'Ошибка сжатия',
+    'cli.import.tip':'Импорт сессий Claude CLI','cli.import.title':'Импорт сессий Claude CLI',
+    'cli.import.project':'Проект:','cli.import.load':'Загрузить',
+    'cli.import.hint':'Укажите проект и нажмите «Загрузить»',
+    'cli.import.do':'Импортировать выбранные','cli.import.sel_all':'Выбрать все',
+    'cli.import.loading':'Загрузка…','cli.import.found_n':'Найдено: {n} сессий в',
+    'cli.import.no_sessions':'Сессии не найдены',
+    'cli.import.msgs':'сообщ.','cli.import.already':'Уже импортировано','cli.import.already_done':'✓ импортировано',
+    'cli.import.doing':'Импортирую…','cli.import.doing_n':'Импортирую {n} сессий…',
+    'cli.import.result':'Импортировано: {n}','cli.import.skipped':' пропущено: {n}','cli.import.errors':' ошибок: {n}',
+    'thinking.title':'Цепочка рассуждений','thinking.copy':'Копировать','thinking.copied':'✓ Скопировано','thinking.copy_err':'Не удалось скопировать',
   }
 };
 function t(key) {
@@ -9964,8 +9994,8 @@ async function copyThinkingContent() {
   try {
     await navigator.clipboard.writeText(_thinkingContent);
     const fb = $i('thinkingCopyFeedback');
-    if (fb) { fb.textContent = '✓ Скопійовано'; setTimeout(() => { if (fb) fb.textContent = ''; }, 2000); }
-  } catch { toast('Не вдалося скопіювати'); }
+    if (fb) { fb.textContent = t('thinking.copied'); setTimeout(() => { if (fb) fb.textContent = ''; }, 2000); }
+  } catch { toast(t('thinking.copy_err')); }
 }
 
 // ─── CLI Import ──────────────────────────────────────────────────────────────
@@ -9976,9 +10006,9 @@ function openCliImport() {
   const workdir = curWorkdir || '';
   $i('cliImportWorkdir').value = workdir;
   _cliSessions = [];
-  $i('cliImportList').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted);font-size:12px">Вкажіть проект і натисніть «Завантажити»</div>';
+  $i('cliImportList').innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);font-size:12px">${t('cli.import.hint')}</div>`;
   $i('cliImportBtn').disabled = true;
-  $i('cliImportBtn').textContent = 'Імпортувати вибрані';
+  $i('cliImportBtn').textContent = t('cli.import.do');
   $i('cliImportStatus').style.display = 'none';
   $i('cliImportSelAll').checked = false;
   $i('cliImportSelAll').indeterminate = false;
@@ -9996,7 +10026,7 @@ function cliImportWorkdirChanged() {
   $i('cliImportStatus').style.display = 'none';
   $i('cliImportSelAll').checked = false;
   $i('cliImportSelAll').indeterminate = false;
-  $i('cliImportList').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted);font-size:12px">Вкажіть проект і натисніть «Завантажити»</div>';
+  $i('cliImportList').innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);font-size:12px">${t('cli.import.hint')}</div>`;
 }
 
 async function loadCliSessions() {
@@ -10005,16 +10035,16 @@ async function loadCliSessions() {
   const statusEl = $i('cliImportStatus');
   const listEl = $i('cliImportList');
   statusEl.style.display = '';
-  statusEl.textContent = 'Завантаження…';
+  statusEl.textContent = t('cli.import.loading');
   listEl.innerHTML = '';
   try {
     const res = await fetch(`/api/sessions/cli-list?workdir=${encodeURIComponent(workdir)}`);
     const data = await res.json();
-    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || 'Помилка'); return; }
+    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || t('status.error')); return; }
     _cliSessions = data.sessions || [];
-    statusEl.textContent = `Знайдено: ${_cliSessions.length} сесій у ${data.projectPath}`;
+    statusEl.textContent = t('cli.import.found_n').replace('{n}', _cliSessions.length) + ' ' + data.projectPath;
     if (_cliSessions.length === 0) {
-      listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px">Сесій не знайдено</div>';
+      listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px">${t('cli.import.no_sessions')}</div>`;
       return;
     }
     renderCliSessionList();
@@ -10029,15 +10059,17 @@ function renderCliSessionList() {
     row.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:5px;cursor:pointer;transition:background .1s;' + (s.alreadyImported ? 'opacity:.5' : '');
     row.onmouseenter = () => { if (!s.alreadyImported) row.style.background = 'var(--s2)'; };
     row.onmouseleave = () => { row.style.background = ''; };
-    const date = s.timestamp ? new Date(s.timestamp).toLocaleDateString('uk-UA', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+    const lang = localStorage.getItem('lang') || 'en';
+    const locale = lang === 'uk' ? 'uk-UA' : lang === 'ru' ? 'ru-RU' : 'en-US';
+    const date = s.timestamp ? new Date(s.timestamp).toLocaleDateString(locale, { day:'2-digit', month:'short', year:'numeric' }) : '—';
     row.innerHTML = `
-      <input type="checkbox" data-id="${escH(s.sessionId)}" ${s.alreadyImported ? 'disabled title="Вже імпортовано"' : ''} onchange="cliImportUpdateCount()" style="margin-top:3px;flex-shrink:0">
+      <input type="checkbox" data-id="${escH(s.sessionId)}" ${s.alreadyImported ? `disabled title="${t('cli.import.already')}"` : ''} onchange="cliImportUpdateCount()" style="margin-top:3px;flex-shrink:0">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(s.title)}</div>
         <div style="font-size:11px;color:var(--muted);display:flex;gap:8px;margin-top:2px">
           <span>${date}</span>
-          <span>${s.messageCount} повід.</span>
-          ${s.alreadyImported ? '<span style="color:var(--green)">✓ імпортовано</span>' : ''}
+          <span>${s.messageCount} ${t('cli.import.msgs')}</span>
+          ${s.alreadyImported ? `<span style="color:var(--green)">${t('cli.import.already_done')}</span>` : ''}
         </div>
       </div>`;
     listEl.appendChild(row);
@@ -10047,7 +10079,7 @@ function renderCliSessionList() {
 
 function cliImportUpdateCount() {
   const checked = listEl_getChecked();
-  $i('cliImportSelCount').textContent = checked.length ? `Вибрано: ${checked.length}` : '';
+  $i('cliImportSelCount').textContent = checked.length ? t('bulk.info').replace('{n}', checked.length) : '';
   $i('cliImportBtn').disabled = checked.length === 0;
   // Sync "select all" checkbox
   const all = $i('cliImportList').querySelectorAll('input[type=checkbox]:not(:disabled)');
@@ -10070,28 +10102,28 @@ async function doCliImport() {
   const workdir = $i('cliImportWorkdir').value.trim();
   const btn = $i('cliImportBtn');
   btn.disabled = true;
-  btn.textContent = 'Імпортую…';
+  btn.textContent = t('cli.import.doing');
   const statusEl = $i('cliImportStatus');
   statusEl.style.display = '';
-  statusEl.textContent = `Імпортую ${sessionIds.length} сесій…`;
+  statusEl.textContent = t('cli.import.doing_n').replace('{n}', sessionIds.length);
   try {
     const res = await fetch('/api/sessions/cli-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionIds, workdir }) });
     const data = await res.json();
-    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || 'Помилка'); btn.disabled = false; btn.textContent = 'Імпортувати вибрані'; return; }
+    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || t('status.error')); btn.disabled = false; btn.textContent = t('cli.import.do'); return; }
     const ok = data.imported?.length || 0;
     const sk = data.skipped?.length || 0;
     const er = data.errors?.length || 0;
-    statusEl.textContent = `Імпортовано: ${ok}${sk ? `, пропущено: ${sk}` : ''}${er ? `, помилок: ${er}` : ''}`;
+    statusEl.textContent = t('cli.import.result').replace('{n}', ok) + (sk ? ',' + t('cli.import.skipped').replace('{n}', sk) : '') + (er ? ',' + t('cli.import.errors').replace('{n}', er) : '');
     if (ok > 0) {
       // Refresh session list in sidebar
       await loadHist();
       closeCliImport();
     } else {
-      btn.textContent = 'Імпортувати вибрані';
+      btn.textContent = t('cli.import.do');
     }
   } catch (e) {
     statusEl.textContent = '⚠ ' + e.message;
-    btn.textContent = 'Імпортувати вибрані';
+    btn.textContent = t('cli.import.do');
     btn.disabled = false;
   }
 }
