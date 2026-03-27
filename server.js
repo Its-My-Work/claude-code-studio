@@ -3959,6 +3959,48 @@ function cwdToCliProjectName(cwd) {
   return cwd.replace(/[/_]/g, '-');
 }
 
+function parseJsonlToMessages(jsonlPath) {
+  try {
+    const lines = fs.readFileSync(jsonlPath, 'utf8').trim().split('\n').filter(Boolean);
+    const msgs = [];
+    let idCounter = 1;
+    // Maps tool_use_id → tool name so tool_result messages show the real tool name
+    const toolUseIdToName = {};
+    for (const line of lines) {
+      let d; try { d = JSON.parse(line); } catch { continue; }
+      const ts = d.timestamp || null;
+      if (d.type === 'user') {
+        const mc = d.message?.content;
+        if (!Array.isArray(mc)) {
+          if (typeof mc === 'string' && mc.trim())
+            msgs.push({ id: idCounter++, role: 'user', type: 'text', content: mc, tool_name: null, agent_id: null, created_at: ts });
+          continue;
+        }
+        const textBlocks = mc.filter(b => b.type === 'text' && b.text?.trim());
+        if (textBlocks.length > 0)
+          msgs.push({ id: idCounter++, role: 'user', type: 'text', content: textBlocks.map(b => b.text).join('\n'), tool_name: null, agent_id: null, created_at: ts });
+        for (const b of mc.filter(b => b.type === 'tool_result')) {
+          const raw = typeof b.content === 'string' ? b.content : (Array.isArray(b.content) ? b.content.map(c => c.text || '').join('\n') : '');
+          msgs.push({ id: idCounter++, role: 'user', type: 'tool_result', content: raw.substring(0, 20000), tool_name: toolUseIdToName[b.tool_use_id] || null, agent_id: null, created_at: ts });
+        }
+      } else if (d.type === 'assistant') {
+        const mc = d.message?.content;
+        if (!Array.isArray(mc)) continue;
+        for (const b of mc) {
+          if (b.type === 'thinking' && b.thinking)
+            msgs.push({ id: idCounter++, role: 'assistant', type: 'thinking', content: b.thinking, tool_name: null, agent_id: null, created_at: ts });
+          else if (b.type === 'tool_use' && b.name) {
+            if (b.id) toolUseIdToName[b.id] = b.name; // register for tool_result lookup
+            msgs.push({ id: idCounter++, role: 'assistant', type: 'tool', content: (typeof b.input === 'string' ? b.input : JSON.stringify(b.input || {})).substring(0, 2000), tool_name: b.name, agent_id: null, created_at: ts });
+          } else if (b.type === 'text' && b.text)
+            msgs.push({ id: idCounter++, role: 'assistant', type: 'text', content: b.text, tool_name: null, agent_id: null, created_at: ts });
+        }
+      }
+    }
+    return msgs;
+  } catch { return []; }
+}
+
 app.get('/api/sessions/cli-list', (req, res) => {
   const workdir = String(req.query.workdir || WORKDIR || '');
   const homeDir = os.homedir();
@@ -4096,16 +4138,30 @@ app.post('/api/sessions/reorder', (req, res) => {
 app.get('/api/sessions/:id', (req,res) => {
   const s = stmts.getSession.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Not found' });
-  // Lite: strip tool content — frontend only needs tool_name + agent_id for badge counts
-  s.messages = stmts.getMsgsLite.all(req.params.id);
-  // Include running-task flag so client can show spinner immediately on load
+
+  // Try JSONL-first serving if session has CLI session ID and workdir
+  let messages = null;
+  if (s.claude_session_id && s.workdir) {
+    const homeDir = os.homedir();
+    const safeBase = path.resolve(path.join(homeDir, '.claude', 'projects'));
+    const projectDir = path.resolve(path.join(safeBase, cwdToCliProjectName(s.workdir)));
+    const jsonlPath = path.join(projectDir, s.claude_session_id + '.jsonl');
+    if (fs.existsSync(jsonlPath)) {
+      const parsed = parseJsonlToMessages(jsonlPath);
+      if (parsed.length > 0) messages = parsed;
+    }
+  }
+
+  // Fallback to SQLite
+  if (!messages) {
+    messages = stmts.getMsgsLite.all(req.params.id);
+  }
+
+  s.messages = messages;
   s.hasRunningTask = !!stmts.hasRunningTask.get(req.params.id);
-  // True when a direct-chat streaming session is alive in memory (not a Kanban task)
   s.isChatRunning = activeTasks.has(req.params.id);
-  // Include chain tasks dispatched FROM this session (for chain progress widget restoration)
   const chainTasks = stmts.getChainTasks.all(req.params.id);
   if (chainTasks.length) {
-    // Group by chain_id (a session could have dispatched multiple chains)
     const chains = {};
     for (const t of chainTasks) {
       if (!t.chain_id) continue;
