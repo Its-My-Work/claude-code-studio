@@ -85,7 +85,7 @@ Not a chatbot. "Refactor this function and add tests" → Claude opens files, ed
 
 **Sidebar quick-filter** — every sidebar section (Projects, Chats, MCP servers, Skills, Commands) has a 🔽 filter button. Click it, type a few letters — the list narrows instantly. Press Esc to clear.
 
-**Claude CLI session import** — import existing sessions from Claude Code CLI (`~/.claude/projects/`) directly into Studio. Click the ↓ button in the header, pick a project path, select sessions, import. Already-imported sessions are marked so you don't duplicate them.
+**Claude CLI session import** — import existing sessions from Claude Code CLI (`~/.claude/projects/`) directly into Studio. Click the ↓ button in the header, pick a project path, select sessions, import. Already-imported sessions are marked so you don't duplicate them. Works on Windows (`C:\...`), macOS, and Linux; supports `~` path expansion.
 
 ### 📋 Kanban Board
 

@@ -3950,7 +3950,14 @@ app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupt
 // ─── CLI Session Import ───────────────────────────────────────────────────────
 // Convert workdir path to Claude Code CLI project directory name
 // e.g. /Users/admin/_Projects/foo  →  -Users-admin--Projects-foo
-function cwdToCliProjectName(cwd) { return cwd.replace(/[/_]/g, '-'); }
+function cwdToCliProjectName(cwd) {
+  if (cwd.startsWith('~')) cwd = os.homedir() + cwd.slice(1);
+  if (/^[A-Za-z]:/.test(cwd)) {
+    // Windows path: normalize backslash separator and replace drive-letter colon
+    return cwd.replace(/\\/g, '/').replace(/[/_:]/g, '-');
+  }
+  return cwd.replace(/[/_]/g, '-');
+}
 
 app.get('/api/sessions/cli-list', (req, res) => {
   const workdir = String(req.query.workdir || WORKDIR || '');

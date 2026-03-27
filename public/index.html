@@ -9881,6 +9881,7 @@ function openCliImport() {
   $i('cliImportBtn').textContent = 'Імпортувати вибрані';
   $i('cliImportStatus').style.display = 'none';
   $i('cliImportSelAll').checked = false;
+  $i('cliImportSelAll').indeterminate = false;
   $i('cliImportSelCount').textContent = '';
   openModalOverlay('cliImportModal');
   if (workdir) loadCliSessions();
