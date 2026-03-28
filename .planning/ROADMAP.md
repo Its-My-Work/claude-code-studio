@@ -23,13 +23,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Goal**: The bot has a stable, explicit state machine and a separate i18n file — making it safe to build new UX on top
 **Depends on**: Nothing (first phase)
 **Requirements**: ARCH-01, FSM-01, FSM-02, FSM-03, FSM-04, FSM-05
+**Plans:** 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — Extract BOT_I18N to telegram-bot-i18n.js (i18n separation)
+- [ ] 01-02-PLAN.md — Replace ad-hoc state flags with explicit FSM (ctx.state + ctx.stateData)
 **Success Criteria** (what must be TRUE):
   1. `telegram-bot-i18n.js` exists as a standalone file; `telegram-bot.js` imports from it and is ~825 lines shorter
   2. `ctx.state` is the single source of pending-input truth — `ctx.pendingInput`, `ctx.pendingAskRequestId`, and `ctx.composing` no longer exist in any code path
   3. Sending a task-creation prompt, then typing a different message, routes that message to Claude (not silently captured as a task title)
   4. Every slash command cancels any in-progress input state before executing
   5. All previously paired devices continue responding without re-pairing after the migration deploys
-**Plans**: TBD
 
 ### Phase 2: UX Redesign
 **Goal**: Users can reach Claude in 2 taps from any state, navigate without dead ends, and see their active context at all times
@@ -78,7 +81,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/2 | Planning complete | - |
 | 2. UX Redesign | 0/TBD | Not started | - |
 | 3. Forum Mode UX + Extraction | 0/TBD | Not started | - |
 | 4. Server Encapsulation | 0/TBD | Not started | - |
