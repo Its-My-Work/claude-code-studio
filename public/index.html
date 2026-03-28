@@ -4892,7 +4892,7 @@ function handleWsMsg(d) {
         if (hadChanges) {
           const panel = $i('delegatePanel');
           if (panel) { panel.classList.remove('has-update'); void panel.offsetWidth; panel.classList.add('has-update'); }
-          toast(t('dlg.toast.agent_responded').replace('{agent}', _activeDelegation.agentLabel || _activeDelegation.agentId), false, 3000);
+          _showNewDlgEntries();
         }
       }
       break;
@@ -11244,6 +11244,33 @@ let _activeDelegation = null;
 let _delegateCheckTimer = null;
 let _delegateTimeTimer = null;
 let _externalAgents = {};
+let _dlgShownCount = 0; // entries already rendered in chat
+
+function _parseDlgEntries(dialog) {
+  if (!dialog) return [];
+  const entries = [];
+  const parts = dialog.split(/\n## \[/);
+  for (const part of parts) {
+    const m = part.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (.+?)\n([\s\S]*)/);
+    if (m) entries.push({ timestamp: m[1], agent: m[2].trim(), text: m[3].trim() });
+  }
+  return entries;
+}
+
+function _showNewDlgEntries() {
+  if (!_activeDelegation) return;
+  const entries = _parseDlgEntries(_activeDelegation.dialog);
+  const newEntries = entries.slice(_dlgShownCount);
+  for (const entry of newEntries) {
+    if (entry.agent === 'claude-code-studio') { _dlgShownCount++; continue; }
+    const label = _activeDelegation.agentLabel || _activeDelegation.agentId;
+    const header = `**[${label}]** _${entry.timestamp}_\n\n`;
+    const w = addMsg('assistant');
+    w.querySelector('.msg').innerHTML = renderMd(header + entry.text);
+    _dlgShownCount++;
+  }
+  scrollBottom();
+}
 
 async function _loadExternalAgents() {
   try {
@@ -11308,13 +11335,11 @@ async function submitDelegation() {
       lastUpdate: Date.now(),
       dialog: '',
     };
+    _dlgShownCount = 0;
 
     closeDelegateModal();
     _renderDelegatePanel();
-
-    if (mode === 'sync') {
-      _startDelegatePolling();
-    }
+    _startDelegatePolling();
 
     toast(t('dlg.toast.delegated').replace('{agent}', d.agent), false, 3000);
   } catch (err) {
@@ -11431,17 +11456,18 @@ async function sendDelegateMsgSubmit() {
 }
 
 async function checkDelegation() {
-  if (!_activeDelegation) return;
+  if (!_activeDelegation) return false;
   try {
     const r = await fetch(`/api/delegate/${_activeDelegation.id}/check`, { method: 'POST' });
-    if (!r.ok) return;
+    if (!r.ok) return false;
     const d = await r.json();
     if (d.dialog !== undefined) {
       const changed = d.dialog !== _activeDelegation.dialog;
       _activeDelegation.dialog = d.dialog;
-      _activeDelegation.lastUpdate = d.lastUpdate;
+      _activeDelegation.lastUpdate = Date.now();
       _renderDelegateDialog();
       _renderDelegatePanel();
+      if (changed) _showNewDlgEntries();
       return changed;
     }
   } catch {}
@@ -11450,11 +11476,7 @@ async function checkDelegation() {
 
 async function checkDelegationBtn() {
   const changed = await checkDelegation();
-  if (changed) {
-    toast(t('dlg.toast.updated'), false, 2000);
-  } else {
-    toast(t('dlg.toast.no_changes'), false, 2000);
-  }
+  if (!changed) toast(t('dlg.toast.no_changes'), false, 2000);
 }
 
 async function stopDelegation() {
@@ -11464,6 +11486,7 @@ async function stopDelegation() {
   } catch {}
   if (_delegateCheckTimer) { clearInterval(_delegateCheckTimer); _delegateCheckTimer = null; }
   _activeDelegation = null;
+  _dlgShownCount = 0;
   _renderDelegatePanel();
   const container = $i('dlgDialogContainer');
   if (container) container.style.display = 'none';
@@ -11496,8 +11519,9 @@ async function _restoreDelegationState() {
         lastUpdate: del.lastUpdate,
         dialog: '',
       };
+      _dlgShownCount = 0;
       _renderDelegatePanel();
-      if (del.mode === 'sync') _startDelegatePolling();
+      _startDelegatePolling();
       checkDelegation();
     }
   } catch {}
