@@ -5314,17 +5314,7 @@ app.post('/api/delegate/:id/check', (req, res) => {
   const delegation = activeDelegations.get(req.params.id);
   if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
   const dialog = readDialog(delegation.delegationDir);
-  // Broadcast update to WS clients
-  for (const client of wss.clients) {
-    if (client.readyState === 1) {
-      client.send(JSON.stringify({
-        type: 'delegate_update',
-        delegationId: delegation.id,
-        dialog,
-        lastUpdate: delegation.lastUpdate,
-      }));
-    }
-  }
+  delegation.lastUpdate = Date.now();
   res.json({ dialog, lastUpdate: delegation.lastUpdate });
 });
 
