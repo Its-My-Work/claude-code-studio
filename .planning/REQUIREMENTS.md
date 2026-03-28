@@ -79,8 +79,30 @@
 
 ## Traceability
 
-*(filled in by roadmapper)*
-
-| REQ-ID | Phase |
-|--------|-------|
-| TBD    | TBD   |
+| REQ-ID | Phase | Status |
+|--------|-------|--------|
+| ARCH-01 | Phase 1 | Pending |
+| FSM-01 | Phase 1 | Pending |
+| FSM-02 | Phase 1 | Pending |
+| FSM-03 | Phase 1 | Pending |
+| FSM-04 | Phase 1 | Pending |
+| FSM-05 | Phase 1 | Pending |
+| NAV-01 | Phase 2 | Pending |
+| NAV-02 | Phase 2 | Pending |
+| NAV-03 | Phase 2 | Pending |
+| NAV-04 | Phase 2 | Pending |
+| NAV-05 | Phase 2 | Pending |
+| NAV-06 | Phase 2 | Pending |
+| KB-01 | Phase 2 | Pending |
+| KB-02 | Phase 2 | Pending |
+| KB-03 | Phase 2 | Pending |
+| ARCH-02 | Phase 2 | Pending |
+| ARCH-03 | Phase 2 | Pending |
+| ARCH-04 | Phase 2 | Pending |
+| STREAM-01 | Phase 2 | Pending |
+| FORUM-01 | Phase 3 | Pending |
+| FORUM-02 | Phase 3 | Pending |
+| FORUM-03 | Phase 3 | Pending |
+| FORUM-04 | Phase 3 | Pending |
+| ENC-01 | Phase 4 | Pending |
+| ENC-02 | Phase 4 | Pending |
