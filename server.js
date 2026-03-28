@@ -5038,17 +5038,17 @@ app.post('/api/tunnel/stop', (_, res) => {
 // CROSS-AGENT DELEGATION
 // ============================================
 
-const activeDelegations = new Map(); // delegationId -> { id, agentId, mode, workdir, pid, startedAt, watcher }
+const activeDelegations = new Map(); // delegationId -> { id, agentId, mode, workdir, delegationDir, startedAt, watcher }
 const CROSSWORK_DIR = '.crosswork';
 
-function getCrossworkPath(workdir) {
-  return path.join(workdir, CROSSWORK_DIR);
+function getDelegationDir(workdir, delegationId) {
+  return path.join(workdir, CROSSWORK_DIR, delegationId);
 }
 
-function ensureCrossworkDir(workdir) {
-  const dir = getCrossworkPath(workdir);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  // Auto-add to .gitignore if not already there
+function ensureDelegationDir(workdir, delegationId) {
+  const dir = getDelegationDir(workdir, delegationId);
+  fs.mkdirSync(dir, { recursive: true });
+  // Auto-add .crosswork/ to .gitignore if not already there
   const gitignorePath = path.join(workdir, '.gitignore');
   try {
     const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
@@ -5059,10 +5059,9 @@ function ensureCrossworkDir(workdir) {
   return dir;
 }
 
-function buildContextMd(session, messages, task) {
+function buildContextMd(session, messages, task, relPath) {
   const now = new Date().toISOString();
   const textMsgs = messages.filter(m => m.type !== 'tool' && m.content);
-  // Take last 40 messages max, trim each to 1000 chars
   const recent = textMsgs.slice(-40);
   let conversation = '';
   for (const m of recent) {
@@ -5085,19 +5084,19 @@ ${conversation}
 You are continuing work delegated from another AI agent (Claude Code Studio).
 
 1. Read this file first for full context of prior work
-2. Before EVERY write to .crosswork/DIALOG.md — re-read it first (another agent may have added messages)
-3. Write to DIALOG.md using this format:
+2. Before EVERY write to ${relPath}/DIALOG.md — re-read it first (another agent may have added messages)
+3. Write to ${relPath}/DIALOG.md using this format:
    ## [YYYY-MM-DD HH:MM:SS] {your-agent-name}
    Your message here.
-4. After each completed work step — append your update to .crosswork/DIALOG.md
+4. After each completed work step — append your update to ${relPath}/DIALOG.md
 5. Never overwrite or delete content in DIALOG.md — only APPEND
 6. The other agent may send follow-up instructions at any time via DIALOG.md
 7. If you finish all work, write a final summary in DIALOG.md
 `;
 }
 
-function appendDialog(workdir, agentName, message) {
-  const dialogPath = path.join(getCrossworkPath(workdir), 'DIALOG.md');
+function appendDialog(delegationDir, agentName, message) {
+  const dialogPath = path.join(delegationDir, 'DIALOG.md');
   const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
   const entry = `\n## [${timestamp}] ${agentName}\n${message}\n`;
   if (!fs.existsSync(dialogPath)) {
@@ -5107,8 +5106,8 @@ function appendDialog(workdir, agentName, message) {
   }
 }
 
-function readDialog(workdir) {
-  const dialogPath = path.join(getCrossworkPath(workdir), 'DIALOG.md');
+function readDialog(delegationDir) {
+  const dialogPath = path.join(delegationDir, 'DIALOG.md');
   try { return fs.readFileSync(dialogPath, 'utf-8'); } catch { return ''; }
 }
 
@@ -5154,20 +5153,18 @@ function openTerminal(shellCommand) {
   }
 }
 
-function startDelegationWatcher(delegationId, workdir) {
-  const dir = getCrossworkPath(workdir);
+function startDelegationWatcher(delegationId, delegationDir) {
   let debounceTimer = null;
   try {
-    const watcher = fs.watch(dir, { persistent: false }, (eventType, filename) => {
+    const watcher = fs.watch(delegationDir, { persistent: false }, (eventType, filename) => {
       if (filename === 'DIALOG.md') {
-        // Debounce: fs.watch on macOS fires multiple events per single write
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           debounceTimer = null;
           const delegation = activeDelegations.get(delegationId);
           if (!delegation) return;
           delegation.lastUpdate = Date.now();
-          const dialog = readDialog(workdir);
+          const dialog = readDialog(delegationDir);
           for (const client of wss.clients) {
             if (client.readyState === 1) {
               client.send(JSON.stringify({
@@ -5225,26 +5222,22 @@ app.post('/api/delegate', express.json(), (req, res) => {
   const session = sessionId ? stmts.getSession.get(sessionId) : null;
   const workdir = session?.workdir || WORKDIR;
 
-  // Check for existing delegation on this workdir
-  for (const [did, d] of activeDelegations) {
-    if (d.workdir === workdir) {
-      return res.status(409).json({ error: 'Active delegation already exists for this workdir', delegationId: did });
-    }
-  }
-
-  // 1. Prepare .crosswork/ directory
-  ensureCrossworkDir(workdir);
+  // 1. Generate delegation ID and create its subdirectory
+  const delegationId = genId();
+  const delegationMode = mode || 'handoff';
+  const delegationDir = ensureDelegationDir(workdir, delegationId);
+  const relPath = `.crosswork/${delegationId}`;
 
   // 2. Build context from session messages
   const messages = sessionId ? stmts.getMsgs.all(sessionId) : [];
-  const contextMd = buildContextMd(session || { title: 'New delegation', workdir }, messages, task);
-  fs.writeFileSync(path.join(getCrossworkPath(workdir), 'CONTEXT.md'), contextMd);
+  const contextMd = buildContextMd(session || { title: 'New delegation', workdir }, messages, task, relPath);
+  fs.writeFileSync(path.join(delegationDir, 'CONTEXT.md'), contextMd);
 
   // 3. Initialize DIALOG.md with delegation message
-  appendDialog(workdir, 'claude-code-studio', `Delegated task to ${agentConfig.label}.\nTask: ${task}\nMode: ${mode || 'handoff'}\nFull context in CONTEXT.md.`);
+  appendDialog(delegationDir, 'claude-code-studio', `Delegated task to ${agentConfig.label}.\nTask: ${task}\nMode: ${delegationMode}\nFull context in CONTEXT.md.`);
 
   // 4. Build prompt for the external agent
-  const agentPrompt = `Read .crosswork/CONTEXT.md for full context of the delegated task, then start working. Follow the protocol described in that file for communicating through .crosswork/DIALOG.md.`;
+  const agentPrompt = `Read ${relPath}/CONTEXT.md for full context of the delegated task, then start working. Follow the protocol described in that file for communicating through ${relPath}/DIALOG.md.`;
 
   // 5. Open terminal with the agent
   const shellCommand = buildTerminalCommand(agentConfig, workdir, agentPrompt);
@@ -5255,10 +5248,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
   }
 
   // 6. Track delegation
-  const delegationId = genId();
-  const delegationMode = mode || 'handoff';
-
-  const watcher = delegationMode === 'sync' ? startDelegationWatcher(delegationId, workdir) : null;
+  const watcher = delegationMode === 'sync' ? startDelegationWatcher(delegationId, delegationDir) : null;
 
   activeDelegations.set(delegationId, {
     id: delegationId,
@@ -5266,6 +5256,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
     agentLabel: agentConfig.label,
     mode: delegationMode,
     workdir,
+    delegationDir,
     sessionId: sessionId || null,
     task,
     startedAt: Date.now(),
@@ -5280,7 +5271,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
     delegationId,
     mode: delegationMode,
     agent: agentConfig.label,
-    crossworkPath: getCrossworkPath(workdir),
+    crossworkPath: delegationDir,
   });
 });
 
@@ -5305,7 +5296,7 @@ app.get('/api/delegate/status', (_, res) => {
 app.get('/api/delegate/:id/dialog', (req, res) => {
   const delegation = activeDelegations.get(req.params.id);
   if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
-  const dialog = readDialog(delegation.workdir);
+  const dialog = readDialog(delegation.delegationDir);
   res.json({ dialog, lastUpdate: delegation.lastUpdate });
 });
 
@@ -5314,7 +5305,7 @@ app.post('/api/delegate/:id/message', express.json(), (req, res) => {
   if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: 'message required' });
-  appendDialog(delegation.workdir, 'claude-code-studio', message);
+  appendDialog(delegation.delegationDir, 'claude-code-studio', message);
   delegation.lastUpdate = Date.now();
   res.json({ ok: true });
 });
@@ -5322,7 +5313,7 @@ app.post('/api/delegate/:id/message', express.json(), (req, res) => {
 app.post('/api/delegate/:id/check', (req, res) => {
   const delegation = activeDelegations.get(req.params.id);
   if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
-  const dialog = readDialog(delegation.workdir);
+  const dialog = readDialog(delegation.delegationDir);
   // Broadcast update to WS clients
   for (const client of wss.clients) {
     if (client.readyState === 1) {

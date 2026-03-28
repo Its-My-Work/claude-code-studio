@@ -125,20 +125,18 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .sec-title { padding: 9px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; transition: color .15s; }
 .sec-title:hover { color: var(--text); }
 .sec-title .badge { background: var(--accent); color: white; font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 700; min-width: 20px; text-align: center; }
-.sec-body { padding: 4px 8px 10px; }
+.sec-body { padding: 4px 8px 8px; display: flex; flex-direction: column; }
 .sec-body.collapsed { display: none; }
-/* Projects and Chats sections: bounded height with independent scroll */
-#projBody:not(.collapsed), #histBody:not(.collapsed) {
-  max-height: 35vh;
-  overflow-y: auto;
-}
-#projBody:not(.collapsed)::-webkit-scrollbar,
-#histBody:not(.collapsed)::-webkit-scrollbar { width: 3px; }
-#projBody:not(.collapsed)::-webkit-scrollbar-thumb,
-#histBody:not(.collapsed)::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+/* ─── Scrollable list inside section ─── */
+.sec-list { max-height: 220px; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+.sec-list::-webkit-scrollbar { width: 3px; }
+.sec-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 /* ─── Section quick-filter ─── */
 .sec-filter-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 2px 5px; border-radius: 4px; transition: color .15s, background .15s; line-height: 1; flex-shrink: 0; }
 .sec-filter-btn:hover, .sec-filter-btn.on { color: var(--accent); background: rgba(124,106,239,.15); }
+/* ─── Add button in section title ─── */
+.sec-add-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: color .15s, background .15s; flex-shrink: 0; line-height: 1; }
+.sec-add-btn:hover { color: var(--accent2); background: rgba(124,106,239,.15); }
 .sec-filter-row { display: none; align-items: center; gap: 5px; margin: 0 0 6px; }
 .sec-filter-row input { flex: 1; min-width: 0; background: var(--s3); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 12px; color: var(--text); outline: none; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
 .sec-filter-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(124,106,239,.13); }
@@ -2074,6 +2072,19 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .dlg-msg-input input { flex: 1; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; outline: none; }
 .dlg-msg-input input:focus { border-color: var(--accent); }
 .dlg-msg-input button { padding: 6px 14px; border-radius: 6px; border: none; background: var(--accent); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; }
+.dlg-select { width: 100%; height: 44px; padding: 0 14px; background: linear-gradient(180deg, rgba(18,24,38,.96) 0%, rgba(11,16,27,.98) 100%); border: 1px solid rgba(124,106,239,.22); border-radius: 10px; color: var(--text); font-size: 14px; font-weight: 600; outline: none; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236e7c98' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; transition: border-color .15s, box-shadow .15s; }
+.dlg-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.16); }
+.dlg-select option { background: var(--s1); color: var(--text); }
+.dlg-mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dlg-mode-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1.5px solid var(--border); border-radius: 12px; background: rgba(18,24,38,.6); cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+.dlg-mode-card:hover { border-color: rgba(124,106,239,.4); background: rgba(124,106,239,.06); }
+.dlg-mode-card.selected { border-color: var(--accent); background: rgba(124,106,239,.1); box-shadow: 0 0 0 3px rgba(124,106,239,.12), inset 0 1px 0 rgba(255,255,255,.03); }
+.dlg-mode-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.dlg-mode-card.selected .dlg-mode-title { color: var(--accent); }
+.dlg-mode-desc { font-size: 11px; line-height: 1.45; color: var(--muted); }
+.dlg-textarea { width: 100%; min-height: 80px; padding: 12px 14px; background: linear-gradient(180deg, rgba(18,24,38,.96) 0%, rgba(11,16,27,.98) 100%); border: 1px solid rgba(124,106,239,.22); border-radius: 10px; color: var(--text); font-size: 13px; line-height: 1.6; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; resize: vertical; outline: none; transition: border-color .15s, box-shadow .15s; }
+.dlg-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.16); }
+.dlg-textarea::placeholder { color: #6e7c98; }
 </style>
 </head>
 <body>
@@ -2084,15 +2095,15 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
         <span data-i18n="sec.projects">Проекти</span>
-        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openAddProject()" title="Додати проект" data-i18n-title="proj.add">＋</button>
           <span class="badge" id="projCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="projBody">
         <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" placeholder="Фільтр..." aria-label="Фільтр проектів" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
-        <div id="projList"></div>
-        <button class="add-btn" onclick="openAddProject()" data-i18n="proj.add">＋ Додати проект</button>
+        <div class="sec-list"><div id="projList"></div></div>
       </div>
     </div>
 
@@ -2100,15 +2111,15 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
         <span data-i18n="sec.sshHosts">SSH Хости</span>
-        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openAddHostModal()" title="Додати SSH хост" data-i18n-title="ssh.add">＋</button>
           <span class="badge" id="sshHostCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="sshHostsBody">
         <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" placeholder="Фільтр..." aria-label="Фільтр SSH хостів" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
-        <div id="sshHostList"></div>
-        <button class="add-btn" onclick="openAddHostModal()" data-i18n="ssh.add">＋ Додати SSH хост</button>
+        <div class="sec-list"><div id="sshHostList"></div></div>
       </div>
     </div>
 
@@ -2123,7 +2134,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
       <div class="sec-body" id="histBody">
         <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" placeholder="Фільтр..." aria-label="Фільтр чатів" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
-        <div class="hist-list" id="histList"></div>
+        <div class="sec-list"><div class="hist-list" id="histList"></div></div>
         <div class="hist-bulk-bar" id="histBulkBar">
           <span class="bulk-info" id="histBulkInfo">0 вибрано</span>
           <button class="bulk-all" onclick="selectAllHist()" data-i18n="bulk.all">Всі</button>
@@ -2135,38 +2146,36 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
         <span data-i18n="sec.mcp">MCP</span>
-        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openMcpImport()" title="Імпортувати MCP з JSON файлу" data-i18n-title="mcp.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();exportMcp()" title="Експортувати MCP у JSON файл" data-i18n-title="mcp.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openMcpModal('add')" title="Додати MCP-сервер" data-i18n-title="mcp.add">＋</button>
           <span class="badge" id="mcpCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="mcpBody">
         <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" placeholder="Фільтр..." aria-label="Фільтр MCP-серверів" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
-        <div id="mcpList"></div>
-        <button class="add-btn" onclick="openMcpModal('add')" data-i18n="mcp.add">＋ Додати MCP-сервер</button>
-        <div style="display:flex;gap:5px;margin-top:4px">
-          <button class="bg" onclick="openMcpImport()" style="flex:1;font-size:11px;padding:5px 6px;display:inline-flex;align-items:center;justify-content:center;gap:4px" data-i18n-title="mcp.import.title" title="Імпортувати MCP з JSON файлу (Claude Desktop формат)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.btn">Імпорт</span></button>
-          <button class="bg" onclick="exportMcp()" style="flex:1;font-size:11px;padding:5px 6px;display:inline-flex;align-items:center;justify-content:center;gap:4px" data-i18n-title="mcp.export.title" title="Експортувати всі MCP у JSON файл"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <span data-i18n="mcp.export.btn">Експорт</span></button>
-        </div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
+        <div class="sec-list"><div id="mcpList"></div></div>
       </div>
     </div>
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
         <span data-i18n="sec.skills">Навички</span>
-        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="skillsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('skills')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button id="autoSkillsBtn" class="auto-skills-btn" onclick="event.stopPropagation();toggleAutoSkills()">⚡ Auto</button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();$i('skillUpload').click()" title="Завантажити .md файл" data-i18n-title="skills.upload">＋</button>
           <span class="badge" id="skillsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="skillsBody">
         <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" placeholder="Фільтр..." aria-label="Фільтр навичок" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
         <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Навички обираються автоматично по тексту задачі</div>
-        <div id="skillsList"></div>
-        <button class="add-btn" onclick="$i('skillUpload').click()" data-i18n="skills.upload">＋ Завантажити .md файл</button>
+        <div class="sec-list"><div id="skillsList"></div></div>
         <input type="file" id="skillUpload" accept=".md,.txt" style="display:none" onchange="uploadSkill(this)">
       </div>
     </div>
@@ -2174,16 +2183,16 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
         <span data-i18n="sec.cmds">/ Команди</span>
-        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openCmdForm()" title="Додати команду" data-i18n-title="cmd.add.new">＋</button>
           <span class="badge" id="cmdsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="cmdsBody">
         <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" placeholder="Фільтр..." aria-label="Фільтр команд" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="cmds.hint">Слеш-команди — шорткати до промптів. Набирайте / в чаті.</div>
-        <div id="cmdsList"></div>
-        <button class="add-btn" onclick="openCmdForm()" data-i18n="cmd.add.new">＋ Додати команду</button>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="cmds.hint">Слеш-команди — шорткати до промптів. Набирайте / в чаті.</div>
+        <div class="sec-list"><div id="cmdsList"></div></div>
       </div>
     </div>
 
@@ -3058,30 +3067,34 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 <div class="modal-overlay hidden" id="delegateModal" aria-hidden="true" onclick="if(event.target===this)closeDelegateModal()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="dlgModalTitle">
     <div class="modal-hdr">
-      <h2 id="dlgModalTitle">⇗ Delegate to External Agent</h2>
+      <h2 id="dlgModalTitle">Delegate to Agent</h2>
       <button class="modal-close" onclick="closeDelegateModal()">&times;</button>
     </div>
-    <div class="modal-body" style="gap:14px;display:flex;flex-direction:column;">
+    <div class="modal-body" style="gap:16px;display:flex;flex-direction:column;">
       <div class="cmd-field">
         <label>Agent</label>
-        <select id="dlgAgent" style="padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
-          <option value="">-- Select agent --</option>
+        <select id="dlgAgent" class="dlg-select">
+          <option value="">Select agent...</option>
         </select>
       </div>
       <div class="cmd-field">
         <label>Mode</label>
-        <div style="display:flex;gap:8px;">
-          <label style="font-size:13px;color:var(--text);display:flex;align-items:center;gap:5px;text-transform:none;letter-spacing:0;font-weight:400;cursor:pointer;">
-            <input type="radio" name="dlgMode" value="handoff" checked> Handoff <span style="color:var(--muted);font-size:11px;">(full transfer, work in terminal)</span>
+        <div class="dlg-mode-cards">
+          <label class="dlg-mode-card selected" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
+            <input type="radio" name="dlgMode" value="handoff" checked style="display:none">
+            <span class="dlg-mode-title">Handoff</span>
+            <span class="dlg-mode-desc">Full transfer. Opens terminal, you continue working there.</span>
           </label>
-          <label style="font-size:13px;color:var(--text);display:flex;align-items:center;gap:5px;text-transform:none;letter-spacing:0;font-weight:400;cursor:pointer;">
-            <input type="radio" name="dlgMode" value="sync"> Sync <span style="color:var(--muted);font-size:11px;">(parallel work, dialog updates)</span>
+          <label class="dlg-mode-card" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
+            <input type="radio" name="dlgMode" value="sync" style="display:none">
+            <span class="dlg-mode-title">Sync</span>
+            <span class="dlg-mode-desc">Parallel work. Both agents active, communicate via dialog file.</span>
           </label>
         </div>
       </div>
       <div class="cmd-field">
         <label>Task</label>
-        <textarea id="dlgTask" rows="4" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px;font-size:13px;resize:vertical;font-family:inherit;min-height:80px;" placeholder="Describe what the external agent should do..."></textarea>
+        <textarea id="dlgTask" rows="3" class="dlg-textarea" placeholder="What should the agent do..."></textarea>
       </div>
     </div>
     <div class="modal-footer">
