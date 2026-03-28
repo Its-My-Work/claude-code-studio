@@ -26,7 +26,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 2 plans
 Plans:
 - [x] 01-01-PLAN.md — Extract BOT_I18N to telegram-bot-i18n.js (i18n separation)
-- [ ] 01-02-PLAN.md — Replace ad-hoc state flags with explicit FSM (ctx.state + ctx.stateData)
+- [x] 01-02-PLAN.md — Replace ad-hoc state flags with explicit FSM (ctx.state + ctx.stateData)
 **Success Criteria** (what must be TRUE):
   1. `telegram-bot-i18n.js` exists as a standalone file; `telegram-bot.js` imports from it and is ~825 lines shorter
   2. `ctx.state` is the single source of pending-input truth — `ctx.pendingInput`, `ctx.pendingAskRequestId`, and `ctx.composing` no longer exist in any code path

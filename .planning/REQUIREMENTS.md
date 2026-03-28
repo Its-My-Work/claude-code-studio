@@ -19,11 +19,11 @@
 
 ### State Machine (FSM)
 
-- [ ] **FSM-01**: User state is represented as a single explicit enum field (`ctx.state`) with values: IDLE, AWAITING_TASK_TITLE, AWAITING_TASK_DESCRIPTION, AWAITING_ASK_RESPONSE, COMPOSING
-- [ ] **FSM-02**: No pending input state can silently intercept a text message that was intended for Claude — task creation and ask_user states are mutually exclusive, never overlap
-- [ ] **FSM-03**: Any slash command resets `ctx.state` to IDLE before processing (cancels any pending input)
-- [ ] **FSM-04**: `answerCallbackQuery` is called in a `finally` block on every inline button tap, unconditionally — no permanent spinner for the user
-- [ ] **FSM-05**: Existing paired devices and in-flight sessions continue working after the state migration (zero re-pairing required)
+- [x] **FSM-01**: User state is represented as a single explicit enum field (`ctx.state`) with values: IDLE, AWAITING_TASK_TITLE, AWAITING_TASK_DESCRIPTION, AWAITING_ASK_RESPONSE, COMPOSING
+- [x] **FSM-02**: No pending input state can silently intercept a text message that was intended for Claude — task creation and ask_user states are mutually exclusive, never overlap
+- [x] **FSM-03**: Any slash command resets `ctx.state` to IDLE before processing (cancels any pending input)
+- [x] **FSM-04**: `answerCallbackQuery` is called in a `finally` block on every inline button tap, unconditionally — no permanent spinner for the user
+- [x] **FSM-05**: Existing paired devices and in-flight sessions continue working after the state migration (zero re-pairing required)
 
 ### Persistent Keyboard (KB)
 
@@ -89,11 +89,11 @@
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
 | ARCH-01 | Phase 1 | Complete |
-| FSM-01 | Phase 1 | Pending |
-| FSM-02 | Phase 1 | Pending |
-| FSM-03 | Phase 1 | Pending |
-| FSM-04 | Phase 1 | Pending |
-| FSM-05 | Phase 1 | Pending |
+| FSM-01 | Phase 1 | Complete |
+| FSM-02 | Phase 1 | Complete |
+| FSM-03 | Phase 1 | Complete |
+| FSM-04 | Phase 1 | Complete |
+| FSM-05 | Phase 1 | Complete |
 | NAV-01 | Phase 2 | Pending |
 | NAV-02 | Phase 2 | Pending |
 | NAV-03 | Phase 2 | Pending |
