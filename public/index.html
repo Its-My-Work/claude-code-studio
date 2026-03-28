@@ -11400,7 +11400,7 @@ async function sendDelegateMsgSubmit() {
   }
 }
 
-async function checkDelegation() {
+async function checkDelegation(showDialog = true) {
   if (!_activeDelegation) return;
   try {
     const r = await fetch(`/api/delegate/${_activeDelegation.id}/check`, { method: 'POST' });
@@ -11409,6 +11409,10 @@ async function checkDelegation() {
     if (d.dialog !== undefined) {
       _activeDelegation.dialog = d.dialog;
       _activeDelegation.lastUpdate = d.lastUpdate;
+      if (showDialog) {
+        const container = $i('dlgDialogContainer');
+        if (container) container.style.display = '';
+      }
       _renderDelegateDialog();
       _renderDelegatePanel();
     }
