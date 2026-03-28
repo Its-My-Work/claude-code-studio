@@ -43,7 +43,7 @@ Plans:
 - [x] 02-01-PLAN.md — SCREENS registry, callback router refactor, screenMsgId removal (editMsgId from callback anchor)
 - [x] 02-02-PLAN.md — sendMessageDraft streaming migration in TelegramProxy (server.js)
 - [x] 02-03-PLAN.md — Auto-generated Back buttons + context header on every screen
-- [ ] 02-04-PLAN.md — Dynamic persistent keyboard + setMyCommands with 4 commands
+- [x] 02-04-PLAN.md — Dynamic persistent keyboard + setMyCommands with 4 commands
 - [ ] 02-05-PLAN.md — 2-tap flow validation, slash command pruning, human verification checkpoint
 **Success Criteria** (what must be TRUE):
   1. From any screen (or fresh /start), a user can send a message to Claude with at most 2 taps — no slash commands typed

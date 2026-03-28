@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md (context header + back buttons)
-last_updated: "2026-03-28T20:01:00.590Z"
+stopped_at: Completed 02-04-PLAN.md (persistent reply keyboard + setMyCommands)
+last_updated: "2026-03-28T20:08:22.441Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 57
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 2
-Plan: 2 of 5 complete
+Plan: 3 of 5 complete
 Status: Ready to execute
 Last activity: 2026-03-28
 
@@ -57,6 +57,7 @@ Progress: [######░░░░] 57%
 | Phase 02-ux-redesign P02 | 3min | 2 tasks | 1 files |
 | Phase 02-ux-redesign P01 | 9min | 2 tasks | 1 files |
 | Phase 02-ux-redesign P03 | 6min | 2 tasks | 2 files |
+| Phase 02-ux-redesign P04 | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Recent decisions affecting current work:
 - [Phase 02-ux-redesign P01]: Forum callbacks (fs:, fm:, fa:) excluded from opts propagation per Phase 3 boundary
 - [Phase 02-ux-redesign]: SCREEN_TO_CALLBACK reverse map used for back navigation instead of reverse CALLBACK_TO_SCREEN lookup
 - [Phase 02-ux-redesign]: Context header replaces per-screen inline project/chat display for consistency
+- [Phase 02-ux-redesign]: Keyboard context update via separate sendMessage (editMessageText cannot set ReplyKeyboardMarkup)
+- [Phase 02-ux-redesign]: setMyCommands called once at startup with only /start /help /cancel /status
 
 ### Pending Todos
 
@@ -92,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T20:01:00.587Z
-Stopped at: Completed 02-03-PLAN.md (context header + back buttons)
+Last session: 2026-03-28T20:08:22.438Z
+Stopped at: Completed 02-04-PLAN.md (persistent reply keyboard + setMyCommands)
 Resume file: None

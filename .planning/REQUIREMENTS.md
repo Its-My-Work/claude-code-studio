@@ -27,9 +27,9 @@
 
 ### Persistent Keyboard (KB)
 
-- [ ] **KB-01**: The persistent reply keyboard (bottom bar) shows the name of the active project/chat when one is selected
-- [ ] **KB-02**: The Write button is always visible in the persistent keyboard and always routes correctly (to compose if session active, to project picker if not)
-- [ ] **KB-03**: `setMyCommands` is updated to list only 3–5 commands: `/start`, `/help`, `/status`, `/cancel` — navigation commands removed
+- [x] **KB-01**: The persistent reply keyboard (bottom bar) shows the name of the active project/chat when one is selected
+- [x] **KB-02**: The Write button is always visible in the persistent keyboard and always routes correctly (to compose if session active, to project picker if not)
+- [x] **KB-03**: `setMyCommands` is updated to list only 3–5 commands: `/start`, `/help`, `/status`, `/cancel` — navigation commands removed
 
 ### Screen Architecture (ARCH)
 
@@ -100,9 +100,9 @@
 | NAV-04 | Phase 2 | Complete |
 | NAV-05 | Phase 2 | Pending |
 | NAV-06 | Phase 2 | Complete |
-| KB-01 | Phase 2 | Pending |
-| KB-02 | Phase 2 | Pending |
-| KB-03 | Phase 2 | Pending |
+| KB-01 | Phase 2 | Complete |
+| KB-02 | Phase 2 | Complete |
+| KB-03 | Phase 2 | Complete |
 | ARCH-02 | Phase 2 | Complete |
 | ARCH-03 | Phase 2 | Complete |
 | ARCH-04 | Phase 2 | Complete |
