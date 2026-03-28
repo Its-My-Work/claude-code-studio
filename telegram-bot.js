@@ -727,10 +727,14 @@ class TelegramBot extends EventEmitter {
       // Restore persisted context on first interaction
       this._restoreDeviceContext(userId);
 
-      // Persistent keyboard buttons
+      // Persistent keyboard buttons (prefix match for dynamic labels like "✉ Write · chatName")
       if (text === this._t('kb_menu')) { return this._screenMainMenu(chatId, userId); }
-      if (text === this._t('kb_write')) { return this._handleWriteButton(chatId, userId); }
+      if (text.startsWith(this._t('kb_write'))) { return this._handleWriteButton(chatId, userId); }
       if (text === this._t('kb_status')) { return this._screenStatus(chatId, userId); }
+      if (text.startsWith(this._t('kb_project_prefix'))) {
+        // Project button tap — show project list (current project context)
+        return this._screenProjects(chatId, userId, 'p:list:0');
+      }
       // Legacy: 🔔 bell button (replaced by Settings, but keep for backwards compat)
       if (text === '🔔') {
         const device = this._stmts.getDevice.get(userId);
@@ -816,15 +820,9 @@ class TelegramBot extends EventEmitter {
 
       await this._sendMessage(chatId, this._t('paired_ok', { name: this._escHtml(displayName) }));
 
-      // Set persistent Reply Keyboard
-      await this._sendMessage(chatId, this._t('use_menu'), {
-        parse_mode: 'HTML',
-        reply_markup: JSON.stringify({
-          keyboard: [[{ text: this._t('kb_menu') }, { text: this._t('kb_write') }, { text: this._t('kb_status') }]],
-          resize_keyboard: true,
-          is_persistent: true,
-        }),
-      });
+      // Set persistent Reply Keyboard (dynamic, context-aware)
+      const ctx = this._getContext(userId);
+      await this._sendReplyKeyboard(chatId, ctx, this._t('use_menu'));
 
       // Emit event so UI can update in real-time
       this.emit('device_paired', {
@@ -1786,6 +1784,9 @@ class TelegramBot extends EventEmitter {
     } else {
       await this._showScreen(chatId, userId, text, keyboard);
     }
+
+    // Update persistent keyboard to reflect new project context
+    await this._sendReplyKeyboard(chatId, ctx, `✓ ${this._escHtml(name)}`);
   }
 
   async _routeProjectMenu(chatId, userId, data, opts = {}) {
@@ -1898,7 +1899,16 @@ class TelegramBot extends EventEmitter {
     ctx.sessionId = ctx.chatList[idx];
     ctx.dialogPage = 0;
     this._saveDeviceContext(userId);
-    return this._screenDialog(chatId, userId, { editMsgId });
+    await this._screenDialog(chatId, userId, { editMsgId });
+
+    // Update persistent keyboard to reflect new active chat
+    const title = (() => {
+      try {
+        const sess = this.db.prepare('SELECT title FROM sessions WHERE id=?').get(ctx.sessionId);
+        return (sess?.title || this._t('chat_untitled')).substring(0, 25);
+      } catch { return this._t('chat_untitled'); }
+    })();
+    await this._sendReplyKeyboard(chatId, ctx, `✓ ${this._escHtml(title)}`);
   }
 
   async _screenDialog(chatId, userId, { mode = 'overview', editMsgId } = {}) {
@@ -3294,7 +3304,8 @@ class TelegramBot extends EventEmitter {
     // Persistent keyboard buttons send their label text into the topic — intercept before Claude
     if (text === this._t('kb_menu'))   return this._forumShowInfo(chatId, userId, workdir);
     if (text === this._t('kb_status')) return this._cmdStatus(chatId, userId);
-    if (text === this._t('kb_write'))  return; // In forum mode, just type directly in the topic
+    if (text.startsWith(this._t('kb_write')))  return; // In forum mode, just type directly in the topic
+    if (text.startsWith(this._t('kb_project_prefix'))) return; // Project button ignored in forum mode
 
     // Handle project-specific commands
     if (text.startsWith('/')) {
@@ -3890,6 +3901,9 @@ class TelegramBot extends EventEmitter {
     } else {
       await this._showScreen(chatId, userId, newChatText, newChatKb);
     }
+
+    // Update persistent keyboard to reflect new active chat
+    await this._sendReplyKeyboard(chatId, ctx, this._t('new_session_created', { id: this._escHtml(id) }).split('\n')[0]);
   }
 
   async _handleNewTask(chatId, userId, { editMsgId } = {}) {
