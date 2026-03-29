@@ -115,7 +115,7 @@ Not a chatbot. "Refactor this function and add tests" → Claude opens files, ed
 
 **Extended thinking** — when Claude uses extended thinking, each thinking block appears as a "Chain of thought" badge showing estimated word count. Click to open the full reasoning in a modal with a copy button. The CLI import modal and thinking modal are fully localized (EN/UA/RU) — all labels, status messages, and dates adapt to the selected interface language.
 
-Thinking blocks are now **fully persistent**: switching tabs mid-generation no longer loses the chain of thought — it's saved to SQLite on completion. Imported CLI sessions preserve thinking blocks too, so every past reasoning trace is available for review. Session recovery is also correct: thinking blocks are excluded from the context sent back to Claude on resume, so it never sees its own internal reasoning as a prior message.
+Thinking blocks are now **fully persistent**: switching tabs mid-generation no longer loses the chain of thought — it's saved to SQLite on completion. Live **thinking badges** appear in real time as Claude reasons, so you can watch the thought process unfold. Imported CLI sessions preserve thinking blocks too, so every past reasoning trace is available for review. Session recovery is also correct: thinking blocks are excluded from the context sent back to Claude on resume, so it never sees its own internal reasoning as a prior message. Press **ESC** to close the thinking modal from the keyboard.
 
 **Session export / import** — take your chat history anywhere. Export any session as a portable JSON file with one click — full message history, tool calls, timestamps, and attachments included. Import it back into any Studio instance to resume where you left off. The Import button lives on the welcome screen so you can restore a session without having to create one first.
 
@@ -209,7 +209,7 @@ Send tasks to external AI CLIs — OpenAI Codex, Gemini CLI, opencode, Aider —
 
 How it works: click **Delegate** in the session bar, pick an agent and mode, describe the task. Studio generates a `CONTEXT.md` with conversation history and opens a terminal with the external agent. In Sync mode, both agents communicate through a shared `DIALOG.md` — responses appear directly in the main chat with real-time notifications.
 
-Configure agents in Settings → External Agents (`config.json`). Delegations survive server restarts via persistent state files.
+**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section in the sidebar lets you add, edit, and delete agents without touching `config.json`. Codex, Gemini CLI, and opencode come **pre-configured out of the box** — seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
 
 ### 🎛 Chat Modes
 
@@ -306,7 +306,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
 | **Telegram** | Bot control, push notifications, ask_user forwarding, session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU), Write button, file attachments |
-| **Delegation** | Cross-agent handoff/sync (Codex, Gemini, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts |
+| **Delegation** | Cross-agent handoff/sync (Codex, Gemini, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
 | **Agents** | Single, Multi (2–5 in-chat), Dispatch (Kanban), auto-retry, cascade cancellation |
 | **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
 | **Skills** | 28 built-in, auto-classification, plugin discovery, custom `.md` files |
