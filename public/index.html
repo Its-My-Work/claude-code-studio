@@ -2258,6 +2258,20 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
     </div>
 
+    <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('agents')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('agents')}">
+        <span data-i18n="sec.agents">Агенти</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+          <button class="sec-add-btn" onclick="event.stopPropagation();openAgentForm()" title="Додати агента" data-i18n-title="agent.add.new">＋</button>
+          <span class="badge" id="agentsCount">0</span>
+        </div>
+      </div>
+      <div class="sec-body" id="agentsBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">Зовнішні агенти для делегування задач.</div>
+        <div class="sec-list"><div id="agentsList"></div></div>
+      </div>
+    </div>
+
     <!-- Tunnel Manager -->
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('tunnel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tunnel')}">
@@ -3101,6 +3115,36 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   </div>
 </div>
 
+<!-- Agent Add/Edit Modal -->
+<div class="modal-overlay hidden" id="agentModal" aria-hidden="true" onclick="if(event.target===this)cancelAgentForm()">
+  <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="agentModalTitle" tabindex="-1">
+    <div class="modal-hdr">
+      <h2 id="agentModalTitle" data-i18n="agent.modal.add.title">＋ Додати агента</h2>
+      <button class="modal-close" onclick="cancelAgentForm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cmd-field">
+        <label for="agentId" data-i18n="agent.modal.id.label">ID</label>
+        <input id="agentId" data-i18n-ph="agent.id.ph" placeholder="codex, gemini, aider..." autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.id.hint">Латинські букви, цифри, - та _</div>
+      </div>
+      <div class="cmd-field">
+        <label for="agentLabel" data-i18n="agent.modal.label.label">Label</label>
+        <input id="agentLabel" data-i18n-ph="agent.label.ph" placeholder="OpenAI Codex" autocomplete="off">
+      </div>
+      <div class="cmd-field">
+        <label for="agentTemplate" data-i18n="agent.modal.template.label">Command template</label>
+        <input id="agentTemplate" data-i18n-ph="agent.template.ph" placeholder="codex {prompt}" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.template.hint">{prompt} — placeholder for task text</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="bg" onclick="cancelAgentForm()" data-i18n="agent.modal.cancel">Скасувати</button>
+      <button class="bp" id="agentSaveBtn" onclick="saveAgent()" data-i18n="agent.add.btn">Додати</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm Stop Modal -->
 <div class="confirm-overlay hidden" id="confirmStopModal" aria-hidden="true" onclick="if(event.target===this)cancelStop()">
   <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmStopTitle">
@@ -3545,6 +3589,15 @@ const TRANSLATIONS = {
     'cmd.modal.name.label':'Слеш-команда','cmd.modal.name.hint':'Використайте короткий тригер, наприклад <code>/check</code> або <code>/review</code>.','cmd.modal.text.label':'Промпт',
     'cmd.err.empty':'Введіть назву та текст команди','toast.cmd_added':'✓ Команду додано','toast.cmd_updated':'✓ Команду оновлено',
     'cmds.popup.hdr':'Команди',
+    'sec.agents':'Агенти','agents.hint':'Зовнішні агенти для делегування задач.',
+    'agent.add.new':'Додати агента','agent.edit.title':'Редагувати','agent.del.title':'Видалити','agent.del.confirm':'Видалити агента',
+    'agent.modal.add.title':'＋ Додати агента','agent.modal.edit.title':'✏️ Редагувати агента','agent.modal.cancel':'Скасувати',
+    'agent.modal.id.label':'ID','agent.id.ph':'codex, gemini, aider...','agent.modal.id.hint':'Латинські букви, цифри, - та _',
+    'agent.modal.label.label':'Назва','agent.label.ph':'OpenAI Codex',
+    'agent.modal.template.label':'Шаблон команди','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — підставиться текст задачі',
+    'agent.add.btn':'Додати','agent.save.btn':'Зберегти',
+    'agent.err.empty':'Заповніть всі поля','agent.err.id':'ID: тільки латинські букви, цифри, - та _',
+    'toast.agent_added':'✓ Агента додано','toast.agent_updated':'✓ Агента оновлено',
     'sec.sshHosts':'SSH Хости',
     'ssh.add':'＋ Додати SSH хост',
     'ssh.no_hosts':'Немає налаштованих SSH хостів',
@@ -3758,6 +3811,15 @@ const TRANSLATIONS = {
     'cmd.modal.name.label':'Slash command','cmd.modal.name.hint':'Use a short trigger like <code>/check</code> or <code>/review</code>.','cmd.modal.text.label':'Prompt',
     'cmd.err.empty':'Enter name and prompt text','toast.cmd_added':'✓ Command added','toast.cmd_updated':'✓ Command updated',
     'cmds.popup.hdr':'Commands',
+    'sec.agents':'Agents','agents.hint':'External agents for task delegation.',
+    'agent.add.new':'Add agent','agent.edit.title':'Edit','agent.del.title':'Delete','agent.del.confirm':'Delete agent',
+    'agent.modal.add.title':'＋ Add agent','agent.modal.edit.title':'✏️ Edit agent','agent.modal.cancel':'Cancel',
+    'agent.modal.id.label':'ID','agent.id.ph':'codex, gemini, aider...','agent.modal.id.hint':'Letters, digits, - and _ only',
+    'agent.modal.label.label':'Label','agent.label.ph':'OpenAI Codex',
+    'agent.modal.template.label':'Command template','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — replaced with task text',
+    'agent.add.btn':'Add','agent.save.btn':'Save',
+    'agent.err.empty':'Fill in all fields','agent.err.id':'ID: letters, digits, - and _ only',
+    'toast.agent_added':'✓ Agent added','toast.agent_updated':'✓ Agent updated',
     'sec.sshHosts':'SSH Hosts',
     'ssh.add':'＋ Add SSH host',
     'ssh.no_hosts':'No SSH hosts configured',
@@ -3971,6 +4033,15 @@ const TRANSLATIONS = {
     'cmd.modal.name.label':'Слеш-команда','cmd.modal.name.hint':'Используйте короткий триггер, например <code>/check</code> или <code>/review</code>.','cmd.modal.text.label':'Промпт',
     'cmd.err.empty':'Введите название и текст команды','toast.cmd_added':'✓ Команда добавлена','toast.cmd_updated':'✓ Команда обновлена',
     'cmds.popup.hdr':'Команды',
+    'sec.agents':'Агенты','agents.hint':'Внешние агенты для делегирования задач.',
+    'agent.add.new':'Добавить агента','agent.edit.title':'Редактировать','agent.del.title':'Удалить','agent.del.confirm':'Удалить агента',
+    'agent.modal.add.title':'＋ Добавить агента','agent.modal.edit.title':'✏️ Редактировать агента','agent.modal.cancel':'Отмена',
+    'agent.modal.id.label':'ID','agent.id.ph':'codex, gemini, aider...','agent.modal.id.hint':'Латинские буквы, цифры, - и _',
+    'agent.modal.label.label':'Название','agent.label.ph':'OpenAI Codex',
+    'agent.modal.template.label':'Шаблон команды','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — подставится текст задачи',
+    'agent.add.btn':'Добавить','agent.save.btn':'Сохранить',
+    'agent.err.empty':'Заполните все поля','agent.err.id':'ID: только латинские буквы, цифры, - и _',
+    'toast.agent_added':'✓ Агент добавлен','toast.agent_updated':'✓ Агент обновлён',
     'sec.sshHosts':'SSH Хосты',
     'ssh.add':'＋ Добавить SSH хост',
     'ssh.no_hosts':'Нет настроенных SSH хостов',
@@ -9353,6 +9424,108 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ─── External Agents sidebar ─────────────────────────────────────────────────
+let _editingAgentId = null;
+
+function renderAgents() {
+  const el = $i('agentsList'); if (!el) return; el.innerHTML = '';
+  const agents = Object.entries(_externalAgents);
+  $i('agentsCount').textContent = agents.length;
+  for (const [id, cfg] of agents) {
+    const icon = _agentIcons[id] || '🤖';
+    const div = document.createElement('div');
+    div.className = 'ci';
+    div.innerHTML = `
+      <div class="inf" style="flex:1;min-width:0">
+        <div class="nm">${icon} ${escH(cfg.label || id)}</div>
+        <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace;font-size:11px">${escH(cfg.template || '')}</div>
+      </div>
+      <button class="cfg" data-agent-id="${escH(id)}" title="${t('agent.edit.title')}">✏️</button>
+      <button class="rm" data-agent-id="${escH(id)}" title="${t('agent.del.title')}">✕</button>`;
+    div.querySelector('.cfg').addEventListener('click', e => { e.stopPropagation(); openAgentForm(id); });
+    div.querySelector('.rm').addEventListener('click', e => { e.stopPropagation(); deleteAgent(id); });
+    el.appendChild(div);
+  }
+}
+
+function openAgentForm(id) {
+  _editingAgentId = id || null;
+  const btn = $i('agentSaveBtn');
+  const title = $i('agentModalTitle');
+  const idInput = $i('agentId');
+  if (id) {
+    const cfg = _externalAgents[id];
+    if (!cfg) return;
+    idInput.value = id;
+    idInput.disabled = true;
+    $i('agentLabel').value = cfg.label || '';
+    $i('agentTemplate').value = cfg.template || '';
+    btn.textContent = t('agent.save.btn');
+    btn.setAttribute('data-i18n', 'agent.save.btn');
+    title.textContent = t('agent.modal.edit.title');
+    title.setAttribute('data-i18n', 'agent.modal.edit.title');
+  } else {
+    idInput.value = '';
+    idInput.disabled = false;
+    $i('agentLabel').value = '';
+    $i('agentTemplate').value = '';
+    btn.textContent = t('agent.add.btn');
+    btn.setAttribute('data-i18n', 'agent.add.btn');
+    title.textContent = t('agent.modal.add.title');
+    title.setAttribute('data-i18n', 'agent.modal.add.title');
+  }
+  openModalOverlay('agentModal', {
+    initialFocus: id ? '#agentLabel' : '#agentId',
+    labelId: 'agentModalTitle',
+    onEscape: cancelAgentForm,
+  });
+}
+
+function cancelAgentForm() {
+  closeModalOverlay('agentModal');
+  $i('agentId').disabled = false;
+  _editingAgentId = null;
+}
+
+async function saveAgent() {
+  const id = $i('agentId').value.trim();
+  const label = $i('agentLabel').value.trim();
+  const template = $i('agentTemplate').value.trim();
+  if (!id || !label || !template) { toast(t('agent.err.empty'), true); return; }
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) { toast(t('agent.err.id'), true); return; }
+  try {
+    const r = await fetch('/api/external-agents', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id, label, template })
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    _externalAgents[id] = { label, template };
+    toast(_editingAgentId ? t('toast.agent_updated') : t('toast.agent_added'));
+  } catch (e) { toast(e.message, true); return; }
+  cancelAgentForm();
+  renderAgents();
+}
+
+async function deleteAgent(id) {
+  const label = _externalAgents[id]?.label || id;
+  if (!confirm(`${t('agent.del.confirm')} "${label}"?`)) return;
+  try {
+    const r = await fetch(`/api/external-agents/${id}`, { method: 'DELETE' });
+    if (!r.ok) { toast(t('toast.err_prefix') + 'Delete failed', true); return; }
+  } catch (e) { toast(e.message, true); return; }
+  delete _externalAgents[id];
+  renderAgents();
+}
+
+document.addEventListener('keydown', e => {
+  if ($i('agentModal')?.classList.contains('hidden')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    saveAgent();
+  }
+});
+
 // Slash autocomplete helpers
 function _openSlashPopup(query) {
   const all = config.slashCommands || [];
@@ -11012,7 +11185,7 @@ function saveUIState() {
       autoSkillsMode,
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
-      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tunnel: c('tunnelBody'), tg: c('tgBody') },
+      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), agents: c('agentsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tunnel: c('tunnelBody'), tg: c('tgBody') },
       openTabs: savedOpenTabs.map(saveTab),
       activeTabId: savedOpenTabs.some(t => t.id === activeTabId) ? activeTabId : null,
       allProjTabs,
@@ -11050,7 +11223,7 @@ function restoreUIState() {
       setPanel('rightPanel', isMobile ? true : s.panels.right);
     }
     if (s.sections) {
-      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tunnel: 'tunnelBody', tg: 'tgBody' };
+      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', agents: 'agentsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tunnel: 'tunnelBody', tg: 'tgBody' };
       for (const [k, elId] of Object.entries(secs)) {
         const el = $i(elId);
         if (!el) continue;
@@ -11496,6 +11669,7 @@ const _agentIcons = { codex: '🧠', gemini: '♊', opencode: '⚡', claude: '�
 
 function openDelegateModal() {
   _loadExternalAgents().then(() => {
+    renderAgents();
     const container = $i('dlgAgentCards');
     if (!container) return;
     container.textContent = '';
@@ -11776,7 +11950,7 @@ fetch('/api/lang').then(r => r.json()).then(d => {
 }).catch(() => {});
 restoreUIState();
 _rlRestore(); // Restore rate limit badge from localStorage if still active
-_loadExternalAgents(); // Load agent labels for delegate message rendering
+_loadExternalAgents().then(() => renderAgents()); // Load agent labels + render sidebar
 _restoreDelegationState(); // Restore active delegation panel if server has one
 {
   const btn = $i('autoSkillsBtn');

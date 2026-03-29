@@ -495,10 +495,10 @@ const stmts = {
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
   addTelegramMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,source) VALUES (?,?,?,?,?,?,?,?,'telegram')`),
-  getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY id ASC`),
+  getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY created_at ASC, CASE WHEN type='thinking' THEN 0 ELSE 1 END ASC, id ASC`),
   // Lightweight: strip tool content (frontend only needs tool_name + agent_id for badge counts)
-  getMsgsLite: db.prepare(`SELECT id, session_id, role, type, CASE WHEN type='tool' THEN '' ELSE content END AS content, tool_name, agent_id, created_at, reply_to_id, attachments, source FROM messages WHERE session_id=? ORDER BY id ASC`),
-  getMsgsPaginated: db.prepare(`SELECT * FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool') ORDER BY id ASC LIMIT ? OFFSET ?`),
+  getMsgsLite: db.prepare(`SELECT id, session_id, role, type, CASE WHEN type='tool' THEN '' ELSE content END AS content, tool_name, agent_id, created_at, reply_to_id, attachments, source FROM messages WHERE session_id=? ORDER BY created_at ASC, CASE WHEN type='thinking' THEN 0 ELSE 1 END ASC, id ASC`),
+  getMsgsPaginated: db.prepare(`SELECT * FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool') ORDER BY created_at ASC, CASE WHEN type='thinking' THEN 0 ELSE 1 END ASC, id ASC LIMIT ? OFFSET ?`),
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
   setLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=? WHERE id=?`),
   clearLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL, retry_count=0 WHERE id=?`),
@@ -5346,6 +5346,22 @@ app.post('/api/external-agents', express.json(), (req, res) => {
   }
   saveConfig(config);
   res.json({ ok: true });
+});
+
+app.post('/api/external-agents/:id/test', (req, res) => {
+  const config = loadConfig();
+  const agentConfig = config.externalAgents[req.params.id];
+  if (!agentConfig) return res.status(404).json({ error: 'Agent not found' });
+  // Extract base command from template (first word before space)
+  const baseCmd = (agentConfig.template || '').split(/\s+/)[0];
+  if (!baseCmd) return res.json({ ok: false, error: 'Empty template' });
+  const whichCmd = os.platform() === 'win32' ? 'where' : 'which';
+  try {
+    const result = execSync(`${whichCmd} ${baseCmd}`, { stdio: 'pipe', timeout: 5000 }).toString().trim();
+    res.json({ ok: true, path: result.split('\n')[0] });
+  } catch {
+    res.json({ ok: false, error: `"${baseCmd}" not found in PATH` });
+  }
 });
 
 app.delete('/api/external-agents/:id', (req, res) => {
