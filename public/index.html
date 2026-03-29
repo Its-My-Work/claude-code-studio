@@ -4888,7 +4888,7 @@ function handleWsMsg(d) {
     case 'delegate_update':
       if (d.delegationId && _activeDelegation?.id === d.delegationId) {
         const hadChanges = d.dialog !== _activeDelegation.dialog;
-        _activeDelegation.lastUpdate = Date.now();
+        if (hadChanges) _activeDelegation.lastUpdate = Date.now();
         _activeDelegation.dialog = d.dialog || '';
         _renderDelegatePanel();
         _renderDelegateDialog();
@@ -11476,6 +11476,7 @@ async function sendDelegateMsgSubmit() {
     // Optimistic update: append to local dialog immediately
     const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
     _activeDelegation.dialog += `\n## [${ts}] claude-code-studio\n${message}\n`;
+    _dlgShownCount++;
     _renderDelegateDialog();
     // Then fetch the full dialog from server
     checkDelegation();
@@ -11493,7 +11494,7 @@ async function checkDelegation() {
     if (d.dialog !== undefined) {
       const changed = d.dialog !== _activeDelegation.dialog;
       _activeDelegation.dialog = d.dialog;
-      _activeDelegation.lastUpdate = Date.now();
+      if (changed) _activeDelegation.lastUpdate = Date.now();
       _renderDelegateDialog();
       _renderDelegatePanel();
       if (changed) _showNewDlgEntries();

@@ -5059,7 +5059,7 @@ function ensureDelegationDir(workdir, delegationId) {
   return dir;
 }
 
-function buildContextMd(session, messages, task, relPath) {
+function buildContextMd(session, messages, task, relPath, mode) {
   const now = new Date().toISOString();
   const textMsgs = messages.filter(m => m.type !== 'tool' && m.content);
   const recent = textMsgs.slice(-40);
@@ -5070,7 +5070,7 @@ function buildContextMd(session, messages, task, relPath) {
     conversation += `### ${role}\n${content}\n\n`;
   }
 
-  return `# Cross-Agent Context Handoff
+  let md = `# Cross-Agent Context Handoff
 - Generated: ${now}
 - Source: Claude Code Studio, session "${session.title || 'Untitled'}"
 - Project: ${session.workdir || 'unknown'}
@@ -5079,9 +5079,12 @@ function buildContextMd(session, messages, task, relPath) {
 ${task}
 
 ## Recent Conversation
-${conversation}
-## Protocol
+${conversation}`;
+
+  if (mode === 'sync') {
+    md += `## Communication Protocol
 You are continuing work delegated from another AI agent (Claude Code Studio).
+Both agents work in parallel and communicate through a shared dialog file.
 
 1. Read this file first for full context of prior work
 2. Before EVERY write to ${relPath}/DIALOG.md — re-read it first (another agent may have added messages)
@@ -5093,6 +5096,9 @@ You are continuing work delegated from another AI agent (Claude Code Studio).
 6. The other agent may send follow-up instructions at any time via DIALOG.md
 7. If you finish all work, write a final summary in DIALOG.md
 `;
+  }
+
+  return md;
 }
 
 function appendDialog(delegationDir, agentName, message) {
@@ -5230,7 +5236,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
 
   // 2. Build context from session messages
   const messages = sessionId ? stmts.getMsgs.all(sessionId) : [];
-  const contextMd = buildContextMd(session || { title: 'New delegation', workdir }, messages, task, relPath);
+  const contextMd = buildContextMd(session || { title: 'New delegation', workdir }, messages, task, relPath, delegationMode);
   fs.writeFileSync(path.join(delegationDir, 'CONTEXT.md'), contextMd);
 
   // 3. Initialize DIALOG.md with delegation message
@@ -5266,6 +5272,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
     task,
     startedAt: Date.now(),
     lastUpdate: Date.now(),
+    lastDialog: '',
     watcher,
   });
 
@@ -5319,7 +5326,11 @@ app.post('/api/delegate/:id/check', (req, res) => {
   const delegation = activeDelegations.get(req.params.id);
   if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
   const dialog = readDialog(delegation.delegationDir);
-  delegation.lastUpdate = Date.now();
+  const changed = dialog !== (delegation.lastDialog || '');
+  if (changed) {
+    delegation.lastUpdate = Date.now();
+    delegation.lastDialog = dialog;
+  }
   res.json({ dialog, lastUpdate: delegation.lastUpdate });
 });
 
