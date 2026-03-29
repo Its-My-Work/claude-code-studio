@@ -1609,6 +1609,7 @@ function loadConfig() {
   if (!c.skills)          c.skills          = {};
   if (!c.slashCommands)   c.slashCommands   = [];
   if (!c.externalAgents)  c.externalAgents  = {};
+  if (!c._removedAgents)  c._removedAgents  = [];
   // Merge-in any default commands the user doesn't have yet (match by name).
   // This handles fresh installs AND version upgrades that add new defaults.
   let dirty = false;
@@ -1618,9 +1619,10 @@ function loadConfig() {
     c.slashCommands.push(...toAdd);
     dirty = true;
   }
-  // Merge-in default external agents (same pattern — seed on fresh install / upgrade)
+  // Merge-in default external agents (skip explicitly removed ones)
+  const removed = new Set(c._removedAgents);
   for (const [id, def] of Object.entries(DEFAULT_EXTERNAL_AGENTS)) {
-    if (!c.externalAgents[id]) {
+    if (!c.externalAgents[id] && !removed.has(id)) {
       c.externalAgents[id] = { ...def };
       dirty = true;
     }
@@ -5238,8 +5240,9 @@ function readDialog(delegationDir) {
 
 function shellEscape(s) {
   if (os.platform() === 'win32') {
-    // Windows cmd.exe: wrap in double quotes, escape inner double quotes
-    return '"' + String(s).replace(/"/g, '""') + '"';
+    // Windows cmd.exe: wrap in double quotes, escape special chars with ^
+    const escaped = String(s).replace(/["%^&|<>!]/g, '^$&');
+    return '"' + escaped + '"';
   }
   // Unix: single-quote wrapping, replace ' with '\'' (end quote, escaped quote, start quote)
   return "'" + String(s).replace(/'/g, "'\\''") + "'";
@@ -5271,7 +5274,7 @@ function openTerminal(shellCommand) {
   } else if (platform === 'win32') {
     // Windows — write a .bat script and open it in a new cmd window
     const tmpBat = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}.bat`);
-    fs.writeFileSync(tmpBat, `@echo off\n${shellCommand}\npause\n`);
+    fs.writeFileSync(tmpBat, `@echo off\n${shellCommand}\n`);
     try {
       spawnProc('cmd.exe', ['/c', 'start', 'Delegate', 'cmd.exe', '/k', tmpBat], { detached: true, stdio: 'ignore' }).unref();
       setTimeout(() => { try { fs.unlinkSync(tmpBat); } catch {} }, 10000);
@@ -5337,13 +5340,23 @@ app.post('/api/external-agents', express.json(), (req, res) => {
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'id must be alphanumeric (a-z, 0-9, -, _)' });
   const config = loadConfig();
   config.externalAgents[id] = { label, template };
+  // If re-adding a previously removed default, clear the removal marker
+  if (config._removedAgents) {
+    config._removedAgents = config._removedAgents.filter(r => r !== id);
+  }
   saveConfig(config);
   res.json({ ok: true });
 });
 
 app.delete('/api/external-agents/:id', (req, res) => {
   const config = loadConfig();
-  delete config.externalAgents[req.params.id];
+  const id = req.params.id;
+  delete config.externalAgents[id];
+  // Remember explicitly removed defaults so loadConfig() won't re-add them
+  if (DEFAULT_EXTERNAL_AGENTS[id]) {
+    if (!config._removedAgents) config._removedAgents = [];
+    if (!config._removedAgents.includes(id)) config._removedAgents.push(id);
+  }
   saveConfig(config);
   res.json({ ok: true });
 });
