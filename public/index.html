@@ -11451,8 +11451,13 @@ function toggleDelegateDialog() {
 function sendDelegateMsg() {
   const container = $i('dlgDialogContainer');
   if (!container) return;
-  container.style.display = '';
-  $i('dlgMsgText')?.focus();
+  if (container.style.display !== 'none') {
+    container.style.display = 'none';
+  } else {
+    container.style.display = '';
+    checkDelegation();
+    $i('dlgMsgText')?.focus();
+  }
 }
 
 async function sendDelegateMsgSubmit() {
