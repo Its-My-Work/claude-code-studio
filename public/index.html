@@ -2589,7 +2589,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <span class="dlg-panel-last-update" id="dlgPanelLastUpdate"></span>
     </div>
     <div class="dlg-panel-actions">
-      <button class="dlg-btn dlg-sync-only" onclick="checkDelegationBtn()" data-i18n="dlg.check">Перевірити</button>
+      <button class="dlg-btn" onclick="checkDelegationBtn()" data-i18n="dlg.check">Перевірити</button>
       <button class="dlg-btn dlg-sync-only" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Діалог</button>
       <button class="dlg-btn dlg-sync-only" onclick="sendDelegateMsg()" data-i18n="dlg.message">Повідомлення</button>
       <button class="dlg-btn danger" onclick="stopDelegation()" data-i18n="dlg.stop">Стоп</button>
@@ -11514,10 +11514,8 @@ async function submitDelegation() {
 
     closeDelegateModal();
     _renderDelegatePanel();
-
-    if (mode === 'sync') {
-      _startDelegatePolling();
-    }
+    // Poll for dialog changes — 15s for sync (real-time collaboration), 30s for handoff (check completion)
+    _startDelegatePolling(mode === 'sync' ? 15000 : 30000);
 
     toast(t('dlg.toast.delegated').replace('{agent}', d.agent), false, 3000);
   } catch (err) {
@@ -11542,7 +11540,7 @@ function _renderDelegatePanel() {
   // Show/hide sync-only elements
   panel.querySelectorAll('.dlg-sync-only').forEach(el => el.style.display = isSync ? '' : 'none');
   const timeBox = $i('dlgPanelLastUpdate');
-  if (timeBox) timeBox.style.display = isSync ? '' : 'none';
+  if (timeBox) timeBox.style.display = '';
   _updateDelegateTime();
   if (!_delegateTimeTimer) {
     _delegateTimeTimer = setInterval(_updateDelegateTime, 5000);
@@ -11711,9 +11709,7 @@ async function _restoreDelegationState() {
       _renderDelegatePanel();
       // Always fetch current dialog state (may have changed while page was closed)
       checkDelegation();
-      if (del.mode === 'sync') {
-        _startDelegatePolling();
-      }
+      _startDelegatePolling(del.mode === 'sync' ? 15000 : 30000);
     }
   } catch {}
 }
