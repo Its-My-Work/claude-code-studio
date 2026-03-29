@@ -2538,9 +2538,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <span class="dlg-panel-last-update" id="dlgPanelLastUpdate"></span>
     </div>
     <div class="dlg-panel-actions">
-      <button class="dlg-btn" onclick="checkDelegationBtn()" data-i18n="dlg.check">Перевірити</button>
-      <button class="dlg-btn" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Діалог</button>
-      <button class="dlg-btn" onclick="sendDelegateMsg()" data-i18n="dlg.message">Повідомлення</button>
+      <button class="dlg-btn dlg-sync-only" onclick="checkDelegationBtn()" data-i18n="dlg.check">Перевірити</button>
+      <button class="dlg-btn dlg-sync-only" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Діалог</button>
+      <button class="dlg-btn dlg-sync-only" onclick="sendDelegateMsg()" data-i18n="dlg.message">Повідомлення</button>
       <button class="dlg-btn danger" onclick="stopDelegation()" data-i18n="dlg.stop">Стоп</button>
     </div>
   </div>
@@ -11339,7 +11339,10 @@ async function submitDelegation() {
 
     closeDelegateModal();
     _renderDelegatePanel();
-    _startDelegatePolling();
+
+    if (mode === 'sync') {
+      _startDelegatePolling();
+    }
 
     toast(t('dlg.toast.delegated').replace('{agent}', d.agent), false, 3000);
   } catch (err) {
@@ -11356,13 +11359,16 @@ function _renderDelegatePanel() {
     return;
   }
   panel.classList.add('active');
+  const isSync = _activeDelegation.mode === 'sync';
   const agentEl = $i('dlgPanelAgent');
   const taskEl = $i('dlgPanelTask');
-  const timeEl = $i('dlgPanelTime');
   if (agentEl) agentEl.textContent = _activeDelegation.agentLabel || _activeDelegation.agentId;
   if (taskEl) taskEl.textContent = _activeDelegation.task;
+  // Show/hide sync-only elements
+  panel.querySelectorAll('.dlg-sync-only').forEach(el => el.style.display = isSync ? '' : 'none');
+  const timeBox = $i('dlgPanelLastUpdate');
+  if (timeBox) timeBox.style.display = isSync ? '' : 'none';
   _updateDelegateTime();
-  // Start real-time timer update
   if (!_delegateTimeTimer) {
     _delegateTimeTimer = setInterval(_updateDelegateTime, 5000);
   }
@@ -11522,8 +11528,10 @@ async function _restoreDelegationState() {
       };
       _dlgShownCount = 0;
       _renderDelegatePanel();
-      _startDelegatePolling();
-      checkDelegation();
+      if (del.mode === 'sync') {
+        _startDelegatePolling();
+        checkDelegation();
+      }
     }
   } catch {}
 }

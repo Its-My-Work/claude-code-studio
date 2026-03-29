@@ -5237,7 +5237,12 @@ app.post('/api/delegate', express.json(), (req, res) => {
   appendDialog(delegationDir, 'claude-code-studio', `Delegated task to ${agentConfig.label}.\nTask: ${task}\nMode: ${delegationMode}\nFull context in CONTEXT.md.`);
 
   // 4. Build prompt for the external agent
-  const agentPrompt = `Read ${relPath}/CONTEXT.md for full context of the delegated task, then start working. Follow the protocol described in that file for communicating through ${relPath}/DIALOG.md.`;
+  let agentPrompt;
+  if (delegationMode === 'sync') {
+    agentPrompt = `Read ${relPath}/CONTEXT.md for full context of the delegated task, then start working. Follow the protocol described in that file for communicating through ${relPath}/DIALOG.md. After each completed step, write a summary to DIALOG.md. Check DIALOG.md before and after each step for new instructions.`;
+  } else {
+    agentPrompt = `Read ${relPath}/CONTEXT.md for full context of the delegated task, then start working.`;
+  }
 
   // 5. Open terminal with the agent
   const shellCommand = buildTerminalCommand(agentConfig, workdir, agentPrompt);
@@ -5247,8 +5252,8 @@ app.post('/api/delegate', express.json(), (req, res) => {
     return res.status(500).json({ error: `Failed to open terminal: ${termResult.error}` });
   }
 
-  // 6. Track delegation — always watch for dialog changes
-  const watcher = startDelegationWatcher(delegationId, delegationDir);
+  // 6. Track delegation — watch for dialog changes in sync mode
+  const watcher = delegationMode === 'sync' ? startDelegationWatcher(delegationId, delegationDir) : null;
 
   activeDelegations.set(delegationId, {
     id: delegationId,
