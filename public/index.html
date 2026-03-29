@@ -2077,9 +2077,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .dlg-msg-input input { flex: 1; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; outline: none; }
 .dlg-msg-input input:focus { border-color: var(--accent); }
 .dlg-msg-input button { padding: 6px 14px; border-radius: 6px; border: none; background: var(--accent); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; }
-.dlg-select { width: 100%; height: 44px; padding: 0 14px; background: linear-gradient(180deg, rgba(18,24,38,.96) 0%, rgba(11,16,27,.98) 100%); border: 1px solid rgba(124,106,239,.22); border-radius: 10px; color: var(--text); font-size: 14px; font-weight: 600; outline: none; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236e7c98' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; transition: border-color .15s, box-shadow .15s; }
-.dlg-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.16); }
-.dlg-select option { background: var(--s1); color: var(--text); }
+.dlg-agent-cards { display: flex; gap: 8px; flex-wrap: wrap; }
+.dlg-agent-card { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1.5px solid var(--border); border-radius: 10px; background: rgba(18,24,38,.6); cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+.dlg-agent-card:hover { border-color: rgba(124,106,239,.4); background: rgba(124,106,239,.06); }
+.dlg-agent-card.selected { border-color: var(--accent); background: rgba(124,106,239,.1); box-shadow: 0 0 0 3px rgba(124,106,239,.12); }
+.dlg-agent-icon { font-size: 18px; flex-shrink: 0; }
+.dlg-agent-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.dlg-agent-card.selected .dlg-agent-label { color: var(--accent); }
+.dlg-agent-empty { padding: 12px 16px; border: 1.5px dashed var(--border); border-radius: 10px; color: var(--muted); font-size: 12px; text-align: center; }
 .dlg-mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .dlg-mode-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1.5px solid var(--border); border-radius: 12px; background: rgba(18,24,38,.6); cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
 .dlg-mode-card:hover { border-color: rgba(124,106,239,.4); background: rgba(124,106,239,.06); }
@@ -3081,9 +3086,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="modal-body" style="gap:16px;display:flex;flex-direction:column;">
       <div class="cmd-field">
         <label data-i18n="dlg.agent">Агент</label>
-        <select id="dlgAgent" class="dlg-select">
-          <option value="" data-i18n="dlg.agent.select">Оберіть агента...</option>
-        </select>
+        <div class="dlg-agent-cards" id="dlgAgentCards"></div>
       </div>
       <div class="cmd-field">
         <label data-i18n="dlg.mode">Режим</label>
@@ -11281,23 +11284,38 @@ async function _loadExternalAgents() {
   } catch { _externalAgents = {}; }
 }
 
+const _agentIcons = { codex: '🧠', gemini: '♊', opencode: '⚡', claude: '🟣', aider: '🔧', cursor: '▶' };
+
 function openDelegateModal() {
   _loadExternalAgents().then(() => {
-    const sel = $i('dlgAgent');
-    if (!sel) return;
-    sel.innerHTML = ''; const defOpt = document.createElement('option'); defOpt.value = ''; defOpt.textContent = t('dlg.agent.select'); sel.appendChild(defOpt);
-    for (const [id, cfg] of Object.entries(_externalAgents)) {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = cfg.label || id;
-      sel.appendChild(opt);
-    }
-    if (Object.keys(_externalAgents).length === 0) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = t('dlg.no_agents');
-      opt.disabled = true;
-      sel.appendChild(opt);
+    const container = $i('dlgAgentCards');
+    if (!container) return;
+    container.textContent = '';
+    const agents = Object.entries(_externalAgents);
+    if (agents.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'dlg-agent-empty';
+      empty.textContent = t('dlg.no_agents');
+      container.appendChild(empty);
+    } else {
+      for (const [id, cfg] of agents) {
+        const card = document.createElement('div');
+        card.className = 'dlg-agent-card';
+        card.dataset.agentId = id;
+        card.onclick = () => {
+          container.querySelectorAll('.dlg-agent-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+        };
+        const icon = document.createElement('span');
+        icon.className = 'dlg-agent-icon';
+        icon.textContent = _agentIcons[id] || '🤖';
+        const label = document.createElement('span');
+        label.className = 'dlg-agent-label';
+        label.textContent = cfg.label || id;
+        card.appendChild(icon);
+        card.appendChild(label);
+        container.appendChild(card);
+      }
     }
     $i('dlgTask').value = '';
     openModalOverlay('delegateModal', { onEscape: closeDelegateModal });
@@ -11309,7 +11327,7 @@ function closeDelegateModal() {
 }
 
 async function submitDelegation() {
-  const agentId = $i('dlgAgent')?.value;
+  const agentId = $i('dlgAgentCards')?.querySelector('.dlg-agent-card.selected')?.dataset?.agentId || '';
   const task = $i('dlgTask')?.value?.trim();
   const mode = document.querySelector('input[name="dlgMode"]:checked')?.value || 'handoff';
 
