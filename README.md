@@ -115,6 +115,8 @@ Not a chatbot. "Refactor this function and add tests" → Claude opens files, ed
 
 **Extended thinking** — when Claude uses extended thinking, each thinking block appears as a "Chain of thought" badge showing estimated word count. Click to open the full reasoning in a modal with a copy button. The CLI import modal and thinking modal are fully localized (EN/UA/RU) — all labels, status messages, and dates adapt to the selected interface language.
 
+**Session export / import** — take your chat history anywhere. Export any session as a portable JSON file with one click — full message history, tool calls, timestamps, and attachments included. Import it back into any Studio instance to resume where you left off, share conversations with teammates, or archive important work. The Import button lives on the welcome screen so you can restore a session without having to create one first.
+
 ### 📋 Kanban Board
 
 Create a card, describe what you want, move to "To Do" — Claude picks it up automatically.
@@ -292,7 +294,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON) |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |

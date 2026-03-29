@@ -3738,11 +3738,11 @@ app.post('/api/sessions/import', (req, res) => {
       session.model || 'sonnet',
       session.workdir || null
     );
-    db.prepare('UPDATE sessions SET claude_session_id=NULL WHERE id=?').run(newId);
+    const importMsg = db.prepare('INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,COALESCE(?,CURRENT_TIMESTAMP))');
     const limit = Math.min(messages.length, 2000);
     for (let i = 0; i < limit; i++) {
       const m = messages[i];
-      stmts.addMsg.run(newId, m.role, m.type, m.content || '', m.tool_name || null, m.agent_id || null, null, null);
+      importMsg.run(newId, m.role, m.type, m.content || '', m.tool_name || null, m.agent_id || null, m.reply_to_id || null, m.attachments || null, m.created_at || null);
     }
   });
   try {

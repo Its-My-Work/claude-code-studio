@@ -128,7 +128,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .sec-body { padding: 4px 8px 8px; display: flex; flex-direction: column; }
 .sec-body.collapsed { display: none; }
 /* ─── Scrollable list inside section ─── */
-.sec-list { max-height: 220px; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+.sec-list { max-height: 440px; overflow-y: auto; overflow-x: hidden; min-height: 0; }
 .sec-list::-webkit-scrollbar { width: 3px; }
 .sec-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 /* ─── Section quick-filter ─── */
@@ -941,6 +941,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .welcome-prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px; margin-top: 20px; }
 .wp-card { background: var(--s2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--muted); cursor: pointer; transition: all .15s; text-align: left; line-height: 1.4; }
 .wp-card:hover { background: var(--s3); border-color: rgba(124,106,239,.4); color: var(--text); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+.welcome-import-btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; padding: 8px 20px; font-size: 13px; color: var(--muted); background: transparent; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; }
+.welcome-import-btn:hover { color: var(--text); border-color: rgba(124,106,239,.4); background: var(--s2); }
 
 /* ─── Collapsible header ─── */
 .hdr-collapse-zone { overflow: visible; transition: max-height .3s var(--ease-out), opacity .2s; max-height: 200px; opacity: 1; }
@@ -2582,7 +2584,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
     <button id="sessBarExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSession()" title="Export session as JSON">↓ Export</button>
     <input type="file" id="sessImportInput" accept=".json" style="display:none" onchange="importSessionFile(this)">
-    <button class="sess-export-btn" onclick="$i('sessImportInput').click()" title="Import session from JSON">↑ Import</button>
   </div>
 
   <div class="dlg-panel" id="delegatePanel">
@@ -2621,6 +2622,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <div class="wp-card" onclick="setPrompt(this)">&#x2728; <span data-i18n="welcome.prompt.3">Напиши unit-тести</span></div>
         <div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; <span data-i18n="welcome.prompt.4">Спроектуй архітектуру</span></div>
       </div>
+      <button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="welcome.import">Import session from JSON</span></button>
     </div>
   </div>
 
@@ -3492,6 +3494,7 @@ const TRANSLATIONS = {
     'dir.path.ph':'Введіть шлях, напр. /Users/you/projects','dir.path.go':'Перейти','dir.filter.ph':'Фільтрувати папки...',
     'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
+    'welcome.import':'Імпортувати сесію з JSON',
     'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
     'ask.submit':'Надіслати відповідь','ask.skip':'Пропустити','ask.answered':'Відповідь','ask.skipped':'Пропущено','ask.auto':'Авто','ask.timer':'Залишилось','ask.other':'Інше...','ask.prev':'← Назад','ask.next':'Далі →',
     'session.copy_id':'Скопіювати ID сесії Claude','session.open_claude':'Відкрити в Claude Code',
@@ -3704,6 +3707,7 @@ const TRANSLATIONS = {
     'dir.path.ph':'Enter path, e.g. /Users/you/projects','dir.path.go':'Go','dir.filter.ph':'Filter folders...',
     'toast.read_err':'Failed to read: ','toast.err_prefix':'Error: ','dir.proj_name':'Project name (auto if empty)',
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
+    'welcome.import':'Import session from JSON',
     'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_retry':'retry',
     'ask.submit':'Send Answer','ask.skip':'Skip','ask.answered':'Answer','ask.skipped':'Skipped','ask.auto':'Auto','ask.timer':'Remaining','ask.other':'Other...','ask.prev':'← Back','ask.next':'Next →',
     'session.copy_id':'Copy Claude session ID','session.open_claude':'Open in Claude Code',
@@ -3916,6 +3920,7 @@ const TRANSLATIONS = {
     'dir.path.ph':'Введите путь, напр. /Users/you/projects','dir.path.go':'Перейти','dir.filter.ph':'Фильтровать папки...',
     'toast.read_err':'Не удалось прочитать: ','toast.err_prefix':'Ошибка: ','dir.proj_name':'Название проекта (авто если пусто)',
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
+    'welcome.import':'Импортировать сессию из JSON',
     'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_retry':'retry',
     'ask.submit':'Отправить ответ','ask.skip':'Пропустить','ask.answered':'Ответ','ask.skipped':'Пропущено','ask.auto':'Авто','ask.timer':'Осталось','ask.other':'Другое...','ask.prev':'← Назад','ask.next':'Далее →',
     'session.copy_id':'Скопировать ID сессии Claude','session.open_claude':'Открыть в Claude Code',
@@ -5717,7 +5722,7 @@ function _chainProgressUpdate(taskId, status) {
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
   streaming.el = null;
-  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CCS</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div></div>`;
+  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CCS</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div><button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('welcome.import')}</button></div>`;
 }
 
 function showStatus(txt) {
