@@ -2131,6 +2131,16 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 }
 .dlg-msg-body p { margin: 0 0 8px; }
 .dlg-msg-body p:last-child { margin-bottom: 0; }
+/* Delegate progress log (compact) */
+.mw.delegate-log {
+  align-self: flex-start; padding: 2px 12px 2px 16px;
+}
+.dlg-log-line {
+  font-size: 11px; color: var(--muted); line-height: 1.5;
+  padding: 4px 10px; border-left: 2px solid rgba(16,185,129,.3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 600px;
+}
 </style>
 </head>
 <body>
@@ -11291,65 +11301,86 @@ function _parseDlgEntries(dialog) {
   const parts = dialog.split(/\n## \[/);
   for (const part of parts) {
     const m = part.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (.+?)\n([\s\S]*)/);
-    if (m) entries.push({ timestamp: m[1], agent: m[2].trim(), text: m[3].trim() });
+    if (!m) continue;
+    const rawAgent = m[2].trim();
+    // Detect "agent-name | answer" tag
+    const pipeIdx = rawAgent.indexOf(' | ');
+    const isAnswer = pipeIdx !== -1 && rawAgent.slice(pipeIdx + 3).trim().toLowerCase() === 'answer';
+    const agent = isAnswer ? rawAgent.slice(0, pipeIdx).trim() : rawAgent;
+    entries.push({ timestamp: m[1], agent, text: m[3].trim(), isAnswer });
   }
   return entries;
+}
+
+function _addDelegateMsg(icon, label, firstTs, lastTs, text) {
+  const w = document.createElement('div');
+  w.className = 'mw delegate';
+  w.dataset.agentIcon = icon;
+  const timeStr = firstTs === lastTs
+    ? firstTs.slice(11)
+    : firstTs.slice(11) + ' — ' + lastTs.slice(11);
+  const headerEl = document.createElement('div');
+  headerEl.className = 'dlg-msg-header';
+  const agentEl = document.createElement('span');
+  agentEl.className = 'dlg-msg-agent';
+  agentEl.textContent = label;
+  const timeEl = document.createElement('span');
+  timeEl.className = 'dlg-msg-time';
+  timeEl.textContent = timeStr;
+  headerEl.appendChild(agentEl);
+  headerEl.appendChild(timeEl);
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'dlg-msg-body';
+  bodyEl.innerHTML = renderMd(text);
+  const msgEl = document.createElement('div');
+  msgEl.className = 'msg';
+  msgEl.appendChild(headerEl);
+  msgEl.appendChild(bodyEl);
+  w.appendChild(msgEl);
+  const cpBtn = document.createElement('button');
+  cpBtn.className = 'cpb';
+  cpBtn.title = t('copy.msg');
+  cpBtn.onclick = function() { cpMsg(this); };
+  cpBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+  w.appendChild(cpBtn);
+  msgsEl.appendChild(w);
 }
 
 function _showNewDlgEntries() {
   if (!_activeDelegation) return;
   const entries = _parseDlgEntries(_activeDelegation.dialog);
   const newEntries = entries.slice(_dlgShownCount);
-  // Collect consecutive entries from the same external agent into one message
-  const groups = [];
+  // Separate answer entries from progress logs
+  const answers = [];
+  const logs = [];
   for (const entry of newEntries) {
     if (entry.agent === 'claude-code-studio') { _dlgShownCount++; continue; }
-    const last = groups[groups.length - 1];
-    if (last && last.agent === entry.agent) {
-      last.texts.push(entry.text);
-      last.lastTimestamp = entry.timestamp;
-    } else {
-      groups.push({ agent: entry.agent, texts: [entry.text], firstTimestamp: entry.timestamp, lastTimestamp: entry.timestamp });
-    }
+    if (entry.isAnswer) { answers.push(entry); } else { logs.push(entry); }
     _dlgShownCount++;
   }
   const agentId = _activeDelegation.agentId || '';
   const label = _activeDelegation.agentLabel || agentId;
   const icon = _agentIcons[agentId] || '⇗';
-  for (const group of groups) {
+  // Show progress logs as compact status lines (only if no answers yet — fallback)
+  const hasAnswers = answers.length > 0;
+  if (!hasAnswers && logs.length > 0) {
+    // Fallback: agent didn't use | answer tag — show logs as before
+    const combined = logs.map(l => l.text).join('\n\n');
+    _addDelegateMsg(icon, label, logs[0].timestamp, logs[logs.length - 1].timestamp, combined);
+  } else if (logs.length > 0) {
+    // Show progress as a compact collapsed line
+    const summary = logs.map(l => l.text.split('\n')[0]).join(' → ');
     const w = document.createElement('div');
-    w.className = 'mw delegate';
-    w.dataset.agentIcon = icon;
-    const timeStr = group.firstTimestamp === group.lastTimestamp
-      ? group.firstTimestamp.slice(11) // HH:MM:SS
-      : group.firstTimestamp.slice(11) + ' — ' + group.lastTimestamp.slice(11);
-    const combined = group.texts.join('\n\n');
-    const headerEl = document.createElement('div');
-    headerEl.className = 'dlg-msg-header';
-    const agentEl = document.createElement('span');
-    agentEl.className = 'dlg-msg-agent';
-    agentEl.textContent = label;
-    const timeEl = document.createElement('span');
-    timeEl.className = 'dlg-msg-time';
-    timeEl.textContent = timeStr;
-    headerEl.appendChild(agentEl);
-    headerEl.appendChild(timeEl);
-    const bodyEl = document.createElement('div');
-    bodyEl.className = 'dlg-msg-body';
-    bodyEl.innerHTML = renderMd(combined);
-    const msgEl = document.createElement('div');
-    msgEl.className = 'msg';
-    msgEl.appendChild(headerEl);
-    msgEl.appendChild(bodyEl);
-    w.appendChild(msgEl);
-    // Copy button
-    const cpBtn = document.createElement('button');
-    cpBtn.className = 'cpb';
-    cpBtn.title = t('copy.msg');
-    cpBtn.onclick = function() { cpMsg(this); };
-    cpBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
-    w.appendChild(cpBtn);
+    w.className = 'mw delegate-log';
+    const line = document.createElement('div');
+    line.className = 'dlg-log-line';
+    line.textContent = `⇗ ${label}: ${summary}`;
+    w.appendChild(line);
     msgsEl.appendChild(w);
+  }
+  // Show answer entries as full styled messages
+  for (const entry of answers) {
+    _addDelegateMsg(icon, label, entry.timestamp, entry.timestamp, entry.text);
   }
   scrollBottom();
 }

@@ -5141,13 +5141,16 @@ Both agents work in parallel and communicate through a shared dialog file.
 
 1. Read this file first for full context of prior work
 2. Before EVERY write to ${relPath}/DIALOG.md — re-read it first (another agent may have added messages)
-3. Write to ${relPath}/DIALOG.md using this format:
+3. Write progress updates to ${relPath}/DIALOG.md using this format:
    ## [YYYY-MM-DD HH:MM:SS] {your-agent-name}
-   Your message here.
-4. After each completed work step — append your update to ${relPath}/DIALOG.md
-5. Never overwrite or delete content in DIALOG.md — only APPEND
-6. The other agent may send follow-up instructions at any time via DIALOG.md
-7. If you finish all work, write a final summary in DIALOG.md
+   Your progress note here.
+4. When you have a FINAL ANSWER for the human user, use this format instead:
+   ## [YYYY-MM-DD HH:MM:SS] {your-agent-name} | answer
+   Your clear, well-formatted answer here. This will be shown directly to the user.
+5. After each completed work step — append your update to ${relPath}/DIALOG.md
+6. Never overwrite or delete content in DIALOG.md — only APPEND
+7. The other agent may send follow-up instructions at any time via DIALOG.md
+8. If you finish all work, write a final answer (with | answer tag) in DIALOG.md
 `;
   }
 
@@ -5298,9 +5301,9 @@ app.post('/api/delegate', express.json(), (req, res) => {
   // 4. Build prompt for the external agent
   let agentPrompt;
   if (delegationMode === 'sync') {
-    agentPrompt = `Read ${relPath}/CONTEXT.md for full context of the delegated task, then start working. Follow the protocol described in that file for communicating through ${relPath}/DIALOG.md. After each completed step, write a summary to DIALOG.md. Check DIALOG.md before and after each step for new instructions.`;
+    agentPrompt = `Read ${relPath}/CONTEXT.md for full context of the delegated task, then start working. Follow the protocol described in that file for communicating through ${relPath}/DIALOG.md. After each completed step, write a summary to DIALOG.md. Check DIALOG.md before and after each step for new instructions. IMPORTANT: When you have a final answer for the user, write it to DIALOG.md using the tag "| answer" after your agent name, like: ## [timestamp] your-name | answer. This answer will be shown directly to the human user, so write it in a clear, well-formatted way.`;
   } else {
-    agentPrompt = `Read ${relPath}/CONTEXT.md for full context of the delegated task, then start working.`;
+    agentPrompt = `Read ${relPath}/CONTEXT.md for full context of the delegated task, then start working. IMPORTANT: When you have a final result, write it to ${relPath}/DIALOG.md using this format: ## [YYYY-MM-DD HH:MM:SS] your-agent-name | answer — followed by a clear, well-formatted answer for the user. This will be shown directly to the human.`;
   }
 
   // 5. Open terminal with the agent
