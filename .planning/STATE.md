@@ -107,7 +107,15 @@ None yet.
 - Phase 2: Verify sendMessageDraft with a real Claude streaming session before using as primary streaming mechanism
 - Phase 2: Test KeyboardButton style field in a test message before relying on it for visual hierarchy
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260329-fr1 | implement chat export/import feature: export session+messages as JSON, import creates new session with same messages as context | 2026-03-29 | 45ffdb1 | [260329-fr1-implement-chat-export-import-feature-exp](.planning/quick/260329-fr1-implement-chat-export-import-feature-exp/) |
+
 ## Session Continuity
+
+Last activity: 2026-03-29 - Completed quick task 260329-fr1: implement chat export/import feature
 
 Last session: 2026-03-28T21:31:00Z
 Stopped at: Completed 04-01-PLAN.md (server encapsulation)
