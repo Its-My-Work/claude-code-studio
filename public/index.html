@@ -1232,6 +1232,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg-interrupt::before { content: '📩'; font-size: 11px; }
 .msg-interrupt.delivered { color: #50b860; border-color: rgba(80,184,96,.25); background: rgba(80,184,96,.08); }
 .msg-interrupt.delivered::before { content: '✓'; }
+.msg-interrupt.expired { color: var(--muted); border-color: var(--border); background: var(--s2); opacity: .7; }
+.msg-interrupt.expired::before { content: '—'; }
 .interrupt-bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; margin-bottom: 4px; }
 .interrupt-bar.hidden { display: none; }
 .ib-opt { background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 3px 10px; font-size: 12px; color: var(--muted); cursor: pointer; transition: all .15s; font-family: inherit; }
@@ -3540,10 +3542,10 @@ const TRANSLATIONS = {
     'attach.file':'Додати файл (📎)',
     'queue.label':'У черзі','queue.edit.title':'Редагувати повідомлення','queue.del.title':'Видалити з черги',
     'interrupt.label':'Відправити як:','interrupt.stream':'📩 Уточнити поточне','interrupt.queue':'📝 Нове завдання (черга)',
-    'interrupt.queued':'Чекає доставки','interrupt.delivered':'Доставлено до Claude',
+    'interrupt.queued':'Уточнення надіслано','interrupt.delivered':'Доставлено до Claude','interrupt.expired':'Завдання завершено',
     'agents.title':'Активні агенти',
     'sess.fork':'Створити копію чату з тією ж історією Claude','sess.fork.na':'Форк недоступний — немає сесії Claude CLI','sess.forked':'Сесію форкнуто',
-    'sess.delete.confirm':'Видалити сесію?','sess.delete.tasks':'Видалити сесію?\n\nДо неї прив\'язано завдань у Kanban: {n}. Вони також будуть видалені.','sess.load.err':'Помилка завантаження сесії',
+    'sess.delete.tip':'Видалити чат','sess.delete.confirm':'Видалити сесію?','sess.delete.tasks':'Видалити сесію?\n\nДо неї прив\'язано завдань у Kanban: {n}. Вони також будуть видалені.','sess.load.err':'Помилка завантаження сесії',
     'mcp.active':'● Активний у чаті','mcp.inactive':'○ Вимкнений','mcp.del.title':'Видалити сервер','mcp.del.confirm':'Видалити сервер',
     'mcp.cfg.tip':'Налаштування','mcp.cfg.warn':'Потрібна конфігурація',
     'mcp.toggle.on':'Клік — вимкнути','mcp.toggle.off':'Клік — увімкнути',
@@ -3766,10 +3768,10 @@ const TRANSLATIONS = {
     'attach.file':'Attach file (📎)',
     'queue.label':'In queue','queue.edit.title':'Edit message','queue.del.title':'Remove from queue',
     'interrupt.label':'Send as:','interrupt.stream':'📩 Clarify current','interrupt.queue':'📝 New task (queue)',
-    'interrupt.queued':'Queued for delivery','interrupt.delivered':'Delivered to Claude',
+    'interrupt.queued':'Clarification sent','interrupt.delivered':'Delivered to Claude','interrupt.expired':'Task ended',
     'agents.title':'Active agents',
     'sess.fork':'Create a copy of this chat with the same Claude history','sess.fork.na':'Fork unavailable — no Claude CLI session','sess.forked':'Session forked',
-    'sess.delete.confirm':'Delete session?','sess.delete.tasks':'Delete session?\n\nLinked Kanban tasks: {n}. They will also be deleted.','sess.load.err':'Error loading session',
+    'sess.delete.tip':'Delete chat','sess.delete.confirm':'Delete session?','sess.delete.tasks':'Delete session?\n\nLinked Kanban tasks: {n}. They will also be deleted.','sess.load.err':'Error loading session',
     'mcp.active':'● Active in chat','mcp.inactive':'○ Disabled','mcp.del.title':'Remove server','mcp.del.confirm':'Remove server',
     'mcp.cfg.tip':'Settings','mcp.cfg.warn':'Configuration required',
     'mcp.toggle.on':'Click to disable','mcp.toggle.off':'Click to enable',
@@ -3992,10 +3994,10 @@ const TRANSLATIONS = {
     'attach.file':'Прикрепить файл (📎)',
     'queue.label':'В очереди','queue.edit.title':'Редактировать сообщение','queue.del.title':'Удалить из очереди',
     'interrupt.label':'Отправить как:','interrupt.stream':'📩 Уточнить текущее','interrupt.queue':'📝 Новая задача (очередь)',
-    'interrupt.queued':'Ожидает доставки','interrupt.delivered':'Доставлено в Claude',
+    'interrupt.queued':'Уточнение отправлено','interrupt.delivered':'Доставлено в Claude','interrupt.expired':'Задание завершено',
     'agents.title':'Активные агенты',
     'sess.fork':'Создать копию чата с той же историей Claude','sess.fork.na':'Форк недоступен — нет сессии Claude CLI','sess.forked':'Сессия форкнута',
-    'sess.delete.confirm':'Удалить сессию?','sess.delete.tasks':'Удалить сессию?\n\nПривязанных задач в Kanban: {n}. Они также будут удалены.','sess.load.err':'Ошибка загрузки сессии',
+    'sess.delete.tip':'Удалить чат','sess.delete.confirm':'Удалить сессию?','sess.delete.tasks':'Удалить сессию?\n\nПривязанных задач в Kanban: {n}. Они также будут удалены.','sess.load.err':'Ошибка загрузки сессии',
     'mcp.active':'● Активен в чате','mcp.inactive':'○ Отключен','mcp.del.title':'Удалить сервер','mcp.del.confirm':'Удалить сервер',
     'mcp.cfg.tip':'Настройки','mcp.cfg.warn':'Требуется настройка',
     'mcp.toggle.on':'Клик — отключить','mcp.toggle.off':'Клик — включить',
@@ -5031,6 +5033,14 @@ function handleWsMsg(d) {
             setStatus(t('status.connected'), 'ok');
           }
         }
+      }
+      // Mark undelivered interrupt badges as expired (task ended without Claude reading them)
+      if (tabId === activeTabId) {
+        msgsEl.querySelectorAll('.msg-interrupt:not(.delivered):not(.expired)').forEach(b => {
+          b.classList.add('expired');
+          const lbl = b.querySelector('.mq-label');
+          if (lbl) lbl.textContent = t('interrupt.expired') || 'Task ended';
+        });
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
       if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
@@ -7700,7 +7710,7 @@ async function send() {
     const badge = document.createElement('div');
     badge.className = 'msg-interrupt';
     badge.dataset.interruptId = queueId;
-    badge.innerHTML = `<span class="mq-label">${t('interrupt.queued') || 'Queued for delivery'}</span>`;
+    badge.innerHTML = `<span class="mq-label">${t('interrupt.queued') || 'Clarification sent'}</span>`;
     msgEl.appendChild(badge);
 
     ws.send(JSON.stringify({
@@ -7962,7 +7972,7 @@ async function loadHist() {
       d.setAttribute('tabindex', '0');
       if (!histSelectMode) d.setAttribute('draggable', 'true');
       const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
-      d.innerHTML = `<span class="drag-handle" onclick="event.stopPropagation()" title="${t('hist.drag')}">⠿</span><input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span>${s.claude_session_id ? `<button class="fork-sess" onclick="event.stopPropagation();forkSess('${s.id}')" data-tip="${t('sess.fork')}">↗</button>` : `<button class="fork-sess fork-na" onclick="event.stopPropagation()" data-tip="${t('sess.fork.na')}">↗</button>`}<button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
+      d.innerHTML = `<span class="drag-handle" onclick="event.stopPropagation()" title="${t('hist.drag')}">⠿</span><input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span>${s.claude_session_id ? `<button class="fork-sess" onclick="event.stopPropagation();forkSess('${s.id}')" data-tip="${t('sess.fork')}">↗</button>` : `<button class="fork-sess fork-na" onclick="event.stopPropagation()" data-tip="${t('sess.fork.na')}">↗</button>`}<button class="del" onclick="event.stopPropagation();delSess('${s.id}')" data-tip="${t('sess.delete.tip')}">✕</button>`;
       if (histSelectMode) {
         d.onclick = (e) => { const chk = d.querySelector('.hist-chk'); chk.checked = !chk.checked; toggleSessCheck(s.id, chk); };
       } else {
@@ -8177,10 +8187,10 @@ function _renderMsgAt(idx, prepend = false) {
   } else {
     w.querySelector('.msg').textContent = m.content;
     if (m.type === 'interrupt') {
-      // Interrupt messages from history — show delivered badge
+      // Interrupt messages from history — show neutral badge (delivery status not tracked in DB)
       const iBadge = document.createElement('div');
-      iBadge.className = 'msg-interrupt delivered matched';
-      iBadge.innerHTML = `<span class="mq-label">${t('interrupt.delivered') || 'Delivered to Claude'}</span>`;
+      iBadge.className = 'msg-interrupt matched';
+      iBadge.innerHTML = `<span class="mq-label">${t('interrupt.queued') || 'Clarification sent'}</span>`;
       w.appendChild(iBadge);
     } else if (hasReply) {
       const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; w.appendChild(a);
