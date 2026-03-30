@@ -7057,11 +7057,10 @@ function newTab() {
 function toggle(id) {
   const el = $i(id);
   el.classList.toggle('collapsed');
-  const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
-  if (btn) btn.classList.toggle('active', !el.classList.contains('collapsed'));
+  const isOpen = !el.classList.contains('collapsed');
+  document.querySelectorAll(`[onclick="toggle('${id}')"]`).forEach(btn => btn.classList.toggle('active', isOpen));
   // Mobile backdrop
   if (window.innerWidth <= 800) {
-    const isOpen = !el.classList.contains('collapsed');
     let bd = $i('mobileBackdrop');
     if (!bd) {
       bd = document.createElement('div');
@@ -11479,8 +11478,7 @@ function restoreUIState() {
       const setPanel = (id, collapsed) => {
         const el = $i(id); if (!el) return;
         el.classList.toggle('collapsed', !!collapsed);
-        const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
-        if (btn) btn.classList.toggle('active', !collapsed);
+        document.querySelectorAll(`[onclick="toggle('${id}')"]`).forEach(btn => btn.classList.toggle('active', !collapsed));
       };
       // On mobile: always start with sidebars closed regardless of saved state
       setPanel('leftPanel', isMobile ? true : s.panels.left);
@@ -11746,8 +11744,7 @@ window.addEventListener('resize', () => {
     const collapse = (id) => {
       const el = $i(id); if (!el || el.classList.contains('collapsed')) return;
       el.classList.add('collapsed');
-      const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
-      if (btn) btn.classList.remove('active');
+      document.querySelectorAll(`[onclick="toggle('${id}')"]`).forEach(btn => btn.classList.remove('active'));
     };
     collapse('leftPanel');
     collapse('rightPanel');
@@ -11769,8 +11766,7 @@ window.addEventListener('resize', () => {
         const restore = (id, collapsed) => {
           const el = $i(id); if (!el) return;
           el.classList.toggle('collapsed', !!collapsed);
-          const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
-          if (btn) btn.classList.toggle('active', !collapsed);
+          document.querySelectorAll(`[onclick="toggle('${id}')"]`).forEach(btn => btn.classList.toggle('active', !collapsed));
         };
         restore('leftPanel', s.panels.left);
         restore('rightPanel', s.panels.right);
