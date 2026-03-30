@@ -4909,9 +4909,19 @@ function _clearTelegramAskState(sessionId) {
 async function processTelegramChat({ sessionId, text, userId, chatId, threadId, attachments }) {
   if (!telegramBot) return;
 
-  // Check if session is busy
+  // Check if session is busy — show actionable navigation instead of dead-end text
   if (activeTasks.has(sessionId)) {
-    await telegramBot.sendMessage(chatId, '⏳ This session is busy. Wait for completion or use /stop.');
+    const busyButtons = threadId
+      ? { reply_markup: JSON.stringify({ inline_keyboard: [
+          [{ text: '🛑 Stop', callback_data: 'cm:stop' }, { text: '📄 Full', callback_data: 'cm:full' }],
+          [{ text: '📋 Info', callback_data: 'fm:info' }, { text: '📜 History', callback_data: 'fm:history' }],
+        ] }) }
+      : { reply_markup: JSON.stringify({ inline_keyboard: [
+          [{ text: '🛑 Stop', callback_data: 'cm:stop' }, { text: '🏠 Menu', callback_data: 'm:menu' }],
+          [{ text: '📊 Status', callback_data: 'm:status' }, { text: '💬 Chats', callback_data: 'c:list:0' }],
+        ] }) };
+    const opts = threadId ? { message_thread_id: threadId, ...busyButtons } : busyButtons;
+    await telegramBot.sendMessage(chatId, '⏳ This session is busy. Wait for completion or use /stop.', opts);
     return;
   }
 
@@ -5019,7 +5029,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     // Save last user msg for reconnect recovery
     stmts.setLastUserMsg.run(text, sessionId);
 
-    // Send "thinking" indicator only in legacy mode (draft streaming provides its own visual)
+    // Send visible "Processing..." indicator (deleted when first content arrives or on finalize)
     await proxy.startThinking();
 
     const params = {

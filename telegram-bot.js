@@ -771,6 +771,14 @@ class TelegramBot extends EventEmitter {
         // Project button tap — show project list (current project context)
         return this._screenProjects(chatId, userId, 'p:list:0');
       }
+      // Fallback: match keyboard button text from any language (handles encoding/language mismatches)
+      {
+        const low = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+        const menuWords = ['menu', 'меню'];
+        const statusWords = ['status', 'статус'];
+        if (menuWords.includes(low)) { return this._screenMainMenu(chatId, userId); }
+        if (statusWords.includes(low)) { return this._screenStatus(chatId, userId); }
+      }
       // Legacy: 🔔 bell button (replaced by Settings, but keep for backwards compat)
       if (text === '🔔') {
         const device = this._stmts.getDevice.get(userId);
@@ -1645,12 +1653,18 @@ class TelegramBot extends EventEmitter {
     const opts = { editMsgId: msgId };
 
     try {
-      // Reset task input state on any non-task navigation
+      // Reset input states on any non-related navigation callback
       if ((ctx.state === FSM_STATES.AWAITING_TASK_TITLE ||
            ctx.state === FSM_STATES.AWAITING_TASK_DESCRIPTION) &&
           !data.startsWith('t:')) {
         ctx.state = FSM_STATES.IDLE;
         ctx.stateData = null;
+      }
+      // Reset COMPOSING state when user navigates away via inline button
+      // (compose is only for free-text input; any callback means user changed intent)
+      if (ctx.state === FSM_STATES.COMPOSING &&
+          data !== 'cm:compose' && !data.startsWith('d:compose:') && !data.startsWith('ask:')) {
+        ctx.state = FSM_STATES.IDLE;
       }
 
       // ask_user option selection
@@ -1664,9 +1678,9 @@ class TelegramBot extends EventEmitter {
           // "Back to menu" goes to forum project info, not the global menu
           if (data === 'm:menu' || data === 'm:status')
             return this._forum.showInfo(chatId, userId, topicInfo.workdir, threadId);
-          // Block global project navigation (p:list, p:sel:N) — no project switching from forum topics
+          // Block global project navigation (p:list, p:sel:N) — redirect to project info instead of silent block
           if (data === 'p:list' || data.startsWith('p:list:') || data.startsWith('p:sel:'))
-            return;
+            return this._forum.showInfo(chatId, userId, topicInfo.workdir, threadId);
           // Scope chats / new-chat navigation to this topic's project
           if (data.startsWith('c:') || data.startsWith('ch:'))
             ctx.projectWorkdir = topicInfo.workdir;
@@ -3265,7 +3279,7 @@ class TelegramBot extends EventEmitter {
       const actionButtons = isForumTopic
         ? [
             [
-              { text: this._t('fm_btn_full'), callback_data: 'fm:last' },
+              { text: this._t('fm_btn_full'), callback_data: 'cm:full' },
               { text: this._t('fm_btn_continue'), callback_data: 'fm:compose' },
               { text: this._t('fm_btn_diff'), callback_data: 'fm:diff' },
             ],
@@ -3617,6 +3631,7 @@ class TelegramProxy {
     this._broadcastToSession = broadcastToSession || (() => {});
     this._buffer = '';
     this._progressMsgId = null;
+    this._thinkingMsgId = null;
     this._updateTimer = null;
     this._lastEditAt = 0;
     this._toolsUsed = [];
@@ -3658,18 +3673,28 @@ class TelegramProxy {
     return this._bot._sendMessage(this._chatId, text, options);
   }
 
-  /** Send "Thinking..." indicator in legacy (non-draft) mode */
+  /** Send visible "Thinking..." indicator (both draft and legacy modes) */
   async startThinking() {
-    if (this._usesDraftStreaming) return;
-    const thinkingMsg = await this._tgSend('🤔 <b>Thinking...</b>', {
-      parse_mode: 'HTML',
-      reply_markup: JSON.stringify({ inline_keyboard: [[
-        { text: '🛑 Stop', callback_data: 'cm:stop' },
-        { text: '🏠 Menu', callback_data: 'm:menu' },
-      ]] }),
-    });
-    if (thinkingMsg?.message_id) {
-      this._progressMsgId = thinkingMsg.message_id;
+    try {
+      const stopBtn = this._threadId
+        ? [{ text: this._bot._t('fm_btn_stop') || '🛑 Stop', callback_data: 'cm:stop' }]
+        : [
+            { text: '🛑 Stop', callback_data: 'cm:stop' },
+            { text: '🏠 Menu', callback_data: 'm:menu' },
+          ];
+      const thinkingMsg = await this._tgSend('🤔 <b>Processing your request...</b>', {
+        parse_mode: 'HTML',
+        reply_markup: JSON.stringify({ inline_keyboard: [stopBtn] }),
+      });
+      if (thinkingMsg?.message_id) {
+        this._thinkingMsgId = thinkingMsg.message_id;
+        // In legacy (non-draft) mode, reuse as progress message
+        if (!this._usesDraftStreaming) {
+          this._progressMsgId = thinkingMsg.message_id;
+        }
+      }
+    } catch {
+      // Non-critical — don't block Claude processing if indicator fails
     }
   }
 
@@ -3747,7 +3772,11 @@ class TelegramProxy {
       text += `\n\n<i>${t('ask_text_hint')}</i>`;
     }
 
-    // Delete progress message if exists (show clean question)
+    // Delete thinking/progress message if exists (show clean question)
+    if (this._thinkingMsgId && this._thinkingMsgId !== this._progressMsgId) {
+      try { await this._bot._callApi('deleteMessage', { chat_id: this._chatId, message_id: this._thinkingMsgId }); } catch {}
+      this._thinkingMsgId = null;
+    }
     if (this._progressMsgId) {
       try {
         await this._bot._callApi('deleteMessage', { chat_id: this._chatId, message_id: this._progressMsgId });
@@ -3826,6 +3855,14 @@ class TelegramProxy {
     this._updateTimer = null;
     if (this._finished) return;
     this._lastEditAt = Date.now();
+
+    // Delete "Thinking..." indicator on first actual content (draft streaming mode)
+    if (this._thinkingMsgId && this._usesDraftStreaming && this._buffer.trim()) {
+      try {
+        await this._bot._callApi('deleteMessage', { chat_id: this._chatId, message_id: this._thinkingMsgId });
+      } catch {}
+      this._thinkingMsgId = null;
+    }
 
     let preview = this._buffer;
     if (preview.length > 3500) {
@@ -3922,6 +3959,11 @@ class TelegramProxy {
       this._updateTimer = null;
     }
 
+    // Delete thinking indicator if still visible (draft streaming mode)
+    if (this._thinkingMsgId && this._thinkingMsgId !== this._progressMsgId) {
+      try { await this._bot._callApi('deleteMessage', { chat_id: this._chatId, message_id: this._thinkingMsgId }); } catch {}
+      this._thinkingMsgId = null;
+    }
     // Delete progress message if exists (legacy mode sends a "Thinking..." message)
     if (this._progressMsgId) {
       try {
@@ -4019,6 +4061,11 @@ class TelegramProxy {
       this._updateTimer = null;
     }
 
+    // Delete thinking indicator if still visible
+    if (this._thinkingMsgId && this._thinkingMsgId !== this._progressMsgId) {
+      try { await this._bot._callApi('deleteMessage', { chat_id: this._chatId, message_id: this._thinkingMsgId }); } catch {}
+      this._thinkingMsgId = null;
+    }
     if (this._progressMsgId) {
       try {
         await this._bot._callApi('deleteMessage', {

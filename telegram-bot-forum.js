@@ -504,10 +504,42 @@ class TelegramBotForum {
     }
 
     // Persistent keyboard buttons send their label text into the topic — intercept before Claude
+    // Exact match first (emoji + localized label)
     if (text === this._api.t('kb_menu'))   return this._forumShowInfo(chatId, userId, workdir, threadId);
     if (text === this._api.t('kb_status')) return this._api.cmdStatus(chatId, userId);
     if (text.startsWith(this._api.t('kb_write')))  return; // In forum mode, just type directly in the topic
     if (text.startsWith(this._api.t('kb_project_prefix'))) return; // Project button ignored in forum mode
+    // Fallback: match keyboard button text from ANY configured language
+    // Handles: different language setting, emoji encoding, manual typing
+    {
+      const low = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+      const menuWords = ['menu', 'меню'];
+      const statusWords = ['status', 'статус'];
+      const writeWords = ['write', 'написати', 'написать'];
+      if (menuWords.includes(low))   return this._forumShowInfo(chatId, userId, workdir, threadId);
+      if (statusWords.includes(low)) return this._api.cmdStatus(chatId, userId);
+      if (writeWords.some(w => low.startsWith(w))) return; // Ignore write button in forum
+    }
+
+    // Intercept: if there's a pending ask_user question, text resolves it (same as private chat)
+    if (ctx.state === 'AWAITING_ASK_RESPONSE') {
+      const requestId = ctx.stateData?.askRequestId;
+      const origAskMsgId = ctx.stateData?.askMsgId;
+      const origAskChatId = ctx.stateData?.askChatId;
+      ctx.state = 'IDLE';
+      ctx.stateData = null;
+      this._api.emit('ask_user_response', { requestId, answer: text });
+      await this._api.sendMessage(chatId, this._api.t('ask_answered'));
+      // Clean up original ask message (remove stale buttons)
+      if (origAskMsgId && origAskChatId) {
+        this._api.callApi('editMessageText', {
+          chat_id: origAskChatId,
+          message_id: origAskMsgId,
+          text: this._api.t('ask_answered'),
+        }).catch(() => {});
+      }
+      return;
+    }
 
     // Handle project-specific commands
     if (text.startsWith('/')) {
@@ -842,7 +874,7 @@ class TelegramBotForum {
         const buttons = [
           [
             { text: this._api.t('fm_btn_continue'), callback_data: 'fm:compose' },
-            { text: this._api.t('fm_btn_full'), callback_data: 'fm:last' },
+            { text: this._api.t('fm_btn_full'), callback_data: 'cm:full' },
           ],
           [
             { text: this._api.t('fm_btn_history'), callback_data: 'fm:history' },
