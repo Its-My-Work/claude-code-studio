@@ -125,7 +125,7 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings }) {
     const args = ['--print'];
 
     // --setting-sources: control which setting sources to load (user, project, local)
@@ -173,6 +173,11 @@ class ClaudeCLI {
     // --add-dir: give Claude access to additional directories
     if (addDirs?.length) {
       for (const d of addDirs) args.push('--add-dir', d);
+    }
+
+    // --settings: additional settings (e.g. hooks for mid-task interrupt delivery)
+    if (extraSettings && typeof extraSettings === 'object') {
+      args.push('--settings', JSON.stringify(extraSettings));
     }
 
     // CRITICAL: bypass permission prompts in non-interactive mode
@@ -226,7 +231,7 @@ class ClaudeCLI {
     args.push('-p', finalPrompt);
 
     // Unset CLAUDECODE to allow nested invocation from dev environment.
-    const env = { ...process.env };
+    const env = { ...process.env, ...(extraEnv || {}) };
     delete env.CLAUDECODE;
     // When ANTHROPIC_BASE_URL is set the user is routing through a proxy (e.g. LiteLLM)
     // and needs ANTHROPIC_API_KEY for auth.  Only strip the key when talking directly to

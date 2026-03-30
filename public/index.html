@@ -3578,6 +3578,7 @@ const TRANSLATIONS = {
     'rl.toast.80':'⚠️ {type} ліміт: використано 80%','rl.toast.90':'🔶 {type} ліміт: залишилось 10%!','rl.toast.95':'🚫 {type} ліміт майже вичерпано!',
     'rl.modal.title':'Ліміт вичерпано','rl.modal.desc':'Ваш {type} ліміт Claude Max вичерпано. Нові запити заблоковані до скидання.','rl.modal.reset':'Скидання через:','rl.modal.ok':'Зрозуміло',
     'rl.notify.title':'Claude Max — ліміт','rl.notify.body':'{type} ліміт: використано {pct}%',
+    'rl.wait.status':'Ліміт — очікування скидання','rl.wait.resuming':'Ліміт скинуто — продовження…',
     'queue.badge':'{n} у черзі',
     'ver.current':'Поточна версія','ver.update':'Доступне оновлення {tag}!\nЗапустіть: npx github:Lexus2016/claude-code-studio','ver.latest':' — остання версія ✓','ver.checking':'Перевірка версії...',
     'status.connecting':'Підключення...',
@@ -3804,6 +3805,7 @@ const TRANSLATIONS = {
     'rl.toast.80':'⚠️ {type} limit: 80% used','rl.toast.90':'🔶 {type} limit: only 10% left!','rl.toast.95':'🚫 {type} limit almost exhausted!',
     'rl.modal.title':'Limit exhausted','rl.modal.desc':'Your {type} Claude Max limit has been exhausted. New requests are blocked until reset.','rl.modal.reset':'Resets in:','rl.modal.ok':'Got it',
     'rl.notify.title':'Claude Max — limit','rl.notify.body':'{type} limit: {pct}% used',
+    'rl.wait.status':'Rate limit — waiting for reset','rl.wait.resuming':'Rate limit reset — resuming…',
     'queue.badge':'{n} in queue',
     'ver.current':'Current version','ver.update':'Update available {tag}!\nRun: npx github:Lexus2016/claude-code-studio','ver.latest':' — latest ✓','ver.checking':'Checking version...',
     'status.connecting':'Connecting...',
@@ -5001,6 +5003,13 @@ function handleWsMsg(d) {
             // Show success toast
             toast('✅ Auto-switched to auto mode', false, 2000);
           }
+        }
+        // Reset generating state for the visible tab (non-task done events only;
+        // task-done events are per-subtask and the parent generation may still be running)
+        if (!d.taskId) {
+          isGen = false;
+          setSendStop(false);
+          setStatus(t('status.connected'), 'ok');
         }
         // Clear streaming state
         streaming.el = null;

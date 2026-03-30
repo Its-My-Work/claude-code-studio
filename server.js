@@ -2176,6 +2176,8 @@ function decryptPassword(stored) {
 // Maximum number of auto-continue attempts when agent hits --max-turns limit.
 // Each continue resumes the session, giving the agent another maxTurns window.
 const MAX_AUTO_CONTINUES = 3;
+const MAX_RATE_LIMIT_WAITS = 3;
+const MAX_RATE_LIMIT_WAIT_MS = 30 * 60 * 1000; // 30 min — skip auto-wait if reset is further out
 
 function isResettableClaudeSessionError(errorText = '') {
   return /Invalid signature in thinking block|invalid session|session .* not found|could not find .*session|no conversation found|resume .*failed|failed to resume|conversation .* not found/i.test(errorText || '');
@@ -2195,21 +2197,33 @@ async function runCliSingle(p) {
   let fullText = '', fullThinking = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
   let continueCount = 0;
+  let rateLimitWaitCount = 0;
   // First invocation carries attachments; subsequent auto-continues do not
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   let pendingFork = !!forkSession; // only fork on first CLI call
 
-  // Run a single CLI invocation and return { resultData, sid, errorText }
+  // Run a single CLI invocation and return { resultData, sid, errorText, rateLimitInfo }
   const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
     let resultData = null;
     let errorText = '';
+    let rateLimitInfo = null;
     let _done = false;
-    const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText }); } };
+    const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText, rateLimitInfo }); } };
     const useFork = pendingFork; pendingFork = false;
 
-    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork })
+    // Inject PreToolUse hook for mid-task interrupt delivery via --settings
+    const interruptHookSettings = {
+      hooks: { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: `node "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`, timeout: 3 }] }] },
+    };
+    const interruptEnv = {
+      CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
+      CCS_INTERRUPT_SESSION: sessionId,
+      CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
+    };
+
+    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings })
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -2232,7 +2246,10 @@ async function runCliSingle(p) {
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
       .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
-      .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
+      .onRateLimit(info => {
+        try { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); } catch {}
+        if (info && info.status === 'rejected') rateLimitInfo = info;
+      })
       .onResult(r => { resultData = r; })
       .onError(err => {
         // Capture error text for the main loop to inspect (e.g. thinking block signature errors)
@@ -2251,12 +2268,79 @@ async function runCliSingle(p) {
   let lastResult = null;
   let totalCostUsd = 0;
   while (true) {
-    const { resultData, errorText } = await runOnce(currentPrompt, currentContentBlocks, newCid);
+    const fullTextBefore = fullText.length;
+    const { resultData, errorText, rateLimitInfo } = await runOnce(currentPrompt, currentContentBlocks, newCid);
+    const hadOutputBeforeRateLimit = fullText.length > fullTextBefore;
     lastResult = resultData;
     totalCostUsd += resultData?.total_cost_usd || 0;
 
     // ✅ Success — agent finished naturally
     if (resultData?.subtype === 'success') break;
+
+    // 🚦 Rate limit rejected — wait for reset and auto-retry
+    {
+      const isRateLimitRejected = (rateLimitInfo?.status === 'rejected') ||
+        (errorText && /rate.?limit|overloaded|too many requests|429/i.test(errorText));
+      if (isRateLimitRejected) {
+        const resetsAt = rateLimitInfo?.resetsAt;
+        const rateLimitType = rateLimitInfo?.rateLimitType || 'unknown';
+        const waitMs = resetsAt ? Math.max(0, (resetsAt * 1000) - Date.now() + 5000) : 60000; // +5s buffer, fallback 60s
+
+        // Don't auto-wait if retries exhausted, too far away, or 7-day limit
+        if (rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS || waitMs > MAX_RATE_LIMIT_WAIT_MS || rateLimitType === 'seven_day') {
+          const reason = rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS ? 'retries exhausted' : rateLimitType === 'seven_day' ? '7-day limit' : 'reset too far';
+          const notice = `\n\n⚠️ **Rate limit** — ${reason}. Please retry manually later.\n\n`;
+          fullText += notice;
+          { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+          try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+          break;
+        }
+
+        rateLimitWaitCount++;
+        const waitSec = Math.ceil(waitMs / 1000);
+        log.warn('rate-limit-wait', { sessionId, rateLimitType, resetsAt, waitMs, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS });
+
+        const notice = `\n\n⏳ **Rate limit** (${rateLimitType}) — auto-waiting ~${Math.ceil(waitSec / 60)} min for reset (${rateLimitWaitCount}/${MAX_RATE_LIMIT_WAITS})...\n\n`;
+        fullText += notice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+        try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: waitSec, resetsAt, rateLimitType, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS, ...(tabId ? { tabId } : {}) })); } catch {}
+
+        // Sleep with abort support — resolves on timeout or when user stops
+        const _sleepAbortable = (ms, signal) => new Promise(resolve => {
+          if (signal?.aborted) { resolve(); return; }
+          const onAbort = () => { clearTimeout(timer); resolve(); };
+          const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+          signal?.addEventListener('abort', onAbort, { once: true });
+        });
+
+        // Wait loop with periodic countdown updates (every 30s)
+        const waitEnd = Date.now() + waitMs;
+        while (Date.now() < waitEnd) {
+          if (abortController?.signal?.aborted) break;
+          const remaining = Math.max(0, Math.ceil((waitEnd - Date.now()) / 1000));
+          try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'countdown', secondsLeft: remaining, resetsAt, ...(tabId ? { tabId } : {}) })); } catch {}
+          await _sleepAbortable(Math.min(30000, remaining * 1000), abortController?.signal);
+        }
+
+        if (abortController?.signal?.aborted) break;
+
+        // Rate limit reset — notify and resume
+        try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'resuming', ...(tabId ? { tabId } : {}) })); } catch {}
+        const resumeNotice = '\n✅ **Rate limit reset** — resuming...\n\n';
+        fullText += resumeNotice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + resumeNotice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: resumeNotice, ...(tabId ? { tabId } : {}) })); } catch {}
+
+        // If Claude produced output before rate limit, switch to continuation prompt
+        if (hadOutputBeforeRateLimit) {
+          currentPrompt = 'Continue where you left off. Complete the remaining work.';
+          currentContentBlocks = null;
+        }
+        // else: keep currentPrompt as-is (retry original request)
+        continue;
+      }
+    }
 
     // 🔑 Resume/session state is broken — start fresh
     // Covers both signature expiry and missing/invalid remote Claude session state.
@@ -2373,6 +2457,7 @@ async function runSshSingle(p) {
   let fullText = '', fullThinking = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
   let continueCount = 0;
+  let rateLimitWaitCount = 0;
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
   const ssh = new ClaudeSSH({ host: remoteHost, workdir: remoteWorkdir, sshKeyPath, password, port });
@@ -2381,8 +2466,9 @@ async function runSshSingle(p) {
   const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
     let resultData = null;
     let errorText = '';
+    let rateLimitInfo = null;
     let _done = false;
-    const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText }); } };
+    const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText, rateLimitInfo }); } };
     const useFork = pendingFork; pendingFork = false;
 
     ssh.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, allowedTools: tools, abortController, forkSession: useFork })
@@ -2404,7 +2490,10 @@ async function runSshSingle(p) {
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
       .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
-      .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
+      .onRateLimit(info => {
+        try { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); } catch {}
+        if (info && info.status === 'rejected') rateLimitInfo = info;
+      })
       .onResult(r => { resultData = r; })
       .onError(err => {
         errorText += err;
@@ -2419,10 +2508,64 @@ async function runSshSingle(p) {
   let lastResult = null;
   let totalCostUsd = 0;
   while (true) {
-    const { resultData, errorText } = await runOnce(currentPrompt, currentContentBlocks, newCid);
+    const fullTextBefore = fullText.length;
+    const { resultData, errorText, rateLimitInfo } = await runOnce(currentPrompt, currentContentBlocks, newCid);
+    const hadOutputBeforeRateLimit = fullText.length > fullTextBefore;
     lastResult = resultData;
     totalCostUsd += resultData?.total_cost_usd || 0;
     if (resultData?.subtype === 'success') break;
+
+    // 🚦 Rate limit rejected — wait for reset and auto-retry
+    {
+      const isRateLimitRejected = (rateLimitInfo?.status === 'rejected') ||
+        (errorText && /rate.?limit|overloaded|too many requests|429/i.test(errorText));
+      if (isRateLimitRejected) {
+        const resetsAt = rateLimitInfo?.resetsAt;
+        const rateLimitType = rateLimitInfo?.rateLimitType || 'unknown';
+        const waitMs = resetsAt ? Math.max(0, (resetsAt * 1000) - Date.now() + 5000) : 60000;
+        if (rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS || waitMs > MAX_RATE_LIMIT_WAIT_MS || rateLimitType === 'seven_day') {
+          const reason = rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS ? 'retries exhausted' : rateLimitType === 'seven_day' ? '7-day limit' : 'reset too far';
+          const notice = `\n\n⚠️ **Rate limit** — ${reason}. Please retry manually later.\n\n`;
+          fullText += notice;
+          { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+          try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+          break;
+        }
+        rateLimitWaitCount++;
+        const waitSec = Math.ceil(waitMs / 1000);
+        log.warn('ssh-rate-limit-wait', { sessionId, rateLimitType, resetsAt, waitMs, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS });
+        const notice = `\n\n⏳ **Rate limit** (${rateLimitType}) — auto-waiting ~${Math.ceil(waitSec / 60)} min for reset (${rateLimitWaitCount}/${MAX_RATE_LIMIT_WAITS})...\n\n`;
+        fullText += notice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+        try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: waitSec, resetsAt, rateLimitType, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS, ...(tabId ? { tabId } : {}) })); } catch {}
+        const _sleepAbortable = (ms, signal) => new Promise(resolve => {
+          if (signal?.aborted) { resolve(); return; }
+          const onAbort = () => { clearTimeout(timer); resolve(); };
+          const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+          signal?.addEventListener('abort', onAbort, { once: true });
+        });
+        const waitEnd = Date.now() + waitMs;
+        while (Date.now() < waitEnd) {
+          if (abortController?.signal?.aborted) break;
+          const remaining = Math.max(0, Math.ceil((waitEnd - Date.now()) / 1000));
+          try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'countdown', secondsLeft: remaining, resetsAt, ...(tabId ? { tabId } : {}) })); } catch {}
+          await _sleepAbortable(Math.min(30000, remaining * 1000), abortController?.signal);
+        }
+        if (abortController?.signal?.aborted) break;
+        try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'resuming', ...(tabId ? { tabId } : {}) })); } catch {}
+        const resumeNotice = '\n✅ **Rate limit reset** — resuming...\n\n';
+        fullText += resumeNotice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + resumeNotice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: resumeNotice, ...(tabId ? { tabId } : {}) })); } catch {}
+        if (hadOutputBeforeRateLimit) {
+          currentPrompt = 'Continue where you left off. Complete the remaining work.';
+          currentContentBlocks = null;
+        }
+        continue;
+      }
+    }
+
     if (errorText && isResettableClaudeSessionError(errorText)) {
       const isThinkingSig = /Invalid signature in thinking block/i.test(errorText);
       log.warn('ssh-claude-session-reset', { sessionId, oldCid: newCid, reason: isThinkingSig ? 'thinking-signature' : 'missing-or-invalid-session' });
