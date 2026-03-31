@@ -8223,11 +8223,15 @@ function _renderMsgAt(idx, prepend = false) {
     w.querySelector('.msg').innerHTML = renderMd(m.content);
   } else {
     w.querySelector('.msg').textContent = m.content;
-    if (m.type === 'interrupt') {
-      // Interrupt messages from history — show neutral badge (delivery status not tracked in DB)
+    if (m.type === 'interrupt' || m.type === 'interrupt_delivered') {
+      // Interrupt messages from history — show delivery status from DB
+      const wasDelivered = m.type === 'interrupt_delivered';
       const iBadge = document.createElement('div');
-      iBadge.className = 'msg-interrupt matched';
-      iBadge.innerHTML = `<span class="mq-label">${t('interrupt.queued') || 'Clarification sent'}</span>`;
+      iBadge.className = `msg-interrupt ${wasDelivered ? 'delivered' : 'expired'}`;
+      const label = wasDelivered
+        ? (t('interrupt.delivered') || 'Delivered to Claude')
+        : (t('interrupt.expired') || 'Task ended');
+      iBadge.innerHTML = `<span class="mq-label">${label}</span>`;
       w.appendChild(iBadge);
     } else if (hasReply) {
       const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; w.appendChild(a);

@@ -498,6 +498,7 @@ const stmts = {
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
   addTelegramMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,source) VALUES (?,?,?,?,?,?,?,?,'telegram')`),
+  markInterruptDelivered: db.prepare(`UPDATE messages SET type='interrupt_delivered' WHERE id=?`),
   getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY created_at ASC, CASE WHEN type='thinking' THEN 0 ELSE 1 END ASC, id ASC`),
   // Lightweight: strip tool content (frontend only needs tool_name + agent_id for badge counts)
   getMsgsLite: db.prepare(`SELECT id, session_id, role, type, CASE WHEN type='tool' THEN '' ELSE content END AS content, tool_name, agent_id, created_at, reply_to_id, attachments, source FROM messages WHERE session_id=? ORDER BY created_at ASC, CASE WHEN type='thinking' THEN 0 ELSE 1 END ASC, id ASC`),
@@ -3265,7 +3266,10 @@ app.post('/api/internal/user-interrupt', express.json(), (req, res) => {
   if (messages.length > 0) {
     pendingInterrupts.delete(sessionId);
 
-    // Notify UI that messages were delivered to Claude
+    // Persist delivery status in DB + notify UI
+    for (const m of messages) {
+      if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+    }
     const task = activeTasks.get(sessionId);
     if (task?.proxy) {
       for (const m of messages) {
@@ -6561,13 +6565,15 @@ wss.on('connection', (ws) => {
         return;
       }
       const interruptId = ++_interruptIdCounter;
-      queue.push({ id: interruptId, content: text, createdAt: new Date().toISOString() });
+
+      // Save to DB as a user message with special type, capture row ID for later delivery tracking
+      let dbId = null;
+      try { const info = stmts.addMsg.run(tabId, 'user', 'interrupt', text, null, null, null, null); dbId = Number(info.lastInsertRowid); } catch {}
+
+      queue.push({ id: interruptId, content: text, createdAt: new Date().toISOString(), dbId });
 
       // Confirm to client
       ws.send(JSON.stringify({ type: 'interrupt_queued', interruptId, tabId, text }));
-
-      // Save to DB as a user message with special type
-      try { stmts.addMsg.run(tabId, 'user', 'interrupt', text, null, null, null, null); } catch {}
 
       log.info('[interrupt] queued', { sessionId: tabId, interruptId, textLen: text.length });
       return;
