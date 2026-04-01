@@ -114,23 +114,61 @@ async function handleMessage(msg) {
         const result = await postToServer({ sessionId: SESSION_ID });
         const messages = result.messages || [];
 
-        let text;
         if (messages.length === 0) {
-          text = 'No pending user messages.';
-        } else {
-          const lines = messages.map((m, i) =>
-            messages.length === 1
-              ? `User clarification: ${m.content}`
-              : `${i + 1}. ${m.content}`
-          );
-          text = messages.length === 1
-            ? lines[0]
-            : `User sent ${messages.length} clarification(s) while you were working:\n\n${lines.join('\n')}\n\nAcknowledge these and adjust your approach if needed.`;
+          sendResponse(id, {
+            content: [{ type: 'text', text: 'No pending user messages.' }],
+          });
+          break;
         }
 
-        sendResponse(id, {
-          content: [{ type: 'text', text }],
-        });
+        // Build multimodal content blocks: text + images + file references
+        const contentBlocks = [];
+
+        // Text summary of all clarifications
+        const lines = messages.map((m, i) =>
+          messages.length === 1
+            ? `User clarification: ${m.content}`
+            : `${i + 1}. ${m.content}`
+        );
+        let text = messages.length === 1
+          ? lines[0]
+          : `User sent ${messages.length} clarification(s) while you were working:\n\n${lines.join('\n')}`;
+
+        // Collect attachment descriptions for the text summary
+        const attachDescriptions = [];
+        for (const m of messages) {
+          if (!Array.isArray(m.attachments) || m.attachments.length === 0) continue;
+          for (const att of m.attachments) {
+            if (att.type === 'ssh') {
+              let sshText = `[SSH Host: ${att.label || att.host || 'SSH'}]\nHost: ${att.host}:${att.port || 22}`;
+              if (att.sshKeyPath) sshText += `\nSSH Key: ${att.sshKeyPath}`;
+              else if (att.password) sshText += `\nPassword: ${att.password}`;
+              attachDescriptions.push(sshText);
+            } else if (att.base64 && att.mimeType && att.mimeType.startsWith('image/')) {
+              // Image with base64 — MCP ImageContent format (flat data + mimeType)
+              contentBlocks.push({
+                type: 'image',
+                data: att.base64,
+                mimeType: att.mimeType,
+              });
+              attachDescriptions.push(`[Attached image: ${att.name || 'screenshot'}]`);
+            } else if (att.path) {
+              // File saved to disk — tell Claude to read it
+              attachDescriptions.push(`[Attached file: ${att.name || 'file'}]\nSaved at: ${att.path}\nRead this file to see its contents.`);
+            }
+          }
+        }
+
+        if (attachDescriptions.length) {
+          text += '\n\nAttachments:\n' + attachDescriptions.join('\n\n');
+        }
+
+        text += '\n\nAcknowledge these and adjust your approach if needed.';
+
+        // Text block goes first (before images) so Claude sees the context
+        contentBlocks.unshift({ type: 'text', text });
+
+        sendResponse(id, { content: contentBlocks });
       } catch (err) {
         sendResponse(id, {
           content: [{ type: 'text', text: 'No pending user messages.' }],

@@ -824,8 +824,77 @@ const TASK_MANAGER_SECRET = require('crypto').randomBytes(16).toString('hex');
 
 // ─── User Interrupt (Internal MCP) ──────────────────────────────────────
 const INTERRUPT_SECRET = require('crypto').randomBytes(16).toString('hex');
-const pendingInterrupts = new Map(); // sessionId → [{ id, content, createdAt }]
+const pendingInterrupts = new Map(); // sessionId → [{ id, content, attachments?, createdAt }]
 let _interruptIdCounter = 0;
+
+// Save interrupt attachments to temp dir for MCP consumption.
+// Returns array of saved attachment descriptors (with path, base64 for images, etc.)
+function saveInterruptAttachments(rawAttachments, sessionId, interruptId, { enrichSsh = false } = {}) {
+  if (!Array.isArray(rawAttachments) || rawAttachments.length === 0) return [];
+  const saved = [];
+  const tmpDir = path.join(os.tmpdir(), `claude-int-${sessionId}-${interruptId}`);
+  try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
+  for (const att of rawAttachments) {
+    const normalized = normalizeStoredAttachment(att);
+    if (!normalized) continue;
+    if (normalized.type === 'ssh') {
+      if (enrichSsh && normalized.hostId) {
+        try {
+          const rh = loadRemoteHosts().find(h => h.id === normalized.hostId);
+          if (rh) {
+            normalized.sshKeyPath = rh.sshKeyPath || '';
+            normalized.password = decryptPassword(rh.password) || '';
+          }
+        } catch {}
+      }
+      saved.push({ type: 'ssh', label: normalized.label, host: normalized.host, port: normalized.port, sshKeyPath: normalized.sshKeyPath || '', password: normalized.password || '' });
+      continue;
+    }
+    if (normalized.base64) {
+      let safeName = (normalized.name || `att-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+      // Avoid name collisions within the same interrupt
+      if (fs.existsSync(path.join(tmpDir, safeName))) {
+        const ext = path.extname(safeName);
+        const base = safeName.slice(0, -ext.length || undefined);
+        safeName = `${base}-${Date.now()}${ext}`;
+      }
+      const filePath = path.join(tmpDir, safeName);
+      try {
+        fs.writeFileSync(filePath, Buffer.from(normalized.base64, 'base64'));
+        const entry = { type: normalized.type, name: normalized.name || safeName, path: filePath };
+        if (isImageAttachment(normalized)) {
+          entry.base64 = normalized.base64;
+          entry.mimeType = getImageMimeType(normalized);
+        }
+        saved.push(entry);
+      } catch (err) {
+        log.warn('[interrupt] failed to save attachment', { name: normalized.name, err: err.message });
+      }
+    }
+  }
+  return saved;
+}
+
+// Clean up temp files created for interrupt attachments.
+// delayMs: delay cleanup to give Claude time to read files after MCP delivery.
+function cleanupInterruptAttachments(messages, delayMs = 0) {
+  if (!Array.isArray(messages) || messages.length === 0) return;
+  const dirs = new Set();
+  for (const m of messages) {
+    if (!Array.isArray(m.attachments)) continue;
+    for (const att of m.attachments) {
+      if (att.path) dirs.add(path.dirname(att.path));
+    }
+  }
+  if (dirs.size === 0) return;
+  const doCleanup = () => {
+    for (const dir of dirs) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+    }
+  };
+  if (delayMs > 0) setTimeout(doCleanup, delayMs);
+  else doCleanup();
+}
 
 function broadcastToSession(sessionId, data) {
   const watchers = sessionWatchers.get(sessionId);
@@ -3279,6 +3348,9 @@ app.post('/api/internal/user-interrupt', express.json(), (req, res) => {
       }
       broadcastToSession(sessionId, { type: 'interrupt_delivered', interruptId: m.id, tabId: sessionId });
     }
+
+    // Schedule temp file cleanup after delay (Claude needs time to read attached files)
+    cleanupInterruptAttachments(messages, 60_000);
   }
 
   return res.json({ messages });
@@ -5110,21 +5182,46 @@ function _clearTelegramAskState(sessionId) {
 async function processTelegramChat({ sessionId, text, userId, chatId, threadId, attachments }) {
   if (!telegramBot) return;
 
-  // Check if session is busy — show actionable navigation instead of dead-end text
+  // Check if session is busy — queue as interrupt instead of dropping the message.
   // activeTasks covers both web and Telegram chat workers; activeChatSessions covers
   // the early phase of web processChat before activeTasks.set() is called.
   if (activeTasks.has(sessionId) || activeChatSessions.has(sessionId)) {
-    const busyButtons = threadId
-      ? { reply_markup: JSON.stringify({ inline_keyboard: [
-          [{ text: '🛑 Stop', callback_data: 'cm:stop' }, { text: '📄 Full', callback_data: 'cm:full' }],
-          [{ text: '📋 Info', callback_data: 'fm:info' }, { text: '📜 History', callback_data: 'fm:history' }],
-        ] }) }
-      : { reply_markup: JSON.stringify({ inline_keyboard: [
-          [{ text: '🛑 Stop', callback_data: 'cm:stop' }, { text: '🏠 Menu', callback_data: 'm:menu' }],
-          [{ text: '📊 Status', callback_data: 'm:status' }, { text: '💬 Chats', callback_data: 'c:list:0' }],
-        ] }) };
-    const opts = threadId ? { message_thread_id: threadId, ...busyButtons } : busyButtons;
-    await telegramBot.sendMessage(chatId, '⏳ This session is busy. Wait for completion or use /stop.', opts);
+    // Queue as interrupt (same mechanism as web UI mid-task clarifications)
+    if (!pendingInterrupts.has(sessionId)) pendingInterrupts.set(sessionId, []);
+    const queue = pendingInterrupts.get(sessionId);
+    if (queue.length >= 10) {
+      const opts = threadId ? { message_thread_id: threadId } : {};
+      await telegramBot.sendMessage(chatId, '⚠️ Interrupt queue full (max 10). Wait for completion or use /stop.', opts);
+      return;
+    }
+    const interruptId = ++_interruptIdCounter;
+    const savedAttachments = saveInterruptAttachments(attachments, sessionId, interruptId);
+
+    let dbId = null;
+    const attJson = attachments?.length ? JSON.stringify(serializeMessageAttachments(attachments)) : null;
+    try { const info = stmts.addMsg.run(sessionId, 'user', 'interrupt', text, null, null, null, attJson); dbId = Number(info.lastInsertRowid); } catch {}
+
+    queue.push({
+      id: interruptId,
+      content: text,
+      attachments: savedAttachments.length ? savedAttachments : undefined,
+      createdAt: new Date().toISOString(),
+      dbId,
+    });
+
+    // Notify all watchers about the queued interrupt
+    const task = activeTasks.get(sessionId);
+    if (task?.proxy) {
+      try { task.proxy.send(JSON.stringify({ type: 'interrupt_queued', interruptId, tabId: sessionId, text })); } catch {}
+    }
+    broadcastToSession(sessionId, { type: 'interrupt_queued', interruptId, tabId: sessionId, text });
+
+    const attachNote = savedAttachments.length > 0 ? ` (+${savedAttachments.length} file${savedAttachments.length > 1 ? 's' : ''})` : '';
+    const confirmMsg = `✉️ Clarification queued${attachNote}. Claude will see it at the next checkpoint.`;
+    const opts = threadId ? { message_thread_id: threadId } : {};
+    await telegramBot.sendMessage(chatId, confirmMsg, opts);
+
+    log.info('[interrupt] queued from telegram', { sessionId, interruptId, textLen: text.length, attachments: savedAttachments.length });
     return;
   }
 
@@ -6395,7 +6492,9 @@ wss.on('connection', (ws) => {
         ? ws._tabAbort?.[effectiveTabId] !== myAbortController
         : ws._abort !== myAbortController);
       if (!isStale) {
+        const _drainedInterrupts = pendingInterrupts.get(localSessionId);
         pendingInterrupts.delete(localSessionId);
+        cleanupInterruptAttachments(_drainedInterrupts);
         for (const [rid, entry] of pendingAskUser) {
           if (entry.sessionId === localSessionId) {
             clearTimeout(entry.timer);
@@ -6551,7 +6650,8 @@ wss.on('connection', (ws) => {
     if (msg.type === 'interrupt') {
       const tabId = msg.tabId;
       const text = (msg.text || '').trim();
-      if (!tabId || !text) return;
+      const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
+      if (!tabId || (!text && !hasAttachments)) return;
 
       // Soft guard: warn if no active task is found, but still store the interrupt.
       // Race window: between session_started (client renames tab) and activeTasks.set()
@@ -6572,14 +6672,25 @@ wss.on('connection', (ws) => {
 
       // Save to DB as a user message with special type, capture row ID for later delivery tracking
       let dbId = null;
-      try { const info = stmts.addMsg.run(tabId, 'user', 'interrupt', text, null, null, null, null); dbId = Number(info.lastInsertRowid); } catch {}
+      const rawAttachments = Array.isArray(msg.attachments) ? msg.attachments : [];
+      const attJson = rawAttachments.length ? JSON.stringify(serializeMessageAttachments(rawAttachments)) : null;
+      try { const info = stmts.addMsg.run(tabId, 'user', 'interrupt', text, null, null, null, attJson); dbId = Number(info.lastInsertRowid); } catch {}
 
-      queue.push({ id: interruptId, content: text, createdAt: new Date().toISOString(), dbId });
+      const savedAttachments = saveInterruptAttachments(rawAttachments, tabId, interruptId, { enrichSsh: true });
+
+      const interruptContent = text || (savedAttachments.length ? '[See attached files]' : '');
+      queue.push({
+        id: interruptId,
+        content: interruptContent,
+        attachments: savedAttachments.length ? savedAttachments : undefined,
+        createdAt: new Date().toISOString(),
+        dbId,
+      });
 
       // Confirm to client
-      ws.send(JSON.stringify({ type: 'interrupt_queued', interruptId, tabId, text }));
+      ws.send(JSON.stringify({ type: 'interrupt_queued', interruptId, tabId, text: interruptContent }));
 
-      log.info('[interrupt] queued', { sessionId: tabId, interruptId, textLen: text.length });
+      log.info('[interrupt] queued', { sessionId: tabId, interruptId, textLen: text.length, attachments: savedAttachments.length });
       return;
     }
 
@@ -6594,7 +6705,9 @@ wss.on('connection', (ws) => {
         activeChatSessions.delete(tabId);
         if (ws._tabQueue) ws._tabQueue[tabId] = [];
         sessionQueues.delete(tabId);
+        const _stoppedInterrupts = pendingInterrupts.get(tabId);
         pendingInterrupts.delete(tabId);
+        cleanupInterruptAttachments(_stoppedInterrupts);
         ws._tabAbort[tabId].abort();
         delete ws._tabAbort[tabId];
       } else if (!tabId) {

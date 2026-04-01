@@ -7775,6 +7775,7 @@ async function send() {
       type: 'interrupt',
       text: finalTxt || ' ',
       tabId: activeTabId,
+      attachments: msgAttachments.length ? msgAttachments : undefined,
     }));
     return;
   }

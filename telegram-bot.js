@@ -2823,6 +2823,49 @@ class TelegramBot extends EventEmitter {
         base64: base64,
       };
 
+      // If awaiting ask_user response, include attachment in the answer
+      if (ctx.state === FSM_STATES.AWAITING_ASK_RESPONSE) {
+        const requestId = ctx.stateData?.askRequestId;
+        const origAskMsgId = ctx.stateData?.askMsgId;
+        const origAskChatId = ctx.stateData?.askChatId;
+        ctx.state = FSM_STATES.IDLE;
+        ctx.stateData = null;
+
+        // Save file to temp dir and include path in the answer text
+        const _os = require('os');
+        const _fs = require('fs');
+        const _path = require('path');
+        const tmpDir = _path.join(_os.tmpdir(), `claude-ask-${Date.now()}`);
+        try { _fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
+        const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = _path.join(tmpDir, safeName);
+        try { _fs.writeFileSync(filePath, buffer); } catch {}
+
+        const caption = msg.caption || '';
+        const answerText = caption
+          ? `${caption}\n\n[Attached file: ${fileName}]\nSaved at: ${filePath}\nRead this file to see its contents.`
+          : `[Attached file: ${fileName}]\nSaved at: ${filePath}\nRead this file to see its contents.`;
+
+        this.emit('ask_user_response', { requestId, answer: answerText });
+
+        // Schedule temp dir cleanup (Claude needs time to read the file)
+        setTimeout(() => {
+          try { _fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+        }, 120_000);
+
+        await this._sendMessage(chatId, this._t('ask_answered'));
+
+        if (origAskMsgId && origAskChatId) {
+          this._callApi('editMessageText', {
+            chat_id: origAskChatId,
+            message_id: origAskMsgId,
+            text: this._t('ask_answered'),
+            parse_mode: 'HTML',
+          }).catch(() => {});
+        }
+        return;
+      }
+
       // If there's a caption, treat it as text + attachment
       const caption = msg.caption || '';
 

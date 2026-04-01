@@ -121,6 +121,8 @@ Hit **Translate** inside the thinking modal to render the chain of thought in yo
 
 **Mid-task interrupt** — send a clarification or new instruction *while Claude is actively working*, without stopping the current task. A compact `⚡ Clarify` pill appears in the input bar while Claude generates — click it to toggle between **Clarify** (inject into the running stream) and **Queue** (schedule after the current task finishes). Delivery is *guaranteed* via a `PreToolUse` hook: Studio intercepts every tool call and delivers your message before Claude's next action. The badge shows delivery status in real time — "Delivered" when Claude reads it, "Task ended" if the task completed before delivery. **Delivery status is now persisted in SQLite** — reload the page, revisit a session days later, and each interrupt in history correctly shows whether it reached Claude or expired. Badge state is reconciled from the server's authoritative count on task completion — correct in every scenario, including multi-tab and missed real-time events. The pill text updates instantly when you switch the UI language — no page refresh needed.
 
+**Interrupt attachments** — attach files, screenshots, or SSH configs to any mid-task clarification. Claude receives images as visual content (full multimodal MCP blocks), files as readable paths, and SSH configs with credentials pre-filled. No need to stop the task to share context — everything arrives in the same checkpoint delivery. Works from both the web UI and Telegram.
+
 **Rate limit auto-wait** — when Claude's API responds with a rate limit or overload (429), Studio automatically waits for the reset window and retries — no manual refresh, no lost session. A live countdown appears in the chat: *"Rate limited — retrying in 4m 30s"*. Up to 3 automatic retries, max 30-minute wait, correctly handles stale reset timestamps with a safe minimum floor.
 
 **Session fork** — hit the ↗ button next to any chat to create a full copy that shares the same Claude CLI session history. Branch your conversation at any point — explore alternative approaches without losing the original thread. Works on SSH hosts too.
@@ -177,7 +179,8 @@ Pair in 30 seconds (6-digit code from Settings). Your phone becomes a full remot
 - **Queue & monitor:** `/projects`, `/chats`, `/tasks`, `/chat`, `/new`
 - **See results:** `/last`, `/full` — plus push notifications when tasks finish or fail
 - **Manage:** `/files`, `/cat`, `/diff`, `/log`, `/stop`, `/tunnel`, `/url`
-- **Ask User forwarding:** Claude's mid-task questions appear as Telegram buttons — tap to answer
+- **Queue & interrupt while busy:** Send a message while Claude is working — it goes directly into the interrupt queue, not a dead-end "busy" reply. Claude picks it up at the next checkpoint. Attach files too.
+- **Ask User forwarding:** Claude's mid-task questions appear as Telegram buttons — tap to answer, or send a file/image as your answer
 - **Inline Stop:** 🛑 button on every progress message — one tap to cancel
 - **Session bridge:** Messages sync to both phone and browser simultaneously
 - **Multi-device:** Pair phone, tablet, laptop — all at once
@@ -309,11 +312,11 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook), session fork, rate limit auto-wait |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
-| **Telegram** | Bot control, push notifications, ask_user forwarding, session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU), Write button, file attachments |
+| **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU), Write button, file attachments, interrupt queue while busy |
 | **Delegation** | Cross-agent handoff/sync (Codex, Gemini, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
 | **Agents** | Single, Multi (2–5 in-chat), Dispatch (Kanban), auto-retry, cascade cancellation |
 | **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
