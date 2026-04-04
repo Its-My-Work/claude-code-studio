@@ -112,11 +112,12 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260329-fr1 | implement chat export/import feature: export session+messages as JSON, import creates new session with same messages as context | 2026-03-29 | 45ffdb1 | [260329-fr1-implement-chat-export-import-feature-exp](.planning/quick/260329-fr1-implement-chat-export-import-feature-exp/) |
+| 260404-qlq | hide interrupt pill for SSH project sessions | 2026-04-04 | 4e78d0d | [260404-qlq-hide-interrupt-pill-for-ssh-project-sess](.planning/quick/260404-qlq-hide-interrupt-pill-for-ssh-project-sess/) |
 
 ## Session Continuity
 
-Last activity: 2026-03-29 - Completed quick task 260329-fr1: implement chat export/import feature
+Last activity: 2026-04-04 - Completed quick task 260404-qlq: hide interrupt pill for SSH project sessions
 
-Last session: 2026-03-28T21:31:00Z
-Stopped at: Completed 04-01-PLAN.md (server encapsulation)
+Last session: 2026-04-04T13:52:00Z
+Stopped at: Completed quick task 260404-qlq
 Resume file: None
