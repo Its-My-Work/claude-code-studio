@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
 
 # Устанавливаем Claude Code CLI глобально
 RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g kilocode
 
 WORKDIR /app
 
