@@ -25,6 +25,7 @@ class KiloRunner {
       sessionId,
       format = 'json',
       auto = true,
+      configPath,
       abortController,
     } = options;
 
@@ -54,10 +55,19 @@ class KiloRunner {
       args.push('--session', sessionId);
     }
 
+    // Конфиг файл
+    if (configPath) {
+      args.push('--config', configPath);
+    }
+
+    // Логировать команду
+    console.log('[KILO] Running command:', this.kiloBin, args.join(' '));
+
     // Создать процесс
     const proc = spawn(this.kiloBin, args, {
       cwd: this.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env }, // Передать переменные окружения
     });
 
     // Обработчики событий
@@ -115,6 +125,7 @@ class KiloRunner {
     // Завершение процесса
     proc.on('close', (code) => {
       clearTimeout(timeoutHandle);
+      console.log('[KILO] Process exited with code:', code);
 
       if (handlers.onDone) {
         handlers.onDone(sessionIdFromOutput || sessionId);

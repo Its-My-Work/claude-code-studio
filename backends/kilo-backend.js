@@ -56,6 +56,7 @@ class KiloBackend extends AgentBackend {
       sessionId,
       format: 'json',
       auto: true,
+      configPath,
       abortController,
     });
 

@@ -69,6 +69,16 @@ class KiloConfig {
       config.model = this.mapModel(model);
     }
 
+    // API настройки
+    if (process.env.ANTHROPIC_BASE_URL) {
+      config.api = config.api || {};
+      config.api.base_url = process.env.ANTHROPIC_BASE_URL;
+    }
+    if (process.env.ANTHROPIC_AUTH_TOKEN) {
+      config.api = config.api || {};
+      config.api.api_key = process.env.ANTHROPIC_AUTH_TOKEN;
+    }
+
     // MCP серверы
     if (mcpServers && Object.keys(mcpServers).length > 0) {
       config.mcp = this.buildMcpConfig(mcpServers);
@@ -102,6 +112,7 @@ class KiloConfig {
       haiku: 'anthropic/claude-haiku-4.5',
       sonnet: 'anthropic/claude-sonnet-4-20250514',
       opus: 'anthropic/claude-opus-4.6',
+      'deepseek-chat': 'deepseek/deepseek-chat',
     };
 
     return modelMap[model] || model;
