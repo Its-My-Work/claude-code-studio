@@ -3508,6 +3508,31 @@ app.get('/api/health', (_, res) => {
   res.status(dbOk ? 200 : 503).json(payload);
 });
 
+// Models list based on AGENT_ENGINE
+app.get('/api/models', (req, res) => {
+  const engine = process.env.AGENT_ENGINE || 'claude';
+
+  if (engine === 'claude') {
+    // Static list for Claude
+    res.json(['haiku', 'sonnet', 'opus']);
+  } else if (engine === 'kilo') {
+    // Dynamic list from Kilo
+    try {
+      const { execSync } = require('child_process');
+      const output = execSync('kilo models', { encoding: 'utf-8' });
+      // Parse output - assume one model per line
+      const models = output.trim().split('\n').filter(line => line.trim());
+      res.json(models);
+    } catch (error) {
+      console.error('Error getting Kilo models:', error);
+      // Fallback to some default models
+      res.json(['anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-4', 'openai/gpt-4-turbo-preview']);
+    }
+  } else {
+    res.status(400).json({ error: 'Unknown agent engine' });
+  }
+});
+
 // Test endpoint to simulate Ask tool (for UI testing)
 // Stats
 app.get('/api/stats', (req, res) => {

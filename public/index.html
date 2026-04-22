@@ -2467,11 +2467,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.model">Model</div>
-        <div class="mob-sheet-chips">
-          <button class="mob-chip" data-mob="model" data-v="haiku" onclick="setMobOpt(this,'model')">Haiku</button>
-          <button class="mob-chip on" data-mob="model" data-v="sonnet" onclick="setMobOpt(this,'model')">Sonnet</button>
-          <button class="mob-chip" data-mob="model" data-v="opus" onclick="setMobOpt(this,'model')">Opus</button>
-        </div>
+        <div id="mob-model-chips" class="mob-sheet-chips"></div>
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
@@ -2595,9 +2591,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="tb-sep"></div>
     <div class="tb-group">
       <span class="label" data-i18n="tb.model">Модель</span>
-      <button class="tb-btn" data-v="haiku" onclick="setOpt(this,'model')">Haiku</button>
-      <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')">Sonnet</button>
-      <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')">Opus</button>
+      <div id="model-buttons-container"></div>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -3358,6 +3352,46 @@ let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
 let curMode = 'auto', curAgent = 'single', curModel = 'sonnet';
+let availableModels = ['haiku', 'sonnet', 'opus']; // default, will be loaded
+async function loadModels() {
+  try {
+    const res = await fetch('/api/models');
+    if (res.ok) {
+      availableModels = await res.json();
+      if (!availableModels.includes(curModel)) {
+        curModel = availableModels[0] || 'sonnet';
+      }
+      renderModelButtons();
+      renderMobModelChips();
+    }
+  } catch (e) {
+    console.error('Failed to load models:', e);
+  }
+}
+function renderModelButtons() {
+  const container = document.getElementById('model-buttons-container');
+  if (!availableModels.length) {
+    container.innerHTML = '<button class="tb-btn" disabled>Модели недоступны</button>';
+  } else {
+    container.innerHTML = availableModels.map(model => {
+      const displayName = model.split('/').pop() || model;
+      return `<button class="tb-btn${model === curModel ? ' on' : ''}" data-v="${model}" onclick="setOpt(this,'model')">${displayName}</button>`;
+    }).join('');
+  }
+}
+function renderMobModelChips() {
+  const container = document.getElementById('mob-model-chips');
+  if (!availableModels.length) {
+    container.innerHTML = '<button class="mob-chip" disabled>Модели недоступны</button>';
+  } else {
+    container.innerHTML = availableModels.map(model => {
+      const displayName = model.split('/').pop() || model;
+      return `<button class="mob-chip${model === curModel ? ' on' : ''}" data-mob="model" data-v="${model}" onclick="setMobOpt(this,'model')">${displayName}</button>`;
+    }).join('');
+  }
+}
+// Load models on page load
+loadModels();
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
 
@@ -4856,7 +4890,7 @@ function handleWsMsg(d) {
 
     case 'ui_state_change': {
       // Agent requested UI state update — validate before assigning to prevent invalid state
-      const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus'], _validAgents = ['single','multi','dispatch'];
+      const _validModes = ['auto','planning','task'], _validModels = availableModels, _validAgents = ['single','multi','dispatch'];
       if (d.mode && _validModes.includes(d.mode)) { curMode = d.mode; syncBtn('mode', d.mode); }
       if (d.model && _validModels.includes(d.model)) { curModel = d.model; syncBtn('model', d.model); }
       if (d.agent && _validAgents.includes(d.agent)) { curAgent = d.agent; syncBtn('agent', d.agent); }
@@ -7319,7 +7353,7 @@ function updateSessBarSkills() {
 }
 
 function syncBtn(group, val) {
-  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: ['haiku','sonnet','opus'] };
+  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: availableModels };
   if (!groups[group]?.includes(val)) return;
   // Sync desktop toolbar
   document.querySelectorAll('.tb-group .tb-btn').forEach(b => {

@@ -44,7 +44,6 @@ const SET_UI_STATE_TOOL = {
       },
       model: {
         type: 'string',
-        enum: ['haiku', 'sonnet', 'opus'],
         description: 'Model to switch to in the UI',
       },
       agent: {
