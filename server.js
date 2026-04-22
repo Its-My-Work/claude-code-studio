@@ -18,6 +18,7 @@ const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
 const TunnelManager = require('./tunnel-manager');
+const BackendFactory = require('./backends/backend-factory');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
@@ -2323,7 +2324,7 @@ async function runCliSingle(p) {
   // First invocation carries attachments; subsequent auto-continues do not
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
-  const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
+  const cli = BackendFactory.createBackend(process.env.AGENT_ENGINE, { cwd: workdir || WORKDIR });
   let pendingFork = !!forkSession; // only fork on first CLI call
 
   // Run a single CLI invocation and return { resultData, sid, errorText, rateLimitInfo }
@@ -5875,11 +5876,12 @@ function openTerminal(shellCommand) {
   if (platform === 'darwin') {
     // macOS — open Terminal.app via osascript
     // Write command to a temp script file to avoid shell/AppleScript escaping issues
-    const tmpScript = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}.sh`);
+    const tmpScript = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.sh`);
     fs.writeFileSync(tmpScript, `#!/bin/bash\n${shellCommand}\n`, { mode: 0o755 });
     const script = `tell application "Terminal"\n  activate\n  do script "${tmpScript}"\nend tell`;
     try {
-      spawnProc('osascript', ['-e', script], { detached: true, stdio: 'ignore' }).unref();
+      const p = spawnProc('osascript', ['-e', script], { detached: true, stdio: 'ignore' });
+      p.unref();
       setTimeout(() => { try { fs.unlinkSync(tmpScript); } catch {} }, 10000);
       return { ok: true };
     } catch (err) {
@@ -5888,10 +5890,11 @@ function openTerminal(shellCommand) {
     }
   } else if (platform === 'win32') {
     // Windows — write a .bat script and open it in a new cmd window
-    const tmpBat = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}.bat`);
+    const tmpBat = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.bat`);
     fs.writeFileSync(tmpBat, `@echo off\n${shellCommand}\n`);
     try {
-      spawnProc('cmd.exe', ['/c', 'start', 'Delegate', 'cmd.exe', '/k', tmpBat], { detached: true, stdio: 'ignore' }).unref();
+      const p = spawnProc('cmd.exe', ['/c', 'start', 'Delegate', 'cmd.exe', '/k', tmpBat], { detached: true, stdio: 'ignore' });
+      p.unref();
       setTimeout(() => { try { fs.unlinkSync(tmpBat); } catch {} }, 10000);
       return { ok: true };
     } catch (err) {
@@ -5903,7 +5906,8 @@ function openTerminal(shellCommand) {
     if (!process.env.DISPLAY) {
       // Headless mode (e.g., Docker): run directly without terminal
       try {
-        spawnProc('bash', ['-c', shellCommand], { detached: true, stdio: 'ignore' }).unref();
+        const p = spawnProc('bash', ['-c', shellCommand], { detached: true, stdio: 'ignore' });
+        p.unref();
         return { ok: true };
       } catch (err) {
         return { ok: false, error: err.message };
@@ -5913,7 +5917,8 @@ function openTerminal(shellCommand) {
       const terminals = ['gnome-terminal', 'xterm', 'konsole'];
       for (const term of terminals) {
         try {
-          spawnProc(term, ['--', 'bash', '-c', shellCommand], { detached: true, stdio: 'ignore' }).unref();
+          const p = spawnProc(term, ['--', 'bash', '-c', shellCommand], { detached: true, stdio: 'ignore' });
+          p.unref();
           return { ok: true };
         } catch { continue; }
       }
