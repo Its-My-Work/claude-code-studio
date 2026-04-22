@@ -5899,15 +5899,26 @@ function openTerminal(shellCommand) {
       return { ok: false, error: err.message };
     }
   } else {
-    // Linux — try common terminal emulators
-    const terminals = ['gnome-terminal', 'xterm', 'konsole'];
-    for (const term of terminals) {
+    // Linux: check for headless mode first
+    if (!process.env.DISPLAY) {
+      // Headless mode (e.g., Docker): run directly without terminal
       try {
-        spawnProc(term, ['--', 'bash', '-c', shellCommand], { detached: true, stdio: 'ignore' }).unref();
+        spawnProc('bash', ['-c', shellCommand], { detached: true, stdio: 'ignore' }).unref();
         return { ok: true };
-      } catch { continue; }
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    } else {
+      // GUI mode: try terminal emulators
+      const terminals = ['gnome-terminal', 'xterm', 'konsole'];
+      for (const term of terminals) {
+        try {
+          spawnProc(term, ['--', 'bash', '-c', shellCommand], { detached: true, stdio: 'ignore' }).unref();
+          return { ok: true };
+        } catch { continue; }
+      }
+      return { ok: false, error: 'No supported terminal emulator found' };
     }
-    return { ok: false, error: 'No supported terminal emulator found' };
   }
 }
 
