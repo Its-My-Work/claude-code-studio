@@ -2467,7 +2467,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.model">Model</div>
-        <div id="mob-model-chips" class="mob-sheet-chips"></div>
+        <input type="text" id="mob-model-input" class="mob-sheet-chips" list="mob-model-datalist" oninput="setMobOpt(this,'model')" autocomplete="off">
+        <datalist id="mob-model-datalist"></datalist>
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
@@ -2591,7 +2592,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="tb-sep"></div>
     <div class="tb-group">
       <span class="label" data-i18n="tb.model">Модель</span>
-      <div id="model-buttons-container"></div>
+      <input type="text" id="model-input" list="model-datalist" oninput="setOpt(this,'model')" autocomplete="off">
+      <datalist id="model-datalist"></datalist>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -3369,24 +3371,34 @@ async function loadModels() {
   }
 }
 function renderModelButtons() {
-  const container = document.getElementById('model-buttons-container');
+  const input = document.getElementById('model-input');
+  const datalist = document.getElementById('model-datalist');
   if (!availableModels.length) {
-    container.innerHTML = '<button class="tb-btn" disabled>Модели недоступны</button>';
+    input.disabled = true;
+    input.value = 'Модели недоступны';
+    datalist.innerHTML = '';
   } else {
-    container.innerHTML = availableModels.map(model => {
-      const displayName = model.split('/').pop() || model;
-      return `<button class="tb-btn${model === curModel ? ' on' : ''}" data-v="${model}" onclick="setOpt(this,'model')">${displayName}</button>`;
+    input.disabled = false;
+    input.value = curModel;
+    datalist.innerHTML = availableModels.map(model => {
+      const display = model.replace('/', ' / ');
+      return `<option value="${model}">${display}</option>`;
     }).join('');
   }
 }
 function renderMobModelChips() {
-  const container = document.getElementById('mob-model-chips');
+  const input = document.getElementById('mob-model-input');
+  const datalist = document.getElementById('mob-model-datalist');
   if (!availableModels.length) {
-    container.innerHTML = '<button class="mob-chip" disabled>Модели недоступны</button>';
+    input.disabled = true;
+    input.value = 'Модели недоступны';
+    datalist.innerHTML = '';
   } else {
-    container.innerHTML = availableModels.map(model => {
-      const displayName = model.split('/').pop() || model;
-      return `<button class="mob-chip${model === curModel ? ' on' : ''}" data-mob="model" data-v="${model}" onclick="setMobOpt(this,'model')">${displayName}</button>`;
+    input.disabled = false;
+    input.value = curModel;
+    datalist.innerHTML = availableModels.map(model => {
+      const display = model.replace('/', ' / ');
+      return `<option value="${model}">${display}</option>`;
     }).join('');
   }
 }
@@ -7301,10 +7313,16 @@ function applyMsgClamp(mw) {
 }
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────
-function setOpt(btn, group) {
-  btn.closest('.tb-group').querySelectorAll('.tb-btn').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on');
-  const v = btn.dataset.v;
+function setOpt(el, group) {
+  let v;
+  if (el.tagName === 'SELECT' || el.tagName === 'INPUT') {
+    v = el.value;
+  } else {
+    // button
+    el.closest('.tb-group').querySelectorAll('.tb-btn').forEach(b => b.classList.remove('on'));
+    el.classList.add('on');
+    v = el.dataset.v;
+  }
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') curModel = v;
@@ -11667,11 +11685,16 @@ function closeMobSheet() {
     setTimeout(() => { if (!overlay.classList.contains('open')) overlay.style.display = ''; }, 300);
   }
 }
-function setMobOpt(btn, group) {
-  // Update mobile chips
-  btn.closest('.mob-sheet-chips').querySelectorAll('.mob-chip').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on');
-  const v = btn.dataset.v;
+function setMobOpt(el, group) {
+  let v;
+  if (el.tagName === 'SELECT' || el.tagName === 'INPUT') {
+    v = el.value;
+  } else {
+    // button
+    el.closest('.mob-sheet-chips').querySelectorAll('.mob-chip').forEach(b => b.classList.remove('on'));
+    el.classList.add('on');
+    v = el.dataset.v;
+  }
   // Sync to desktop toolbar
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
