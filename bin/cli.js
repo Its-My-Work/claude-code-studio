@@ -19,7 +19,7 @@ const skillsDir = path.join(process.env.APP_DIR, 'skills');
 if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true });
 
 // Seed config.json from bundled template on first run (config.json is gitignored)
-const configDest = path.join(process.env.APP_DIR, 'config.json');
+const configDest = path.join(process.env.APP_DIR, 'data', 'config.json');
 if (!fs.existsSync(configDest)) {
   const template = path.join(__dirname, '..', 'config.example.json');
   if (fs.existsSync(template)) fs.copyFileSync(template, configDest);

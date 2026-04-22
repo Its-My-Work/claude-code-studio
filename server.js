@@ -73,7 +73,7 @@ const PORT = process.env.PORT || 3000;
 // data persists in the user's directory, not inside the npm cache.
 const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
-const CONFIG_PATH = path.join(APP_DIR, 'config.json');
+const CONFIG_PATH = path.join(APP_DIR, 'data', 'config.json');
 
 // ─── Security config ──────────────────────────────────────────────────────────
 // Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting)
@@ -4526,17 +4526,27 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
       // execSync would kill xterm after the timeout; spawnProc+unref lets it live.
       const safeWorkdir = workdir.replace(/'/g, "'\\''");
       fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
-      const termCandidates = [
-        ['gnome-terminal', ['--', 'bash', '-c', `${fullCmd}; exec bash`]],
-        ['xterm',          ['-e', 'bash', '-c', `${fullCmd}; exec bash`]],
-        ['konsole',        ['-e', 'bash', '-c', fullCmd]],
-      ];
-      for (const [cmd, args] of termCandidates) {
+      if (!process.env.DISPLAY) {
+        // Headless mode (e.g., Docker): run directly without terminal
         try {
-          const p = spawnProc(cmd, args, { detached: true, stdio: 'ignore' });
+          const p = spawnProc('bash', ['-c', fullCmd], { detached: true, stdio: 'ignore' });
           p.unref();
-          ok = true; break;
+          ok = true;
         } catch {}
+      } else {
+        // GUI mode: try terminal emulators
+        const termCandidates = [
+          ['gnome-terminal', ['--', 'bash', '-c', `${fullCmd}; exec bash`]],
+          ['xterm',          ['-e', 'bash', '-c', `${fullCmd}; exec bash`]],
+          ['konsole',        ['-e', 'bash', '-c', fullCmd]],
+        ];
+        for (const [cmd, args] of termCandidates) {
+          try {
+            const p = spawnProc(cmd, args, { detached: true, stdio: 'ignore' });
+            p.unref();
+            ok = true; break;
+          } catch {}
+        }
       }
     }
   } catch {}
