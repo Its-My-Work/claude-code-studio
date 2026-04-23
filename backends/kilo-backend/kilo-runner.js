@@ -25,7 +25,6 @@ class KiloRunner {
       sessionId,
       format = 'json',
       auto = true,
-      configPath,
       abortController,
     } = options;
 
@@ -55,19 +54,10 @@ class KiloRunner {
       args.push('--session', sessionId);
     }
 
-    // Конфиг файл
-    if (configPath) {
-      args.push('--config', configPath);
-    }
-
-    // Логировать команду
-    console.log('[KILO] Running command:', this.kiloBin, args.join(' '));
-
     // Создать процесс
     const proc = spawn(this.kiloBin, args, {
       cwd: this.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env }, // Передать переменные окружения
     });
 
     // Обработчики событий
@@ -125,7 +115,6 @@ class KiloRunner {
     // Завершение процесса
     proc.on('close', (code) => {
       clearTimeout(timeoutHandle);
-      console.log('[KILO] Process exited with code:', code);
 
       if (handlers.onDone) {
         handlers.onDone(sessionIdFromOutput || sessionId);
@@ -144,25 +133,34 @@ class KiloRunner {
     function handleJsonEvent(event) {
       if (!event || typeof event !== 'object') return;
 
-      // Текстовое событие
-      if (event.type === 'text' && event.content) {
+      // Извлечь sessionID из события
+      if (event.sessionID) {
+        sessionIdFromOutput = event.sessionID;
+        if (handlers.onSessionId) {
+          handlers.onSessionId(event.sessionID);
+        }
+      }
+
+      // Событие завершения шага - сигнал о том, что Kilo завершил обработку
+      if (event.type === 'step_finish' || event.type === 'step-finish') {
+        // Это сигнал завершения, вызываем onDone
+        if (handlers.onDone) {
+          handlers.onDone(sessionIdFromOutput || sessionId);
+        }
+        return;
+      }
+
+      // Текстовое событие - Kilo отправляет текст в event.part.text
+      if (event.type === 'text' && event.part && event.part.text) {
         if (handlers.onText) {
-          handlers.onText(event.content);
+          handlers.onText(event.part.text);
         }
       }
 
       // Событие инструмента
-      if (event.type === 'tool' && event.name) {
+      if (event.type === 'tool' && event.part && event.part.name) {
         if (handlers.onTool) {
-          handlers.onTool(event.name, event.input || '');
-        }
-      }
-
-      // ID сессии
-      if (event.sessionId) {
-        sessionIdFromOutput = event.sessionId;
-        if (handlers.onSessionId) {
-          handlers.onSessionId(event.sessionId);
+          handlers.onTool(event.part.name, event.part.input || '');
         }
       }
 

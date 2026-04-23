@@ -56,7 +56,6 @@ class KiloBackend extends AgentBackend {
       sessionId,
       format: 'json',
       auto: true,
-      configPath,
       abortController,
     });
 
@@ -64,64 +63,78 @@ class KiloBackend extends AgentBackend {
     let fullText = '';
     let fullError = '';
     let newSessionId = sessionId;
+    
+    // Хранилище для callbacks
+    const callbacks = {
+      onText: null,
+      onTool: null,
+      onError: null,
+      onDone: null,
+      onSessionId: null,
+      onResult: null,
+    };
 
-    // Обработка текста
+    // Регистрировать обработчики один раз
     kiloRunner.onText((text) => {
       fullText += text;
+      if (callbacks.onText) {
+        callbacks.onText(text);
+      }
     });
 
-    // Обработка инструментов
     kiloRunner.onTool((name, input) => {
-      // Преобразовать имя инструмента Kilo в Claude формат
-      const claudeToolName = this.mapToolName(name);
+      if (callbacks.onTool) {
+        callbacks.onTool(name, input);
+      }
     });
 
-    // Обработка ошибок
     kiloRunner.onError((error) => {
       fullError += error;
+      if (callbacks.onError) {
+        callbacks.onError(error);
+      }
     });
 
-    // Обработка ID сессии
     kiloRunner.onSessionId((sid) => {
       newSessionId = sid;
+      if (callbacks.onSessionId) {
+        callbacks.onSessionId(sid);
+      }
+    });
+
+    kiloRunner.onDone((sid) => {
+      if (sid) newSessionId = sid;
+      if (callbacks.onDone) {
+        callbacks.onDone(sid);
+      }
+      if (callbacks.onResult) {
+        callbacks.onResult({
+          subtype: 'success',
+          sessionId: sid,
+        });
+      }
     });
 
     // Вернуть объект совместимый с Claude интерфейсом
     return {
       onText(callback) {
-        // Перехватить текст и передать callback
-        const originalOnText = kiloRunner.onText;
-        kiloRunner.onText((text) => {
-          callback(text);
-        });
+        callbacks.onText = callback;
         return this;
       },
       onTool(callback) {
-        const originalOnTool = kiloRunner.onTool;
-        kiloRunner.onTool((name, input) => {
-          callback(name, input);
-        });
+        callbacks.onTool = callback;
         return this;
       },
       onError(callback) {
-        const originalOnError = kiloRunner.onError;
-        kiloRunner.onError((error) => {
-          callback(error);
-        });
+        callbacks.onError = callback;
         return this;
       },
       onDone(callback) {
-        const originalOnDone = kiloRunner.onDone;
-        kiloRunner.onDone((sid) => {
-          callback(sid);
-        });
+        callbacks.onDone = callback;
         return this;
       },
       onSessionId(callback) {
-        const originalOnSessionId = kiloRunner.onSessionId;
-        kiloRunner.onSessionId((sid) => {
-          callback(sid);
-        });
+        callbacks.onSessionId = callback;
         return this;
       },
       onThinking(callback) {
@@ -129,13 +142,7 @@ class KiloBackend extends AgentBackend {
         return this;
       },
       onResult(callback) {
-        const originalOnDone = kiloRunner.onDone;
-        kiloRunner.onDone((sid) => {
-          callback({
-            subtype: 'success',
-            sessionId: sid,
-          });
-        });
+        callbacks.onResult = callback;
         return this;
       },
       onRateLimit(callback) {
