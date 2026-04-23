@@ -63,6 +63,7 @@ class KiloBackend extends AgentBackend {
     let fullText = '';
     let fullError = '';
     let newSessionId = sessionId;
+    let resultData = null;
     
     // Хранилище для callbacks
     const callbacks = {
@@ -104,14 +105,16 @@ class KiloBackend extends AgentBackend {
 
     kiloRunner.onDone((sid) => {
       if (sid) newSessionId = sid;
-      if (callbacks.onDone) {
-        callbacks.onDone(sid);
-      }
-      if (callbacks.onResult) {
-        callbacks.onResult({
+      // Гарантировать, что onResult вызывается перед onDone
+      if (callbacks.onResult && !resultData) {
+        resultData = {
           subtype: 'success',
           sessionId: sid,
-        });
+        };
+        callbacks.onResult(resultData);
+      }
+      if (callbacks.onDone) {
+        callbacks.onDone(sid);
       }
     });
 

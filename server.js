@@ -275,12 +275,17 @@ function runDatabaseMaintenance() {
 // Bug: runMultiAgent fallback could store { cid, completed } objects or nested JSON
 // like {"cid":"{\"cid\":\"uuid\",\"completed\":true}","completed":false}
 // This helper recursively unwraps to find the actual UUID.
+// Also supports Anthropic API session_id format (ses_*) and Kilo session_id formats
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const ANTHROPIC_SESSION_RE = /^ses_[a-zA-Z0-9]+$/;
+const KILO_SESSION_RE = /^[a-zA-Z0-9_-]+$/;
 
 function sanitizeSessionId(val) {
   if (!val) return null;
   // Already a clean UUID
   if (typeof val === 'string' && UUID_RE.test(val)) return val;
+  // Anthropic API session_id format (ses_*)
+  if (typeof val === 'string' && ANTHROPIC_SESSION_RE.test(val)) return val;
   // Object with .cid field (from runCliSingle return value)
   if (typeof val === 'object' && val !== null && val.cid) return sanitizeSessionId(val.cid);
   // JSON string — try to parse and extract
@@ -292,6 +297,8 @@ function sanitizeSessionId(val) {
     // Maybe a UUID is embedded somewhere in the string
     const m = val.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
     if (m) return m[1];
+    // Try Anthropic session_id format
+    if (ANTHROPIC_SESSION_RE.test(val)) return val;
   }
   return null;
 }
@@ -2333,6 +2340,7 @@ async function runCliSingle(p) {
     let errorText = '';
     let rateLimitInfo = null;
     let _done = false;
+    let _resultReceived = false;
     const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText, rateLimitInfo }); } };
     const useFork = pendingFork; pendingFork = false;
 
@@ -2373,7 +2381,7 @@ async function runCliSingle(p) {
         try { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); } catch {}
         if (info && info.status === 'rejected') rateLimitInfo = info;
       })
-      .onResult(r => { resultData = r; })
+      .onResult(r => { resultData = r; _resultReceived = true; })
       .onError(err => {
         // Capture error text for the main loop to inspect (e.g. thinking block signature errors)
         errorText += err;
@@ -2383,6 +2391,10 @@ async function runCliSingle(p) {
       })
       .onDone(sid => {
         if (sid) newCid = sid;
+        // If onResult wasn't called, assume success (for backends that don't emit onResult)
+        if (!_resultReceived && !resultData) {
+          resultData = { subtype: 'success', sessionId: sid };
+        }
         _finish(newCid);
       });
   });
