@@ -103,6 +103,13 @@ class KiloBackend extends AgentBackend {
       }
     });
 
+    kiloRunner.onResult((result) => {
+      resultData = result;
+      if (callbacks.onResult) {
+        callbacks.onResult(result);
+      }
+    });
+
     kiloRunner.onDone((sid) => {
       if (sid) newSessionId = sid;
       // Гарантировать, что onResult вызывается перед onDone

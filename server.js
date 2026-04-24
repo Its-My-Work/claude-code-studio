@@ -2331,7 +2331,7 @@ async function runCliSingle(p) {
   // First invocation carries attachments; subsequent auto-continues do not
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
-  const cli = BackendFactory.createBackend(process.env.AGENT_ENGINE, { cwd: workdir || WORKDIR });
+    const cli = BackendFactory.createBackend(process.env.AGENT_ENGINE, { cwd: workdir || WORKDIR, logger: log });
   let pendingFork = !!forkSession; // only fork on first CLI call
 
   // Run a single CLI invocation and return { resultData, sid, errorText, rateLimitInfo }
@@ -2392,7 +2392,7 @@ async function runCliSingle(p) {
       .onDone(sid => {
         if (sid) newCid = sid;
         // If onResult wasn't called, assume success (for backends that don't emit onResult)
-        if (!_resultReceived && !resultData) {
+        if (!resultData) {
           resultData = { subtype: 'success', sessionId: sid };
         }
         _finish(newCid);
@@ -2408,6 +2408,7 @@ async function runCliSingle(p) {
     const hadOutputBeforeRateLimit = fullText.length > fullTextBefore;
     lastResult = resultData;
     totalCostUsd += resultData?.total_cost_usd || 0;
+    log.info('[cli] runOnce result', { subtype: resultData?.subtype, hasText: fullText.length > fullTextBefore, sessionId });
 
     // ✅ Success — agent finished naturally
     if (resultData?.subtype === 'success') break;
@@ -6515,6 +6516,7 @@ wss.on('connection', (ws) => {
 
       const _dic = proxy._deliveredInterruptCount || 0;
       proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(resultMeta ? { resultMeta } : {}), ...(_dic ? { deliveredInterruptCount: _dic } : {}) }));
+      log.info('[cli] sent done', { sessionId: localSessionId, tabId: effectiveTabId });
       proxy.send(JSON.stringify({ type:'files_changed' }));
       // Notify Telegram (if task was NOT started from Telegram — those get notified via TelegramProxy)
       if (telegramBot && telegramBot.isRunning()) {
