@@ -81,43 +81,8 @@ const MODEL_MAP = {
   'haiku':  'haiku',
 };
 
-// ─── CLI Version Detection: KiloCode vs Claude ───────────────────────────────
-let _cliVersionCache = null;
-
-/**
- * Detect CLI type (KiloCode or Claude) and available agents.
- * Returns { type: 'kilocode' | 'claude', agents: string[] }
- * Caches result to avoid repeated --version calls.
- */
-function detectCliVersion() {
-  if (_cliVersionCache) return _cliVersionCache;
-
-  let result = { type: 'claude', agents: [] };
-  try {
-    const out = execSync(`${CLAUDE_BIN} --version`, { 
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 5000,
-      encoding: 'utf-8'
-    }).trim();
-    
-    // KiloCode CLI outputs "kilo ..." or "kilocode ...", Claude outputs "claude ..."
-    if (out.toLowerCase().includes('kilo')) {
-      result.type = 'kilocode';
-      result.agents = ['code', 'ask', 'plan', 'debug', 'orchestrator'];
-    } else {
-      result.type = 'claude';
-      result.agents = [];
-    }
-  } catch (err) {
-    // On error, fall back to Claude mode (safe default)
-    console.warn('[claude-cli] CLI version detection failed, defaulting to claude mode:', err.message);
-    result.type = 'claude';
-    result.agents = [];
-  }
-
-  _cliVersionCache = result;
-  return result;
-}
+// ─── CLI Engine Detection: KiloCode vs Claude ───────────────────────────────
+// Uses AGENT_ENGINE env var instead of runtime detection
 
 // ─── MCP config file cache ──────────────────────────────────────────────────
 // Reuses temp files by content hash instead of creating/deleting per request.
@@ -182,13 +147,16 @@ class ClaudeCLI {
     }
 
     if (model) args.push('--model', MODEL_MAP[model] || model);
-    
-    // --agent: only for KiloCode CLI, maps mode to agent
-    // For KiloCode: mode is the agent name (code, ask, plan, debug, orchestrator)
-    // For Claude: mode is a planning hint (auto, planning, task) — not used in CLI
-    const cliVersion = detectCliVersion();
-    if (cliVersion.type === 'kilocode' && mode && cliVersion.agents.includes(mode)) {
-      args.push('--agent', mode);
+
+    // --agent: only for KiloCode CLI, passes mode as agent name
+    // AGENT_ENGINE determines CLI type instead of runtime detection
+    const engine = process.env.AGENT_ENGINE || 'claude';
+    if (engine === 'kilo' && mode) {
+      // Valid KiloCode agents: code, ask, plan, debug, orchestrator
+      const validAgents = ['code', 'ask', 'plan', 'debug', 'orchestrator'];
+      if (validAgents.includes(mode)) {
+        args.push('--agent', mode);
+      }
     }
     
     if (maxTurns) args.push('--max-turns', String(maxTurns));

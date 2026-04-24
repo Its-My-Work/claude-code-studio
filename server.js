@@ -2316,42 +2316,39 @@ function isResettableClaudeSessionError(errorText = '') {
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId } = p;
-  
-  // Build mode prompt: different handling for Claude (planning, task) vs KiloCode (agents)
-  // Claude modes: 'auto', 'planning', 'task' 
-  // KiloCode agents: 'code', 'ask', 'plan', 'debug', 'orchestrator' (passed via --agent flag)
+
+  // Build mode prompt: only for Claude CLI modes (planning, task)
+  // KiloCode agents handle their own prompts internally
+  const engine = process.env.AGENT_ENGINE || 'claude';
   let mp = '';
-  if (mode === 'planning') {
-    mp = 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n';
-  } else if (mode === 'task') {
-    mp = 'MODE: EXECUTION.\n\n';
-  } else if (mode === 'ask') {
-    // KiloCode 'ask' agent: read-only mode, limited tool access
-    mp = 'You are in ask mode. Provide helpful analysis and answers. Do not modify files or run commands unless absolutely necessary.\n\n';
-  } else if (mode === 'plan') {
-    // KiloCode 'plan' agent: planning-focused
-    mp = 'You are in plan mode. Analyze the task, create a detailed plan, but do not execute changes.\n\n';
-  } else if (mode === 'debug') {
-    // KiloCode 'debug' agent: debugging-focused
-    mp = 'You are in debug mode. Focus on identifying and diagnosing issues in the code.\n\n';
+  if (engine === 'claude') {
+    // Original Claude mode prompts (unchanged)
+    if (mode === 'planning') {
+      mp = 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n';
+    } else if (mode === 'task') {
+      mp = 'MODE: EXECUTION.\n\n';
+    }
+    // For 'auto' and other modes: no special prompt
   }
-  // For 'code' (default) and 'auto' (Claude default): no special prompt
-  
+  // For KiloCode: mode is passed via --agent flag, prompts are handled by KiloCode internally
+
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  
+
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
   const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
-  
-  // Tool availability depends on mode
-  // Claude planning/ask modes: read-only tools; execution modes: full tools
-  // KiloCode ask/plan modes: limited tools; code mode: full tools
+
+  // Tool availability depends on mode (only for Claude)
   const readOnlyTools = ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools];
   const executionTools = ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', ...mcpTools];
-  
+
   let tools;
-  if (mode === 'planning' || mode === 'ask' || mode === 'plan') {
-    tools = readOnlyTools;
+  if (engine === 'claude') {
+    // Original Claude logic (unchanged)
+    tools = mode === 'planning'
+      ? readOnlyTools
+      : executionTools;
   } else {
+    // For KiloCode: all agents get full tools (KiloCode handles restrictions internally)
     tools = executionTools;
   }
   const effectiveMaxTurns = maxTurns || 30;
@@ -2605,33 +2602,36 @@ async function runCliSingle(p) {
 // --- SSH Remote Agent ---
 async function runSshSingle(p) {
   const { prompt, userContent, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
-  
-  // Build mode prompt: same as CLI (supports both Claude modes and KiloCode agents)
+
+  // Build mode prompt: same as CLI (only for Claude, KiloCode handles internally)
+  const engine = process.env.AGENT_ENGINE || 'claude';
   let mp = '';
-  if (mode === 'planning') {
-    mp = 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n';
-  } else if (mode === 'task') {
-    mp = 'MODE: EXECUTION.\n\n';
-  } else if (mode === 'ask') {
-    mp = 'You are in ask mode. Provide helpful analysis and answers. Do not modify files or run commands unless absolutely necessary.\n\n';
-  } else if (mode === 'plan') {
-    mp = 'You are in plan mode. Analyze the task, create a detailed plan, but do not execute changes.\n\n';
-  } else if (mode === 'debug') {
-    mp = 'You are in debug mode. Focus on identifying and diagnosing issues in the code.\n\n';
+  if (engine === 'claude') {
+    // Original Claude mode prompts (unchanged)
+    if (mode === 'planning') {
+      mp = 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n';
+    } else if (mode === 'task') {
+      mp = 'MODE: EXECUTION.\n\n';
+    }
   }
-  
+  // For KiloCode: mode is passed via --agent flag, prompts are handled by KiloCode internally
+
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  
+
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
   const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
-  
+
   const readOnlyTools = ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools];
   const executionTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...mcpTools];
-  
+
   let tools;
-  if (mode === 'planning' || mode === 'ask' || mode === 'plan') {
-    tools = readOnlyTools;
+  if (engine === 'claude') {
+    // Original Claude logic (unchanged)
+    tools = mode === 'planning'
+      ? readOnlyTools
+      : executionTools;
   } else {
+    // For KiloCode: all agents get full tools (KiloCode handles restrictions internally)
     tools = executionTools;
   }
   const effectiveMaxTurns = maxTurns || 30;
@@ -3601,32 +3601,15 @@ app.get('/api/models', (req, res) => {
 
 // Detect CLI version (Claude vs KiloCode)
 app.get('/api/cli-version', (req, res) => {
-  const { execSync } = require('child_process');
-  const ClaudeCLI = require('./claude-cli');
-  
-  // Use the detectCliVersion function from claude-cli.js
-  // We'll call it through a temporary instance
-  try {
-    const cli = new ClaudeCLI();
-    const versionOutput = execSync(`${cli.claudeBin || 'claude'} --version`, {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 5000
-    }).trim();
-    
-    let type = 'claude';
-    let agents = [];
-    
-    if (versionOutput.toLowerCase().includes('kilo')) {
-      type = 'kilocode';
-      agents = ['code', 'ask', 'plan', 'debug', 'orchestrator'];
-    }
-    
-    res.json({ type, agents });
-  } catch (error) {
-    // On error, default to Claude mode
-    log.warn('[cli-version] detection failed, defaulting to claude:', error.message);
-    res.json({ type: 'claude', agents: [] });
+  const engine = process.env.AGENT_ENGINE || 'claude';
+
+  if (engine === 'claude') {
+    res.json({ type: 'claude', agents: ['auto', 'planning', 'task'] });
+  } else if (engine === 'kilo') {
+    // KiloCode agents as documented
+    res.json({ type: 'kilocode', agents: ['code', 'ask', 'plan', 'debug', 'orchestrator'] });
+  } else {
+    res.status(400).json({ error: 'Unknown agent engine' });
   }
 });
 
