@@ -3355,6 +3355,33 @@ let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
 let curMode = 'auto', curAgent = 'single', curModel = 'sonnet';
 let availableModels = ['haiku', 'sonnet', 'opus']; // default, will be loaded
+let cliType = 'claude'; // 'claude' or 'kilocode'
+let availableModes = ['auto', 'planning', 'task']; // default Claude modes
+
+async function detectCliVersion() {
+  try {
+    const res = await fetch('/api/cli-version');
+    if (res.ok) {
+      const data = await res.json();
+      cliType = data.type || 'claude';
+      availableModes = data.agents && data.agents.length > 0 
+        ? data.agents 
+        : ['auto', 'planning', 'task'];
+      // Reset mode to first available if current is not available
+      if (!availableModes.includes(curMode)) {
+        curMode = availableModes[0];
+      }
+      renderModeButtons();
+      renderMobModeChips();
+    }
+  } catch (e) {
+    console.error('Failed to detect CLI version:', e);
+    // Fall back to Claude mode on error
+    cliType = 'claude';
+    availableModes = ['auto', 'planning', 'task'];
+  }
+}
+
 async function loadModels() {
   try {
     const res = await fetch('/api/models');
@@ -3402,7 +3429,66 @@ function renderMobModelChips() {
     }).join('');
   }
 }
-// Load models on page load
+
+// Mode label mappings for UI
+const modeLabels = {
+  // Claude modes
+  'auto': 'Auto',
+  'planning': 'Plan',
+  'task': 'Task',
+  // KiloCode agents
+  'code': 'Code',
+  'ask': 'Ask',
+  'plan': 'Architect',
+  'debug': 'Debug',
+  'orchestrator': 'Orchestrator'
+};
+
+function renderModeButtons() {
+  const container = document.querySelector('.tb-group:has(>span[data-i18n="tb.mode"])');
+  if (!container) return;
+  
+  // Remove old mode buttons (keep the label and separator)
+  const label = container.querySelector('span[data-i18n="tb.mode"]');
+  const buttons = container.querySelectorAll('.tb-btn');
+  buttons.forEach(btn => btn.remove());
+  
+  // Add new mode buttons
+  for (const mode of availableModes) {
+    const btn = document.createElement('button');
+    btn.className = 'tb-btn' + (mode === curMode ? ' on' : '');
+    btn.setAttribute('data-v', mode);
+    btn.textContent = modeLabels[mode] || mode;
+    btn.onclick = function() { setOpt(this, 'mode'); };
+    container.appendChild(btn);
+  }
+}
+
+function renderMobModeChips() {
+  const container = document.querySelector('.mob-sheet-chips:has(button[data-v="auto"][data-mob="mode"])');
+  if (!container) {
+    // Container doesn't exist yet, will be rendered on first sheet open
+    return;
+  }
+  
+  // Remove old chips
+  const chips = container.querySelectorAll('.mob-chip[data-mob="mode"]');
+  chips.forEach(chip => chip.remove());
+  
+  // Add new chips
+  for (const mode of availableModes) {
+    const chip = document.createElement('button');
+    chip.className = 'mob-chip' + (mode === curMode ? ' on' : '');
+    chip.setAttribute('data-mob', 'mode');
+    chip.setAttribute('data-v', mode);
+    chip.textContent = modeLabels[mode] || mode;
+    chip.onclick = function() { setMobOpt(this, 'mode'); };
+    container.appendChild(chip);
+  }
+}
+
+// Load models and detect CLI version on page load
+detectCliVersion();
 loadModels();
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
@@ -4902,7 +4988,7 @@ function handleWsMsg(d) {
 
     case 'ui_state_change': {
       // Agent requested UI state update — validate before assigning to prevent invalid state
-      const _validModes = ['auto','planning','task'], _validModels = availableModels, _validAgents = ['single','multi','dispatch'];
+      const _validModes = availableModes, _validModels = availableModels, _validAgents = ['single','multi','dispatch'];
       if (d.mode && _validModes.includes(d.mode)) { curMode = d.mode; syncBtn('mode', d.mode); }
       if (d.model && _validModels.includes(d.model)) { curModel = d.model; syncBtn('model', d.model); }
       if (d.agent && _validAgents.includes(d.agent)) { curAgent = d.agent; syncBtn('agent', d.agent); }
@@ -11704,6 +11790,9 @@ function setMobOpt(el, group) {
   saveUIState();
 }
 function syncMobSheetFromDesktop() {
+  // Recreate mode chips if available modes changed
+  renderMobModeChips();
+  
   // Sync mob chips from current state
   document.querySelectorAll('.mob-chip[data-mob]').forEach(chip => {
     const group = chip.dataset.mob;
@@ -11739,7 +11828,7 @@ function updateMobTitle() {
 function updateMobSubtitle() {
   const el = $i('mobSubtitle');
   if (!el) return;
-  const modeLabel = { auto: 'Auto', planning: 'Plan', task: 'Task' }[curMode] || curMode;
+  const modeLabel = modeLabels[curMode] || curMode;
   const modelLabel = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' }[curModel] || curModel;
   el.textContent = modeLabel + ' · ' + modelLabel;
 }

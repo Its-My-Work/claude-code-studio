@@ -81,6 +81,44 @@ const MODEL_MAP = {
   'haiku':  'haiku',
 };
 
+// ─── CLI Version Detection: KiloCode vs Claude ───────────────────────────────
+let _cliVersionCache = null;
+
+/**
+ * Detect CLI type (KiloCode or Claude) and available agents.
+ * Returns { type: 'kilocode' | 'claude', agents: string[] }
+ * Caches result to avoid repeated --version calls.
+ */
+function detectCliVersion() {
+  if (_cliVersionCache) return _cliVersionCache;
+
+  let result = { type: 'claude', agents: [] };
+  try {
+    const out = execSync(`${CLAUDE_BIN} --version`, { 
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000,
+      encoding: 'utf-8'
+    }).trim();
+    
+    // KiloCode CLI outputs "kilo ..." or "kilocode ...", Claude outputs "claude ..."
+    if (out.toLowerCase().includes('kilo')) {
+      result.type = 'kilocode';
+      result.agents = ['code', 'ask', 'plan', 'debug', 'orchestrator'];
+    } else {
+      result.type = 'claude';
+      result.agents = [];
+    }
+  } catch (err) {
+    // On error, fall back to Claude mode (safe default)
+    console.warn('[claude-cli] CLI version detection failed, defaulting to claude mode:', err.message);
+    result.type = 'claude';
+    result.agents = [];
+  }
+
+  _cliVersionCache = result;
+  return result;
+}
+
 // ─── MCP config file cache ──────────────────────────────────────────────────
 // Reuses temp files by content hash instead of creating/deleting per request.
 // Key: SHA-256 hash of JSON content → { path, refCount }
@@ -125,7 +163,7 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, mode }) {
     const args = ['--print'];
 
     // --setting-sources: control which setting sources to load (user, project, local)
@@ -144,6 +182,15 @@ class ClaudeCLI {
     }
 
     if (model) args.push('--model', MODEL_MAP[model] || model);
+    
+    // --agent: only for KiloCode CLI, maps mode to agent
+    // For KiloCode: mode is the agent name (code, ask, plan, debug, orchestrator)
+    // For Claude: mode is a planning hint (auto, planning, task) — not used in CLI
+    const cliVersion = detectCliVersion();
+    if (cliVersion.type === 'kilocode' && mode && cliVersion.agents.includes(mode)) {
+      args.push('--agent', mode);
+    }
+    
     if (maxTurns) args.push('--max-turns', String(maxTurns));
     // Don't pass --system-prompt when resuming a session — the system prompt is
     // already baked into the session history. Changing it invalidates cryptographic
