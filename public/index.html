@@ -2457,7 +2457,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <button class="mob-chip" data-mob="mode" data-v="task" onclick="setMobOpt(this,'mode')">Task</button>
         </div>
       </div>
-      <div class="mob-sheet-section">
+      <div class="mob-sheet-section" id="mobAgentModeSection">
         <div class="mob-sheet-label" data-i18n="tb.agent">Agent</div>
         <div class="mob-sheet-chips">
           <button class="mob-chip on" data-mob="agent" data-v="single" onclick="setMobOpt(this,'agent')">Single</button>
@@ -2583,7 +2583,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <button class="tb-btn" data-v="task" onclick="setOpt(this,'mode')">Task</button>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-group">
+    <div class="tb-group" id="agentModeGroup">
       <span class="label" data-i18n="tb.agent">Агент</span>
       <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')">Single</button>
       <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')">Multi</button>
@@ -3373,12 +3373,36 @@ async function detectCliVersion() {
       }
       renderModeButtons();
       renderMobModeChips();
+      updateAgentModeVisibility();
     }
   } catch (e) {
     console.error('Failed to detect CLI version:', e);
     // Fall back to Claude mode on error
     cliType = 'claude';
     availableModes = ['auto', 'planning', 'task'];
+    updateAgentModeVisibility();
+  }
+}
+
+function updateAgentModeVisibility() {
+  // Hide Agent Mode block (Single/Multi/Dispatch) when using KiloCode
+  // because KiloCode has built-in multi-agent support via 'orchestrator' mode
+  const desktopGroup = document.getElementById('agentModeGroup');
+  const mobileSection = document.getElementById('mobAgentModeSection');
+  
+  if (cliType === 'kilocode') {
+    // Hide agent mode for KiloCode
+    if (desktopGroup) desktopGroup.style.display = 'none';
+    if (mobileSection) mobileSection.style.display = 'none';
+    // Also hide separator after agent group (if it exists)
+    const sep = desktopGroup?.nextElementSibling;
+    if (sep && sep.classList.contains('tb-sep')) sep.style.display = 'none';
+  } else {
+    // Show agent mode for Claude
+    if (desktopGroup) desktopGroup.style.display = '';
+    if (mobileSection) mobileSection.style.display = '';
+    const sep = desktopGroup?.nextElementSibling;
+    if (sep && sep.classList.contains('tb-sep')) sep.style.display = '';
   }
 }
 
