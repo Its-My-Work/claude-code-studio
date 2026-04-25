@@ -2470,7 +2470,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <input type="text" id="mob-model-input" class="mob-sheet-chips" list="mob-model-datalist" oninput="setMobOpt(this,'model')" autocomplete="off">
         <datalist id="mob-model-datalist"></datalist>
       </div>
-      <div class="mob-sheet-section">
+      <div class="mob-sheet-section" id="mobTurnsSection">
         <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
         <div class="mob-sheet-turns">
           <input type="number" id="mobMaxTurns" value="50" min="1" max="200">
@@ -2596,7 +2596,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <datalist id="model-datalist"></datalist>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-group">
+    <div class="tb-group" id="turnsGroup">
       <span class="label" data-i18n="tb.turns">Кроки</span>
       <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200">
     </div>
@@ -3389,7 +3389,11 @@ function updateAgentModeVisibility() {
   // because KiloCode has built-in multi-agent support via 'orchestrator' mode
   const desktopGroup = document.getElementById('agentModeGroup');
   const mobileSection = document.getElementById('mobAgentModeSection');
-  
+
+  // Hide Turns block when using KiloCode
+  const turnsGroup = document.getElementById('turnsGroup');
+  const mobTurnsSection = document.getElementById('mobTurnsSection');
+
   if (cliType === 'kilocode') {
     // Hide agent mode for KiloCode
     if (desktopGroup) desktopGroup.style.display = 'none';
@@ -3397,12 +3401,26 @@ function updateAgentModeVisibility() {
     // Also hide separator after agent group (if it exists)
     const sep = desktopGroup?.nextElementSibling;
     if (sep && sep.classList.contains('tb-sep')) sep.style.display = 'none';
+
+    // Hide turns group for KiloCode
+    if (turnsGroup) turnsGroup.style.display = 'none';
+    if (mobTurnsSection) mobTurnsSection.style.display = 'none';
+    // Also hide separator before turns group (if it exists)
+    const turnsSep = turnsGroup?.previousElementSibling;
+    if (turnsSep && turnsSep.classList.contains('tb-sep')) turnsSep.style.display = 'none';
   } else {
     // Show agent mode for Claude
     if (desktopGroup) desktopGroup.style.display = '';
     if (mobileSection) mobileSection.style.display = '';
     const sep = desktopGroup?.nextElementSibling;
     if (sep && sep.classList.contains('tb-sep')) sep.style.display = '';
+
+    // Show turns group for Claude
+    if (turnsGroup) turnsGroup.style.display = '';
+    if (mobTurnsSection) mobTurnsSection.style.display = '';
+    // Show separator before turns group (if it exists)
+    const turnsSep = turnsGroup?.previousElementSibling;
+    if (turnsSep && turnsSep.classList.contains('tb-sep')) turnsSep.style.display = '';
   }
 }
 
