@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -302,19 +302,19 @@ button{font-family:inherit;cursor:pointer}
     <nav class="nav-sw" aria-label="Навігація між розділами">
       <a class="nav-sw-btn" href="/" data-tip="Чат">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        Chat
+        <span data-i18n="nav.chat">Chat</span>
       </a>
       <a class="nav-sw-btn" href="/kanban" data-tip="Kanban дошка">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
-        Kanban
+        <span data-i18n="nav.kanban">Kanban</span>
       </a>
       <a class="nav-sw-btn active" href="/schedule" data-tip="Розклад завдань">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Schedule
+        <span data-i18n="nav.schedule">Schedule</span>
       </a>
       <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-        Dashboard
+        <span data-i18n="nav.dashboard">Dashboard</span>
       </a>
     </nav>
     <div class="hdr-meta">
@@ -403,58 +403,8 @@ button{font-family:inherit;cursor:pointer}
 
 <script>
 // ─── i18n ─────────────────────────────────────────────────────────────────
-const lang = localStorage.getItem('lang') || 'uk';
+const lang = localStorage.getItem('lang') || 'ru';
 const TR = {
-  uk: {
-    'page.title': 'Розклад — Claude Code Studio',
-    'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
-    'nav.aria': 'Навігація між розділами',
-    'hdr.add': 'Задача', 'hdr.refresh': 'Оновити', 'hdr.connected': 'Підключено', 'hdr.disconnected': 'Відключено',
-    'proj.all': 'Всі проекти', 'proj.search': 'Пошук…', 'proj.noname': 'Без проекту',
-    'stat.overdue': 'прострочено', 'stat.today': 'сьогодні',
-    'stat.upcoming': 'заплановано', 'stat.recurring': 'повторюваних',
-    'recur.hourly': 'Щогодини', 'recur.daily': 'Щодня',
-    'recur.weekly': 'Щотижня', 'recur.monthly': 'Щомісяця',
-    'time.in': 'за ', 'time.min': ' хв', 'time.hr': ' г', 'time.day': ' д',
-    'sec.overdue': 'Прострочено', 'sec.overdue.rel': 'Прострочено',
-    'sec.today.rel': 'Сьогодні', 'sec.tomorrow.rel': 'Завтра',
-    'sec.this_week': 'Цього тижня', 'sec.this_week.rel': 'Найближчі дні',
-    'sec.later': 'Пізніше', 'sec.later.rel': 'Далекі плани',
-    'sec.recur': 'Повторювані', 'sec.recur.rel': 'Без фіксованої дати',
-    'status.backlog': 'Backlog', 'status.todo': 'Todo',
-    'status.in_progress': 'Виконується', 'status.done': 'Готово', 'status.cancelled': 'Скасовано',
-    'card.running': 'Виконується', 'card.run_now': 'Run now',
-    'card.run_now.title': 'Запустити зараз', 'card.edit.title': 'Редагувати',
-    'empty.title': 'Жодних запланованих завдань',
-    'empty.sub': 'Заплануйте перше завдання — Claude запустить його автоматично у вказаний час.',
-    'empty.cta': 'Запланувати завдання',
-    'modal.add': 'Нове завдання з розкладом', 'modal.edit': 'Редагувати завдання',
-    'form.title': 'Назва *', 'form.title.ph': 'Що має зробити Claude?',
-    'form.date': 'Дата та час запуску', 'form.date.hint': 'Залиште порожнім для завдання без дати',
-    'form.recur': 'Повторення', 'form.recur.hint': 'Claude буде запускатись автоматично',
-    'form.recur.once': '— одноразово —',
-    'form.recur.end': 'Кінець повторень',
-    'form.recur.end.hint': "Необов'язково — якщо не вказано, повторюється безкінечно",
-    'form.desc': 'Опис', 'form.desc.ph': 'Детальний опис завдання для Claude…',
-    'form.session': "Пов'язана сесія", 'form.session.hint': 'Claude відновить цю сесію',
-    'form.no_session': '— без сесії —',
-    'form.model': 'Модель',
-    'form.model.sonnet': 'Sonnet (за замовч.)', 'form.model.haiku': 'Haiku (швидший)', 'form.model.opus': 'Opus (найпотужніший)',
-    'btn.cancel': 'Скасувати', 'btn.create': 'Створити', 'btn.save': 'Зберегти', 'btn.delete': 'Видалити',
-    'toast.queued': 'Завдання передано у чергу', 'toast.scheduled': 'Завдання заплановано',
-    'toast.saved': 'Збережено', 'toast.deleted': 'Завдання видалено',
-    'toast.err.title': 'Введіть назву завдання',
-    'toast.no_project': 'Спочатку оберіть проєкт',
-    'toast.err.load': 'Помилка завантаження: ', 'toast.err': 'Помилка: ',
-    'confirm.delete': 'Видалити завдання? Цю дію не можна скасувати.',
-    'tasks.count': '{n} завдань', 'tasks.count.1': '{n} завдання', 'tasks.count.few': '{n} завдання',
-    'form.exec': 'Параметри виконання',
-    'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
-    'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки',
-    'group.badge': 'група', 'group.progress': '{done}/{total}',
-    'group.run_now': 'Запустити групу',
-    'locale': 'uk',
-  },
   en: {
     'page.title': 'Schedule — Claude Code Studio',
     'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
@@ -1316,9 +1266,6 @@ function startAutoRefresh() {
 function applyStaticI18n() {
   document.title = t('page.title');
   document.querySelector('.nav-sw')?.setAttribute('aria-label', t('nav.aria'));
-  document.querySelector('a.nav-sw-btn[href="/"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.chat'); });
-  document.querySelector('a.nav-sw-btn[href="/kanban"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.kanban'); });
-  document.querySelector('a.nav-sw-btn[href="/schedule"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.schedule'); });
   document.querySelector('.hb[onclick="refresh()"]')?.setAttribute('title', t('hdr.refresh'));
   const addLbl = $i('addBtnLabel'); if (addLbl) addLbl.textContent = t('hdr.add');
   const lo = $i('lblStatOverdue'); if (lo) lo.textContent = ' ' + t('stat.overdue');

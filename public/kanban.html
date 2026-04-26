@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -361,19 +361,19 @@ textarea.inp{ resize:vertical; min-height:80px; }
     <nav class="nav-sw" aria-label="Навігація між розділами">
       <a class="nav-sw-btn" href="/" data-tip="Чат">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        Chat
+        <span data-i18n="nav.chat">Chat</span>
       </a>
       <a class="nav-sw-btn active" href="/kanban" data-tip="Kanban дошка">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
-        Kanban
+        <span data-i18n="nav.kanban">Kanban</span>
       </a>
       <a class="nav-sw-btn" href="/schedule" data-tip="Розклад завдань">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Schedule
+        <span data-i18n="nav.schedule">Schedule</span>
       </a>
       <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-        Dashboard
+        <span data-i18n="nav.dashboard">Dashboard</span>
       </a>
     </nav>
     <div class="hdr-meta">
@@ -448,42 +448,6 @@ textarea.inp{ resize:vertical; min-height:80px; }
 <script>
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TR = {
-  uk: {
-    'hdr.title':'Kanban','hdr.add':'Завдання',
-    'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
-    'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
-    'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає завдань',
-    'modal.add':'Нове завдання','modal.edit':'Редагувати завдання',
-    'modal.name':'Назва *','modal.status':'Статус','modal.session':"Пов'язана сесія",
-    'modal.no_session':'— без сесії —','modal.new_session':'➕ Нова сесія',
-    'modal.desc':'Опис','modal.notes':'Нотатки',
-    'modal.attach':'Вкладення','modal.attach_hint':'Клікніть, перетягніть або вставте (Ctrl+V)','modal.attach_max':'Максимум 10 файлів на завдання',
-    'modal.create':'Створити','modal.save':'Зберегти','modal.cancel':'Скасувати',
-    'modal.delete':'Видалити',
-    'confirm.title':'Видалити завдання?','confirm.body':'Ця дія незворотна.',
-    'confirm.ok':'Видалити','confirm.cancel':'Скасувати',
-    'chat.title':'Чат сесії','chat.empty':'Немає повідомлень','chat.open':'↗ Відкрити в чаті',
-    'toast.created':'✓ Завдання створено','toast.saved':'✓ Збережено',
-    'toast.deleted':'Завдання видалено','toast.copied':'✓ ID скопійовано',
-    'toast.sess_created':'✓ Сесію створено автоматично','toast.err':'Помилка: ',
-    'toast.no_project':'Спочатку оберіть проект',
-    'modal.new_sess_cfg':'Налаштування нової сесії',
-    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки','tb.engine':'Двигун',
-    'card.running':'Виконується','msg.you':'Ви','msg.tool':'Tool','refresh.now':'щойно',
-    'card.retry':'↩ повтор',
-    'time.min':'хв','time.hr':'г','time.day':'д',
-    'hdr.connected':'Підключено',
-    'card.sess_fallback':'сесія','card.retry_tooltip':'повтор(ів)','chat.copy_id':'Клікніть для копіювання',
-    'nav.chat':'Чат','nav.kanban':'Kanban дошка','nav.aria':'Навігація між розділами',
-    'stat.total':'всього',
-    'card.sched_tip':'Чекає запуску:','modal.sched_wait':'Чекає запуску:','locale':'uk-UA',
-    'hdr.group':'Група','group.add':'Нова група','group.edit':'Редагувати групу',
-    'group.title':'Назва групи *','group.tasks':'Завдання','group.add_task':'+ Додати завдання',
-    'group.empty':'Додайте завдання до групи','group.activate':'Запустити',
-    'group.delete':'Видалити групу?','group.delete_body':'Буде видалено групу та всі її завдання.',
-    'group.created':'✓ Групу створено','group.saved':'✓ Групу збережено','group.task_added':'✓ Завдання додано',
-    'group.edit_task':'Редагувати завдання','group.task_saved':'✓ Завдання збережено',
-  },
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.search':'Search project...','search.empty':'Not found',
@@ -557,7 +521,7 @@ const TR = {
     'group.edit_task':'Редактировать задание','group.task_saved':'✓ Задание сохранено',
   },
 };
-const lang = localStorage.getItem('lang') || 'uk';
+const lang = localStorage.getItem('lang') || 'ru';
 function t(k){ return (TR[lang]||TR.uk)[k] || k; }
 
 document.title = t('hdr.title') + ' — Claude Code Studio';
@@ -568,6 +532,9 @@ document.getElementById('cancelBtn').textContent=t('confirm.cancel');
 document.querySelector('.nav-sw').setAttribute('aria-label', t('nav.aria'));
 document.querySelector('a.nav-sw-btn[href="/"]').setAttribute('data-tip', t('nav.chat'));
 document.querySelector('a.nav-sw-btn[href="/kanban"]').setAttribute('data-tip', t('nav.kanban'));
+document.querySelector('a.nav-sw-btn[href="/schedule"]').setAttribute('data-tip', t('nav.schedule'));
+document.querySelector('a.nav-sw-btn[href="/dashboard"]').setAttribute('data-tip', t('nav.dashboard'));
+document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.getAttribute('data-i18n')));
 document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 
 // ─── State ────────────────────────────────────────────────────────────────

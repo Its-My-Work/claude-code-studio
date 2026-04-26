@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -211,6 +211,115 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .proj-dd-item.active .proj-dd-item-name { color: var(--accent2); }
 .proj-dd-item.active .proj-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; flex-shrink: 0; }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* ─── Model dropdown ─── */
+.model-dd-wrap { position: relative; display: inline-block; }
+#modelDdPortal { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 2000; }
+.model-dd-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--accent2);
+  background: linear-gradient(135deg, rgba(124,106,239,.15) 0%, rgba(124,106,239,.08) 100%);
+  border: 1px solid rgba(124,106,239,.35);
+  border-radius: 8px; padding: 6px 14px; cursor: pointer;
+  max-width: 200px; transition: all .2s ease; font-family: inherit;
+  box-shadow: 0 2px 8px rgba(124,106,239,.12);
+}
+.model-dd-btn:hover {
+  background: linear-gradient(135deg, rgba(124,106,239,.22) 0%, rgba(124,106,239,.12) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(124,106,239,.2);
+  transform: translateY(-1px);
+}
+.model-dd-btn.open {
+  background: linear-gradient(135deg, rgba(124,106,239,.25) 0%, rgba(124,106,239,.15) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(124,106,239,.25);
+}
+.model-dd-btn .model-dd-icon { font-size: 14px; flex-shrink: 0; }
+.model-dd-btn .model-dd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-dd-btn .model-dd-arrow { font-size: 10px; opacity: .6; transition: transform .2s; flex-shrink: 0; }
+.model-dd-btn.open .model-dd-arrow { transform: rotate(180deg); opacity: 1; }
+.model-dd-menu {
+  position: fixed;
+  min-width: 250px; max-width: 350px; max-height: 300px;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.35), 0 0 0 1px rgba(124,106,239,.1);
+  z-index: 2001; opacity: 0; visibility: hidden;
+  transform: scale(.95); transition: all .2s var(--ease-out);
+  overflow: hidden;
+  pointer-events: none;
+}
+.model-dd-menu.open {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.model-dd-search { padding: 12px; border-bottom: 1px solid var(--border); background: rgba(124,106,239,.05); }
+.model-dd-search input {
+  width: 100%; background: var(--s3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text);
+  outline: none; font-family: inherit; transition: border-color .15s, box-shadow .15s;
+}
+.model-dd-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.model-dd-list { max-height: 280px; overflow-y: auto; padding: 6px 0; scrollbar-width: thin; }
+.model-dd-list::-webkit-scrollbar { width: 6px; }
+.model-dd-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.model-dd-list::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.model-dd-item {
+  position: relative;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 16px; cursor: pointer; transition: background .12s;
+  border-left: 3px solid transparent;
+}
+.model-dd-item:hover { background: var(--s3); }
+.model-dd-item.active {
+  background: rgba(124,106,239,.1);
+  border-left-color: var(--accent);
+}
+.model-dd-item .model-dd-item-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.model-dd-item.active .model-dd-item-name { color: var(--accent2); }
+.model-dd-item.active .model-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; margin-right: 6px; }
+.model-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* ─── Mobile model dropdown ─── */
+.mob-model-dd-wrap { position: relative; }
+.mob-model-dd-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: var(--s2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 16px; cursor: pointer; transition: border-color .15s;
+}
+.mob-model-dd-btn:hover { border-color: var(--accent); }
+.mob-model-dd-btn .mob-model-dd-icon { font-size: 16px; flex-shrink: 0; }
+.mob-model-dd-btn .mob-model-dd-name { flex: 1; font-weight: 600; }
+.mob-model-dd-btn .mob-model-dd-arrow { font-size: 12px; opacity: .6; transition: transform .2s; }
+.mob-model-dd-btn.open .mob-model-dd-arrow { transform: rotate(180deg); opacity: 1; }
+.mob-model-dd-menu {
+  margin-top: 8px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; opacity: 0; visibility: hidden;
+  transform: translateY(-4px); transition: all .2s var(--ease-out);
+  z-index: 2000; position: relative;
+}
+.mob-model-dd-menu.open { opacity: 1; visibility: visible; transform: translateY(0); }
+.mob-model-dd-search { padding: 12px; border-bottom: 1px solid var(--border); background: rgba(124,106,239,.05); }
+.mob-model-dd-search input {
+  width: 100%; background: var(--s3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 12px; font-size: 13px; color: var(--text);
+  outline: none; font-family: inherit; transition: border-color .15s;
+}
+.mob-model-dd-search input:focus { border-color: var(--accent); }
+.mob-model-dd-list { max-height: 240px; overflow-y: auto; }
+.mob-model-dd-item {
+  padding: 12px 16px; cursor: pointer; transition: background .12s;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.mob-model-dd-item:last-child { border-bottom: none; }
+.mob-model-dd-item:hover { background: var(--s3); }
+.mob-model-dd-item.active { background: rgba(124,106,239,.1); }
+.mob-model-dd-item .mob-model-dd-item-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.mob-model-dd-item.active .mob-model-dd-item-name { color: var(--accent2); }
+.mob-model-dd-item.active .mob-model-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; margin-right: 6px; }
 
 /* ─── Rate limit badge ─── */
 #rlBadge { display:none; position:relative; align-items:center; gap:5px; padding:3px 9px; border-radius:6px; font-size:12px; font-weight:600; cursor:default; user-select:none; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.45); color:#f59e0b; transition:background .2s,border-color .2s; }
@@ -2465,10 +2574,23 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <button class="mob-chip" data-mob="agent" data-v="dispatch" onclick="setMobOpt(this,'agent')">Dispatch</button>
         </div>
       </div>
-      <div class="mob-sheet-section">
+      <div class="mob-sheet-section" id="mobModelInputSection">
         <div class="mob-sheet-label" data-i18n="tb.model">Model</div>
         <input type="text" id="mob-model-input" class="mob-sheet-chips" list="mob-model-datalist" oninput="setMobOpt(this,'model')" autocomplete="off">
         <datalist id="mob-model-datalist"></datalist>
+      </div>
+      <div class="mob-model-dd-wrap hidden" id="mobModelDdWrap">
+        <button class="mob-model-dd-btn" id="mobModelDdBtn" onclick="toggleMobModelDropdown()">
+          <span class="mob-model-dd-icon">🤖</span>
+          <span class="mob-model-dd-name" id="mobModelDdName">sonnet</span>
+          <span class="mob-model-dd-arrow">▼</span>
+        </button>
+        <div class="mob-model-dd-menu" id="mobModelDdMenu">
+          <div class="mob-model-dd-search">
+            <input type="text" id="mobModelDdSearch" placeholder="Search model..." oninput="filterMobModelDropdown(this.value)">
+          </div>
+          <div class="mob-model-dd-list" id="mobModelDdList"></div>
+        </div>
       </div>
       <div class="mob-sheet-section" id="mobTurnsSection">
         <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
@@ -2478,10 +2600,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
       <div class="mob-sheet-divider"></div>
       <a class="mob-sheet-link" href="/kanban" data-i18n-tip="nav.kanban.tip">
-        <span class="mob-sheet-link-icon">📊</span> Kanban
+        <span class="mob-sheet-link-icon">📊</span> <span data-i18n="nav.kanban">Kanban</span>
       </a>
       <a class="mob-sheet-link" href="/schedule" data-i18n-tip="nav.schedule.tip">
-        <span class="mob-sheet-link-icon">📅</span> Schedule
+        <span class="mob-sheet-link-icon">📅</span> <span data-i18n="nav.schedule">Schedule</span>
       </a>
       <div class="mob-sheet-divider"></div>
       <button class="mob-sheet-link" onclick="toggle('rightPanel');closeMobSheet()">
@@ -2515,19 +2637,19 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <nav class="nav-sw" aria-label="Навігація між розділами" data-i18n-aria="nav.aria">
         <a class="nav-sw-btn active" href="/" data-tip="Чат" data-i18n-tip="nav.chat.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          Chat
+          <span data-i18n="nav.chat">Chat</span>
         </a>
         <a class="nav-sw-btn" href="/kanban" data-tip="Kanban дошка" data-i18n-tip="nav.kanban.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
-          Kanban
+          <span data-i18n="nav.kanban">Kanban</span>
         </a>
         <a class="nav-sw-btn" href="/schedule" data-tip="Розклад завдань" data-i18n-tip="nav.schedule.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          Schedule
+          <span data-i18n="nav.schedule">Schedule</span>
         </a>
         <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard" data-i18n-tip="nav.dashboard.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-          Dashboard
+          <span data-i18n="nav.dashboard">Dashboard</span>
         </a>
       </nav>
       <div class="hdr-meta">
@@ -2567,7 +2689,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
       <select class="lang-sel" id="langSel" onchange="setLang(this.value)" aria-label="Interface language" data-tip="Мова інтерфейсу" data-i18n-tip="tip.lang">
         <option value="en">EN</option>
-        <option value="uk">UK</option>
         <option value="ru">RU</option>
       </select>
       <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener" data-tip="GitHub" style="text-decoration:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg></a>
@@ -2590,10 +2711,17 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <button class="tb-btn" data-v="dispatch" onclick="setOpt(this,'agent')">Dispatch</button>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-group">
+    <div class="tb-group" id="modelInputGroup">
       <span class="label" data-i18n="tb.model">Модель</span>
       <input type="text" id="model-input" list="model-datalist" oninput="setOpt(this,'model')" autocomplete="off">
       <datalist id="model-datalist"></datalist>
+    </div>
+    <div class="model-dd-wrap hidden" id="modelDdWrap">
+      <button class="model-dd-btn" id="modelDdBtn" onclick="toggleModelDropdown()">
+        <span class="model-dd-icon">🤖</span>
+        <span class="model-dd-name" id="modelDdName">sonnet</span>
+        <span class="model-dd-arrow">▼</span>
+      </button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" id="turnsGroup">
@@ -3394,6 +3522,12 @@ function updateAgentModeVisibility() {
   const turnsGroup = document.getElementById('turnsGroup');
   const mobTurnsSection = document.getElementById('mobTurnsSection');
 
+  // Model selection: input vs dropdown
+  const modelInputGroup = document.getElementById('modelInputGroup');
+  const modelDdWrap = document.getElementById('modelDdWrap');
+  const mobModelInputSection = document.getElementById('mobModelInputSection');
+  const mobModelDdWrap = document.getElementById('mobModelDdWrap');
+
   if (cliType === 'kilocode') {
     // Hide agent mode for KiloCode
     if (desktopGroup) desktopGroup.style.display = 'none';
@@ -3408,6 +3542,12 @@ function updateAgentModeVisibility() {
     // Also hide separator before turns group (if it exists)
     const turnsSep = turnsGroup?.previousElementSibling;
     if (turnsSep && turnsSep.classList.contains('tb-sep')) turnsSep.style.display = 'none';
+
+    // Show model dropdown for KiloCode
+    if (modelInputGroup) modelInputGroup.style.display = 'none';
+    if (modelDdWrap) modelDdWrap.classList.remove('hidden');
+    if (mobModelInputSection) mobModelInputSection.style.display = 'none';
+    if (mobModelDdWrap) mobModelDdWrap.classList.remove('hidden');
   } else {
     // Show agent mode for Claude
     if (desktopGroup) desktopGroup.style.display = '';
@@ -3421,6 +3561,12 @@ function updateAgentModeVisibility() {
     // Show separator before turns group (if it exists)
     const turnsSep = turnsGroup?.previousElementSibling;
     if (turnsSep && turnsSep.classList.contains('tb-sep')) turnsSep.style.display = '';
+
+    // Show model input for Claude
+    if (modelInputGroup) modelInputGroup.style.display = '';
+    if (modelDdWrap) modelDdWrap.classList.add('hidden');
+    if (mobModelInputSection) mobModelInputSection.style.display = '';
+    if (mobModelDdWrap) mobModelDdWrap.classList.add('hidden');
   }
 }
 
@@ -3434,6 +3580,9 @@ async function loadModels() {
       }
       renderModelButtons();
       renderMobModelChips();
+      updateModelDisplay();
+      renderModelDropdownList();
+      renderMobModelDropdownList();
     }
   } catch (e) {
     console.error('Failed to load models:', e);
@@ -3667,234 +3816,6 @@ document.addEventListener('keydown', e => {
 
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
-  uk: {
-    'sec.proactive':'Статус',
-    'sec.chats':'Чати','sec.mcp':'MCP',
-    'mcp.hint':'Увімкніть інструменти, які Claude може використовувати в цьому чаті.',
-    'mcp.add':'＋ Додати MCP-сервер','mcp.id':'ID (напр. my-server)','mcp.label':'Назва',
-    'mcp.cmd':'Команда (напр. npx)','mcp.args':'Аргументи через кому','mcp.add_btn':'Додати',
-    'sec.skills':'Навички','skills.hint':'Навички — файли інструкцій, що додаються до системного промпту.',
-    'skills.upload':'＋ Завантажити .md файл','sec.projects':'Проекти','proj.add':'＋ Додати проект',
-    'tip.new':'Новий чат','tip.cfg':'Налаштування','tip.logout':'Вийти',
-    'tip.panels.left':'Сховати/показати ліву панель','tip.panels.right':'Сховати/показати праву панель',
-    'btn.new':'Чат','btn.cfg':'Конфіг','btn.logout':'Вийти','mob.files':'Файли','mob.tabs':'Сесії',
-    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
-    'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
-    'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
-    'input.ph':'Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл',
-    'files.title':'Робоча директорія','files.refresh':'Оновити','queue.title':'Завдань у черзі',
-    'cfg.title':'Налаштування','cfg.saved':'✓ Збережено','cfg.close':'Закрити','cfg.save':'Зберегти',
-    'dir.title':'Новий проект','toast.loading':'Завантаження...',
-    'scroll.down':'Прокрутити вниз',
-    'at.search':'Пошук файлу...',
-    'reply.cancel':'Скасувати відповідь',
-    'stop.agent':'Зупинити агента',
-    'send.msg':'Надіслати (Enter)',
-    'dir.cancel':'Скасувати',
-    'confirm.stop.h':'Зупинити завдання?',
-    'confirm.stop.yes':'Так, зупинити',
-    'confirm.stop.cancel':'Скасувати',
-    'copy.code':'Копіювати',
-    'copy.msg':'Копіювати',
-    'msg.reply':'Відповісти',
-    'fork.title':'Продовжити в новому чаті',
-    'use.input':'Вставити в поле вводу',
-    'tab.new':'Новий чат',
-    'you.label':'Ви',
-    'err.stop.switch':'Зупиніть агента перед переключенням',
-    'err.stop.close':'Зупиніть агента перед закриттям',
-    'err.stop.new':'Зупиніть агента перед відкриттям нового чату',
-    'err.stop.project':'Зупиніть агента перед зміною проекту',
-    'queue.cancel':'Скасувати','queue.save':'Зберегти',
-    'proj.deactivated':'Проект деактивовано',
-    'load.more':'↑ Завантажити попередні повідомлення',
-    'logout.confirm':'Вийти з системи?\n\nВсі активні сесії залишаться збережені.',
-    'proj.delete.confirm':'Видалити проект "{{name}}"?\n\nДиректорія НЕ буде видалена.',
-    'proj.active':'● Активний','proj.inactive':'○ Не активний',
-    'proj.active.title':'Активний проект','proj.click.title':'Клік — активувати',
-    'proj.del.title':'Видалити проект','proj.rename.title':'Перейменувати проект',
-    'chip.remove':'Видалити',
-    'attach.file':'Додати файл (📎)',
-    'queue.label':'У черзі','queue.edit.title':'Редагувати повідомлення','queue.del.title':'Видалити з черги',
-    'interrupt.label':'Відправити як:','interrupt.stream':'📩 Уточнити поточне','interrupt.queue':'📝 Нове завдання (черга)',
-    'interrupt.pill.clarify':'Уточнити','interrupt.pill.queue':'Черга','interrupt.pill.clarify.tip':'Натисніть щоб переключити на режим черги','interrupt.pill.queue.tip':'Натисніть щоб переключити на режим уточнення',
-    'interrupt.queued':'Уточнення надіслано','interrupt.delivered':'Доставлено до Claude','interrupt.expired':'Завдання завершено',
-    'agents.title':'Активні агенти',
-    'sess.fork':'Створити копію чату з тією ж історією Claude','sess.fork.na':'Форк недоступний — немає сесії Claude CLI','sess.forked':'Сесію форкнуто',
-    'sess.delete.tip':'Видалити чат','sess.delete.confirm':'Видалити сесію?','sess.delete.tasks':'Видалити сесію?\n\nДо неї прив\'язано завдань у Kanban: {n}. Вони також будуть видалені.','sess.load.err':'Помилка завантаження сесії',
-    'mcp.active':'● Активний у чаті','mcp.inactive':'○ Вимкнений','mcp.del.title':'Видалити сервер','mcp.del.confirm':'Видалити сервер',
-    'mcp.cfg.tip':'Налаштування','mcp.cfg.warn':'Потрібна конфігурація',
-    'mcp.toggle.on':'Клік — вимкнути','mcp.toggle.off':'Клік — увімкнути',
-    'mcp.cfg.api_warn':'⚠ Вкажіть API ключі для активації',
-    'mcp.cfg.no_params':'Немає параметрів для налаштування',
-    'mcp.cfg.saved':'✓ Налаштування збережено','mcp.cfg.save_err':'Помилка збереження',
-    'mcp.cfg.cancel':'Скасувати','mcp.cfg.save':'Зберегти',
-    'mcp.add.id_req':'ID обов\'язковий','mcp.add.url_req':'URL обов\'язковий',
-    'mcp.add.cmd_req':'Команда обов\'язкова','mcp.add.ok':'✓ MCP сервер додано',
-        'skill.active':'● У системному промпті','skill.inactive':'○ Не активний','skill.del.title':'Видалити skill','skill.name_prompt':'Назва скілу:',
-    'skills.auto_hint':'⚡ Навички обираються автоматично по тексту завдання',
-    'auto.title.on':'⚡ Auto-Skills: увімкнено — клік для вимкнення',
-    'auto.title.off':'⚡ Auto-Skills: вимкнено — клік для увімкнення',
-    'status.connected':'Підключено','status.generating':'Генерація…','status.thinking':'Обдумування...','status.processing':'Обробка...','status.classifying':'⚡ Визначення спеціалістів...','status.reconnecting':'Перепідключення…','status.stopped':'Зупинено','status.error':'Помилка',
-    'fpv.download':'Завантажити','fpv.download.title':'Завантажити файл','fpv.copy_img':'Копіювати','fpv.copy_img.title':'Скопіювати зображення в буфер','fpv.share':'Поділитись','fpv.share.title':'Поділитись / Скопіювати посилання','fpv.binary':'Бінарний файл — перегляд недоступний','fpv.img_error':'Помилка завантаження зображення','fpv.load_error':'Помилка завантаження файлу',
-    'toast.no_connection':'Немає з\'єднання','toast.sess_not_found':'Сесію не знайдено','toast.cfg_load_err':'Помилка завантаження конфігурації','toast.skill_uploaded':'✓ Скіл завантажено','toast.link_copied':'✓ Посилання скопійовано','toast.img_copied':'✓ Зображення скопійовано','toast.select_dir':'Виберіть директорію','toast.link_prompt':'Скопіюйте посилання:',
-    'at.no_project':'Оберіть проект, щоб шукати файли','at.searching':'Пошук...','at.search_err':'Помилка пошуку','at.no_files':'Файлів не знайдено','ssh.search':'Пошук SSH-сервера...','ssh.no_hosts':'SSH-сервери не налаштовано',
-    'dir.this_dir':'. (ця директорія)','dir.no_subdirs':'Немає підпапок','dir.drives':'💻 Всі диски',
-    'dir.path.ph':'Введіть шлях, напр. /Users/you/projects','dir.path.go':'Перейти','dir.filter.ph':'Фільтрувати папки...',
-    'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
-    'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
-    'welcome.import':'Імпортувати сесію з JSON',
-    'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
-    'ask.submit':'Надіслати відповідь','ask.skip':'Пропустити','ask.answered':'Відповідь','ask.skipped':'Пропущено','ask.auto':'Авто','ask.timer':'Залишилось','ask.other':'Інше...','ask.prev':'← Назад','ask.next':'Далі →',
-    'session.copy_id':'Скопіювати ID сесії Claude','session.open_claude':'Відкрити в Claude Code',
-    'stream.interrupted':'Відповідь була перервана',
-    'rl.title.warn':'Наближається ліміт','rl.title.crit':'Ліміт вичерпується!',
-    'rl.key.type':'Тип','rl.key.used':'Використано','rl.key.left':'Залишилось','rl.key.reset':'Скидання','rl.key.via':'Через',
-    'rl.reset.done':'вже скинуто','rl.time.h':'г','rl.time.m':'хв','rl.time.s':'с',
-    'rl.toast.80':'⚠️ {type} ліміт: використано 80%','rl.toast.90':'🔶 {type} ліміт: залишилось 10%!','rl.toast.95':'🚫 {type} ліміт майже вичерпано!',
-    'rl.modal.title':'Ліміт вичерпано','rl.modal.desc':'Ваш {type} ліміт Claude Max вичерпано. Нові запити заблоковані до скидання.','rl.modal.reset':'Скидання через:','rl.modal.ok':'Зрозуміло',
-    'rl.notify.title':'Claude Max — ліміт','rl.notify.body':'{type} ліміт: використано {pct}%',
-    'rl.wait.status':'Ліміт — очікування скидання','rl.wait.resuming':'Ліміт скинуто — продовження…',
-    'queue.badge':'{n} у черзі',
-    'ver.current':'Поточна версія','ver.update':'Доступне оновлення {tag}!\nЗапустіть: npx github:Lexus2016/claude-code-studio','ver.latest':' — остання версія ✓','ver.checking':'Перевірка версії...',
-    'status.connecting':'Підключення...',
-    'toast.cmd_copied':'✓ Команду скопійовано','toast.json_req':'Потрібен .json файл','toast.json_enter':'Введіть або завантажте JSON',
-    'toast.mcp_imported':'✓ Імпортовано {n} MCP серверів','toast.mcp_import_err':'Помилка імпорту: ','toast.mcp_export_err':'Помилка експорту',
-    'skill.toggle.on':'Клік — вимкнути skill','skill.toggle.off':'Клік — додати skill до системного промпту',
-    'files.empty':'Порожньо','files.view':'Переглянути',
-    'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
-    'proj.search':'Пошук проекту...','search.empty':'Не знайдено',
-    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад завдань','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
-    'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
-    'mcp.export.btn':'Експорт','mcp.export.title':'Експортувати всі MCP у JSON файл','mcp.replace.title':'Замінить існуючий',
-    'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL потік)',
-    'mcp.import.modal.title':'Імпорт MCP серверів',
-    'mcp.import.drop':'Перетягніть .json файл або натисніть для вибору',
-    'mcp.import.or':'— або вставте JSON вручну —',
-    'mcp.import.found':'Знайдено серверів:',
-    'mcp.import.replace':'Замінити існуючі кастомні сервери (інакше — злиття)',
-    'mcp.import.preview.btn':'👁 Перегляд',
-    'mcp.import.do':'Імпортувати',
-    'dir.name.label':'Назва:',
-    'dir.git.init':'git init (якщо ще не репозиторій)',
-    'confirm.stop.desc':'Виконання агента буде перервано.',
-    'rl.type.five_hour':'5-годинний','rl.type.seven_day':'7-денний',
-    'proj.generating':'Генерація у фоні...',
-    'mcp.parse.no_servers':'Не вдалося знайти MCP сервери. Очікується {"mcpServers":{...}} або сумісний формат.',
-    'mcp.parse.empty':'Список серверів порожній',
-    'mcp.cfg.env_json_err':'Невірний формат ENV JSON',
-    'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами',
-    'msf.working':'Працює','msf.done':'Готово','msf.error':'Помилка','msf.waiting':'Очікування',
-    'ta.calls':'операцій','ta.activity':'Активність',
-    'msf.team':'Команда агентів',
-    'hdr.toggle':'Згорнути/розгорнути панель','msg.show_more':'Показати більше','msg.show_less':'Показати менше',
-    'sec.cmds':'/ Команди','cmds.hint':'Слеш-команди — шорткати до промптів. Набирайте / в чаті.',
-    'cmd.name.ph':'/назва (напр. /check)','cmd.text.ph':'Повний текст промпту...','cmd.add.btn':'Додати','cmd.save.btn':'Зберегти',
-    'cmd.add.new':'＋ Додати команду','cmd.insert.title':'Вставити в чат','cmd.edit.title':'Редагувати','cmd.del.title':'Видалити','cmd.del.confirm':'Видалити команду',
-    'cmd.modal.add.title':'＋ Додати команду','cmd.modal.edit.title':'✏️ Редагувати команду','cmd.modal.cancel':'Скасувати',
-    'cmd.modal.name.label':'Слеш-команда','cmd.modal.name.hint':'Використайте короткий тригер, наприклад <code>/check</code> або <code>/review</code>.','cmd.modal.text.label':'Промпт',
-    'cmd.err.empty':'Введіть назву та текст команди','toast.cmd_added':'✓ Команду додано','toast.cmd_updated':'✓ Команду оновлено',
-    'cmds.popup.hdr':'Команди',
-    'sec.agents':'Агенти','agents.hint':'Зовнішні агенти для делегування завдань.',
-    'agent.add.new':'Додати агента','agent.edit.title':'Редагувати','agent.del.title':'Видалити','agent.del.confirm':'Видалити агента',
-    'agent.modal.add.title':'＋ Додати агента','agent.modal.edit.title':'✏️ Редагувати агента','agent.modal.cancel':'Скасувати',
-    'agent.modal.id.label':'ID','agent.id.ph':'codex, gemini, aider...','agent.modal.id.hint':'Латинські букви, цифри, - та _',
-    'agent.modal.label.label':'Назва','agent.label.ph':'OpenAI Codex',
-    'agent.modal.template.label':'Шаблон команди','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — підставиться текст завдання',
-    'agent.add.btn':'Додати','agent.save.btn':'Зберегти',
-    'agent.test.title':'Перевірити наявність','agent.test.fail':'Команду не знайдено в системі',
-    'agent.err.empty':'Заповніть всі поля','agent.err.id':'ID: тільки латинські букви, цифри, - та _',
-    'toast.agent_added':'✓ Агента додано','toast.agent_updated':'✓ Агента оновлено',
-    'sec.sshHosts':'SSH Хости',
-    'ssh.add':'＋ Додати SSH хост',
-    'ssh.no_hosts':'Немає налаштованих SSH хостів',
-    'ssh.del.title':'Видалити','ssh.edit.title':'Редагувати','ssh.test.title':'Тест з\'єднання',
-    'ssh.del.confirm':'Видалити хост "{name}"?','ssh.deleted':'✓ Хост видалено',
-    'ssh.modal.add.title':'🌐 Додати SSH хост','ssh.modal.edit.title':'✏️ Редагувати SSH хост',
-    'ssh.modal.save':'＋ Зберегти хост','ssh.modal.update':'💾 Оновити хост',
-    'ssh.modal.label':'Назва хоста *','ssh.modal.label.ph':'Мій продакшн сервер',
-    'ssh.modal.host':'Хост (user@host або host) *','ssh.modal.port':'Порт',
-    'ssh.modal.auth':'Метод автентифікації','ssh.modal.auth.key':'🔑 SSH ключ','ssh.modal.auth.pwd':'🔐 Пароль',
-    'ssh.modal.keypath':'Шлях до SSH ключа (необов\'язково)','ssh.modal.password':'Пароль',
-    'ssh.modal.tip':'💡 SSH ключ: без пароля або доданий у ssh-agent. Перше підключення автоматично підтвердить fingerprint. Пароль зберігається у відкритому вигляді — рекомендуємо використовувати ключ.',
-    'ssh.modal.test':'🔌 Тест','ssh.modal.cancel':'Скасувати',
-    'ssh.testing':'Перевірка...','ssh.connecting':'⏳ Підключення...','ssh.conn_err':'✗ Помилка підключення',
-    'ssh.err.no_host':'Вкажіть хост','ssh.err.no_label':'Вкажіть назву','ssh.err.no_password':'Вкажіть пароль','ssh.err.reenter_password_test':'Щоб протестувати password-host, введіть пароль ще раз','ssh.err':'Помилка',
-    'ssh.saved':'✓ Хост "{name}" збережено','ssh.updated':'✓ Хост "{name}" оновлено',
-    'ssh.select.ph':'— оберіть хост —','ssh.sel.err':'Оберіть хост',
-    'sec.tunnel':'Remote Access','tn.hint':'Відкрийте доступ до Studio через інтернет.',
-    'tn.provider':'Провайдер:','tn.start':'▶ Запустити','tn.stop':'⏹ Зупинити',
-    'tn.starting':'Запуск...','tn.stopping':'Зупинка...','tn.url':'Публічний URL:','tn.copy':'Скопійовано!',
-    'tn.copy.manual':'Виділіть і скопіюйте вручну (Ctrl+C)',
-    'tn.stopped':'Доступ зупинено','tn.send_tg':'📤 Telegram',
-    'tn.sent_tg':'URL надіслано в Telegram','tn.err.not_installed':'Не встановлено',
-    'tn.err.start':'Не вдалося відкрити доступ','tn.err.tg':'Помилка надсилання',
-    'tn.cf.desc':'Без реєстрації','tn.ng.desc':'Потрібен токен','tn.ng.get_token':'↗ отримати',
-    'tn.install.or':'або','tn.install.link':'📥 Інструкція з встановлення',
-    'tn.confirm':'⚠️ Це відкриє доступ до Studio через інтернет. Авторизація обов\'язкова. Продовжити?',
-    'sec.telegram':'Telegram','tg.hint':'Керуйте Studio віддалено через Telegram-бота.',
-    'tg.token':'Bot Token (від @BotFather):','tg.start':'▶ Запустити','tg.stop':'⏹ Зупинити',
-    'tg.accept_new':'Нові підключення:','tg.toggle.title':'Дозволити/заборонити нові підключення','tg.pair':'🔗 Підключити Telegram',
-    'tg.pair.hint':'Введіть цей код у Telegram-боті:','tg.pair.cancel':'Скасувати',
-    'tg.devices':'Підключені пристрої:','tg.stopped':'⏹ Telegram-бот зупинено',
-    'tg.no_devices':'Немає підключених пристроїв','tg.last_active':'Активність',
-    'tg.paired':'з','tg.device.disconnect':'Відключити пристрій','tg.device.disconnected':'відключено',
-    'tg.err.no_token':'Введіть Bot Token від @BotFather','tg.device.remove_confirm':'Відключити пристрій "{name}"?',
-    'tg.time.now':'щойно','tg.time.min':'{n} хв тому','tg.time.hour':'{n} год тому','tg.time.day':'{n} д тому',
-    'bulk.info':'{n} вибрано','bulk.all':'Всі','bulk.deselect':'Зняти всі','bulk.del':'Видалити',
-    'hist.sel.title':'Вибрати кілька','toast.del_err':'Помилка видалення',
-    'proj.type.local':'📁 Локальний','proj.type.remote':'🌐 Віддалений SSH',
-    'dir.ssh_host':'SSH Хост:','dir.remote.path':'Шлях на сервері:',
-    'dir.remote.test':'🔌 Тест з\'єднання','dir.remote.add_new':'＋ Новий',
-    'dir.remote.err.no_host':'Оберіть SSH хост','dir.remote.err.no_path':'Вкажіть шлях на сервері',
-    'cpc.running':'виконується','cpc.done':'виконано','cpc.failed':'помилка','cpc.retrying':'повтор',
-    'mcp.cfg.env':'Змінні оточення','mcp.cfg.env_add':'＋ Додати','mcp.cfg.env_empty':'Немає змінних оточення',
-    'me.title.add':'Додати MCP-сервер','me.title.edit':'Редагування MCP-сервера',
-    'me.tab.form':'Форма','me.tab.json':'JSON',
-    'me.label':'Назва','me.desc':'Опис','me.desc.ph':'Що робить цей сервер?','me.type':'Тип',
-    'me.type.stdio':'Локальна команда / процес','me.type.http':'Віддалений HTTP endpoint',
-    'me.cmd':'Команда','me.args':'Аргументи','me.args.hint':'по одному на рядок',
-    'me.env':'Змінні середовища','me.headers':'Заголовки',
-    'me.env.add':'＋ Додати змінну','me.header.add':'＋ Додати заголовок',
-    'me.json.hint':'Редагуйте конфігурацію сервера в форматі JSON. При перемиканні назад на Форму, JSON буде розпарсений і поля заповнені автоматично.',
-    'me.cancel':'Скасувати','me.save.add':'Додати сервер','me.save.edit':'Зберегти зміни',
-    'me.saving.add':'Додавання…','me.saving.edit':'Збереження…',
-    'me.id.locked':'ID сервера не можна змінити',
-    'me.err.json':'Невалідний JSON — виправте синтаксис.','me.err.json_save':'Невалідний JSON — неможливо зберегти.',
-    'me.err.id_req':'Server ID є обов\'язковим.','me.err.id_fmt':'Server ID може містити тільки літери, цифри, дефіси та підкреслення.',
-    'me.err.id_dup':'Сервер з таким ID вже існує.','me.err.url_req':'URL є обов\'язковим для HTTP серверів.',
-    'me.err.cmd_req':'Команда є обов\'язковою для stdio серверів.','me.err.request':'Помилка запиту — перевірте логи сервера.',
-    'me.toast.added':'MCP-сервер додано.','me.toast.updated':'MCP-сервер оновлено.','me.kv.del':'Видалити',
-    'notif.dismiss':'Закрити','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Відкрити Kanban →','msf.sent':'✅ Надіслано',
-    'skill.custom_desc':'Користувацький скіл','skill.custom_cat':'🔧 Кастомні',
-    'files.remote_unavail':'🌐 Віддалений проект —<br>файловий браузер недоступний',
-    'hist.drag':'Перетягнути','tg.device.connected':'📱 Telegram: {name} підключено',
-    'tg.bot.started':'✅ Telegram-бот запущено: @{bot}',
-    'compact.btn':'Compact & New','compact.title':'Стиснути чат і відкрити нову сесію','compact.loading':'Стиснення…','compact.success':'✅ Чат стиснено — відкриваю нову сесію','compact.err':'Помилка стиснення',
-    'cli.import.tip':'Імпорт сесій Claude CLI','cli.import.title':'Імпорт сесій Claude CLI',
-    'cli.import.project':'Проект:','cli.import.load':'Завантажити',
-    'cli.import.hint':'Вкажіть проект і натисніть «Завантажити»',
-    'cli.import.do':'Імпортувати вибрані','cli.import.sel_all':'Вибрати всі',
-    'cli.import.loading':'Завантаження…','cli.import.found_n':'Знайдено: {n} сесій у',
-    'cli.import.no_sessions':'Сесій не знайдено',
-    'cli.import.msgs':'повід.','cli.import.already':'Вже імпортовано','cli.import.already_done':'✓ імпортовано',
-    'cli.import.doing':'Імпортую…','cli.import.doing_n':'Імпортую {n} сесій…',
-    'cli.import.result':'Імпортовано: {n}','cli.import.skipped':' пропущено: {n}','cli.import.errors':' помилок: {n}',
-    'thinking.title':'Ланцюжок думок','thinking.copy':'Копіювати','thinking.copied':'✓ Скопійовано','thinking.copy_err':'Не вдалося скопіювати','thinking.translate':'Перекласти','thinking.show_original':'Показати оригінал','thinking.translating':'Перекладаю…','thinking.translate_err':'Помилка перекладу',
-    'dlg.title':'Делегувати агенту','dlg.agent':'Агент','dlg.agent.select':'Оберіть агента...','dlg.mode':'Режим',
-    'dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Повна передача. Відкриє термінал, ви продовжите роботу там.',
-    'dlg.mode.sync':'Синхронізація','dlg.mode.sync.desc':'Паралельна робота. Обидва агенти активні, спілкуються через файл діалогу.',
-    'dlg.task':'Завдання','dlg.task.ph':'Що має зробити агент...','dlg.cancel':'Скасувати','dlg.submit':'Делегувати',
-    'dlg.btn':'Делегувати','dlg.btn.title':'Делегувати зовнішньому агенту',
-    'dlg.check':'Перевірити','dlg.dialog':'Діалог','dlg.message':'Повідомлення','dlg.stop':'Стоп',
-    'dlg.msg.ph':'Надіслати повідомлення агенту...','dlg.send':'Надіслати',
-    'dlg.no_agents':'Немає налаштованих агентів (додайте в Налаштуваннях)',
-    'dlg.toast.select_agent':'Оберіть агента','dlg.toast.describe_task':'Опишіть завдання',
-    'dlg.toast.delegated':'Делеговано до {agent}','dlg.toast.fail':'Помилка делегування: {err}',
-    'dlg.toast.send_fail':'Не вдалося надіслати','dlg.toast.send_err':'Помилка надсилання: {err}','dlg.toast.stopped':'Делегування зупинено',
-    'dlg.toast.updated':'Діалог оновлено','dlg.toast.no_changes':'Без змін',
-    'dlg.last_update':'оновлено {time} тому',
-  },
   en: {
     'sec.proactive':'Status',
     'sec.chats':'Chats','sec.mcp':'MCP',
@@ -3906,7 +3827,7 @@ const TRANSLATIONS = {
     'tip.new':'New chat','tip.cfg':'Configuration','tip.logout':'Logout',
     'tip.panels.left':'Toggle left panel','tip.panels.right':'Toggle right panel',
     'btn.new':'Chat','btn.cfg':'Config','btn.logout':'Logout','mob.files':'Files','mob.tabs':'Sessions',
-    'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
+    'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns','model.search':'Search model...',
     'welcome.title':'New session','welcome.ready':'Ready to work',
     'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
     'input.ph':'Write a task... Ctrl+V — screenshot · @ — files · # — SSH · 📎 — any file',
@@ -3992,7 +3913,7 @@ const TRANSLATIONS = {
     'files.empty':'Empty','files.view':'Preview',
     'proj.empty':'No projects. Add a directory to work with Claude Code.',
     'proj.search':'Search project...','search.empty':'Not found',
-    'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.aria':'Navigation','tip.lang':'Interface language',
+    'nav.chat':'Chat','nav.kanban':'Kanban','nav.schedule':'Schedule','nav.dashboard':'Dashboard','nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.dashboard.tip':'Dashboard','nav.aria':'Navigation','tip.lang':'Interface language',
     'mcp.import.btn':'Import','mcp.import.title':'Import MCP from JSON file (Claude Desktop format)',
     'mcp.export.btn':'Export','mcp.export.title':'Export all MCP to JSON file','mcp.replace.title':'Will replace existing',
     'mcp.type.stdio':'stdio (command)','mcp.type.sse':'SSE (URL stream)',
@@ -4134,7 +4055,7 @@ const TRANSLATIONS = {
     'tip.new':'Новый чат','tip.cfg':'Настройки','tip.logout':'Выйти',
     'tip.panels.left':'Скрыть/показать левую панель','tip.panels.right':'Скрыть/показать правую панель',
     'btn.new':'Чат','btn.cfg':'Конфиг','btn.logout':'Выйти','mob.files':'Файлы','mob.tabs':'Сессии',
-    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
+    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги','model.search':'Поиск модели...',
     'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
     'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
     'input.ph':'Напишите задание... Ctrl+V — скриншот · @ — файлы · # — SSH · 📎 — любой файл',
@@ -4220,7 +4141,7 @@ const TRANSLATIONS = {
     'files.empty':'Пусто','files.view':'Просмотр',
     'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
     'proj.search':'Поиск проекта...','search.empty':'Не найдено',
-    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.schedule.tip':'Расписание','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
+    'nav.chat':'Чат','nav.kanban':'Канбан','nav.schedule':'Расписание','nav.dashboard':'Сводка','nav.chat.tip':'Чат','nav.kanban.tip':'Доска Канбан','nav.schedule.tip':'Расписание','nav.dashboard.tip':'Сводка','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
     'mcp.import.btn':'Импорт','mcp.import.title':'Импортировать MCP из JSON файла (формат Claude Desktop)',
     'mcp.export.btn':'Экспорт','mcp.export.title':'Экспортировать все MCP в JSON файл','mcp.replace.title':'Заменит существующий',
     'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL поток)',
@@ -4353,11 +4274,11 @@ const TRANSLATIONS = {
   }
 };
 function t(key) {
-  const lang = localStorage.getItem('lang') || 'en';
-  return (TRANSLATIONS[lang] || TRANSLATIONS.en)[key] || key;
+  const lang = localStorage.getItem('lang') || 'ru';
+  return (TRANSLATIONS[lang] || TRANSLATIONS.ru)[key] || key;
 }
 function setLang(lang) {
-  const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.ru;
   localStorage.setItem('lang', lang);
   fetch('/api/lang', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang }) }).catch(() => {});
   const sel = $i('langSel'); if (sel) sel.value = lang;
@@ -7453,7 +7374,10 @@ function setOpt(el, group) {
   }
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
-  else if (group === 'model') curModel = v;
+  else if (group === 'model') {
+    curModel = v;
+    updateModelDisplay();
+  }
   updInd();
   // Sync mobile UI
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
@@ -10494,6 +10418,166 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeProjDropdown(); e.preventDefault(); }
 });
 
+// ─── Model dropdown in toolbar ────────────────────────────────────────────────
+let _modelDdOpen = false;
+
+function toggleModelDropdown() {
+  _modelDdOpen = !_modelDdOpen;
+  const btn = $i('modelDdBtn');
+  const menu = $i('modelDdMenu');
+  
+  btn?.classList.toggle('open', _modelDdOpen);
+  menu?.classList.toggle('open', _modelDdOpen);
+  
+  if (_modelDdOpen) {
+    // Position menu relative to button
+    const rect = btn.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 8) + 'px';
+    menu.style.left = rect.left + 'px';
+    
+    $i('modelDdSearch')?.focus();
+    renderModelDropdownList();
+  }
+}
+
+function closeModelDropdown() {
+  _modelDdOpen = false;
+  $i('modelDdBtn')?.classList.remove('open');
+  $i('modelDdMenu')?.classList.remove('open');
+}
+
+function renderModelDropdownList(filter = '') {
+  const list = $i('modelDdList');
+  if (!list) return;
+
+  const filtered = filter
+    ? availableModels.filter(m => m.toLowerCase().includes(filter.toLowerCase()))
+    : availableModels;
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="model-dd-empty">${filter ? 'Не знайдено' : 'Немає моделей'}</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(model => {
+    const active = model === curModel;
+    return `
+      <div class="model-dd-item${active ? ' active' : ''}" onclick="selectModelFromDropdown('${model}')">
+        <div class="model-dd-item-name">${active ? '● ' : ''}${escH(model)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function filterModelDropdown(value) {
+  renderModelDropdownList(value);
+}
+
+function selectModelFromDropdown(modelId) {
+  closeModelDropdown();
+  if (modelId !== curModel) {
+    curModel = modelId;
+    // Update UI
+    updateModelDisplay();
+    // Call existing setOpt logic
+    setOpt({ dataset: { v: modelId } }, 'model');
+  }
+}
+
+function updateModelDisplay() {
+  // Update desktop dropdown
+  const ddName = $i('modelDdName');
+  if (ddName) ddName.textContent = curModel;
+
+  // Update mobile dropdown
+  const mobDdName = $i('mobModelDdName');
+  if (mobDdName) mobDdName.textContent = curModel;
+
+  // Update mobile dropdown list
+  if (_mobModelDdOpen) {
+    renderMobModelDropdownList();
+  }
+}
+
+// ─── Mobile model dropdown ────────────────────────────────────────────────────
+let _mobModelDdOpen = false;
+
+function toggleMobModelDropdown() {
+  _mobModelDdOpen = !_mobModelDdOpen;
+  const btn = $i('mobModelDdBtn');
+  const menu = $i('mobModelDdMenu');
+  btn?.classList.toggle('open', _mobModelDdOpen);
+  menu?.classList.toggle('open', _mobModelDdOpen);
+  if (_mobModelDdOpen) {
+    $i('mobModelDdSearch')?.focus();
+    renderMobModelDropdownList();
+  }
+}
+
+function closeMobModelDropdown() {
+  _mobModelDdOpen = false;
+  $i('mobModelDdBtn')?.classList.remove('open');
+  $i('mobModelDdMenu')?.classList.remove('open');
+}
+
+function renderMobModelDropdownList(filter = '') {
+  const list = $i('mobModelDdList');
+  if (!list) return;
+
+  const filtered = filter
+    ? availableModels.filter(m => m.toLowerCase().includes(filter.toLowerCase()))
+    : availableModels;
+
+  if (!filtered.length) {
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted)">${filter ? 'Not found' : 'No models'}</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(model => {
+    const active = model === curModel;
+    return `
+      <div class="mob-model-dd-item${active ? ' active' : ''}" onclick="selectMobModelFromDropdown('${model}')">
+        <div class="mob-model-dd-item-name">${active ? '● ' : ''}${escH(model)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function filterMobModelDropdown(value) {
+  renderMobModelDropdownList(value);
+}
+
+function selectMobModelFromDropdown(modelId) {
+  closeMobModelDropdown();
+  if (modelId !== curModel) {
+    curModel = modelId;
+    updateModelDisplay();
+    setMobOpt({ dataset: { v: modelId } }, 'model');
+  }
+}
+
+// Close dropdowns on click outside
+document.addEventListener('click', e => {
+  if (_modelDdOpen && !e.target.closest('.model-dd-wrap') && !e.target.closest('.model-dd-menu')) {
+    closeModelDropdown();
+  }
+  if (_mobModelDdOpen && !e.target.closest('.mob-model-dd-wrap')) {
+    closeMobModelDropdown();
+  }
+});
+
+// Keyboard navigation for model dropdowns
+document.addEventListener('keydown', e => {
+  if (_modelDdOpen && e.key === 'Escape') {
+    closeModelDropdown();
+    e.preventDefault();
+  }
+  if (_mobModelDdOpen && e.key === 'Escape') {
+    closeMobModelDropdown();
+    e.preventDefault();
+  }
+});
+
 // ─── Per-project tab save/restore ────────────────────────────────────────
 const PROJ_TABS_KEY = pid => `cc_ptabs_${pid || '__none'}`;
 
@@ -11826,7 +11910,10 @@ function setMobOpt(el, group) {
   // Sync to desktop toolbar
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
-  else if (group === 'model') curModel = v;
+  else if (group === 'model') {
+    curModel = v;
+    updateModelDisplay();
+  }
   syncBtn(group, v);
   updateMobSubtitle();
   saveUIState();
@@ -12545,6 +12632,19 @@ checkVersion();
     else setTimeout(tryOpen, 800);
   }
 }
+
+// ─── Portal for model dropdown (outside toolbar overflow) ────────────────────
+const modelDdPortal = document.createElement('div');
+modelDdPortal.id = 'modelDdPortal';
+modelDdPortal.innerHTML = `
+  <div class="model-dd-menu" id="modelDdMenu">
+    <div class="model-dd-search">
+      <input type="text" id="modelDdSearch" data-i18n-ph="model.search" placeholder="Пошук моделі..." oninput="filterModelDropdown(this.value)">
+    </div>
+    <div class="model-dd-list" id="modelDdList"></div>
+  </div>
+`;
+document.body.appendChild(modelDdPortal);
 </script>
 </body>
 </html>
