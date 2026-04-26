@@ -3884,7 +3884,7 @@ const TRANSLATIONS = {
     'skills.auto_hint':'⚡ Skills are auto-selected based on task text',
     'auto.title.on':'⚡ Auto-Skills: enabled — click to disable',
     'auto.title.off':'⚡ Auto-Skills: disabled — click to enable',
-    'status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.classifying':'⚡ Classifying specialists...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
+    'status.connecting':'Connecting...','status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.classifying':'⚡ Classifying specialists...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
     'fpv.download':'Download','fpv.download.title':'Download file','fpv.copy_img':'Copy','fpv.copy_img.title':'Copy image to clipboard','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
     'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.img_copied':'✓ Image copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
     'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found','ssh.search':'Search SSH server...','ssh.no_hosts':'No SSH servers configured',
@@ -4112,7 +4112,7 @@ const TRANSLATIONS = {
     'skills.auto_hint':'⚡ Навыки выбираются автоматически по тексту задачи',
     'auto.title.on':'⚡ Auto-Skills: включено — клик для отключения',
     'auto.title.off':'⚡ Auto-Skills: отключено — клик для включения',
-    'status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.classifying':'⚡ Определение специалистов...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
+    'status.connecting':'Подключение...','status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.classifying':'⚡ Определение специалистов...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
     'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.copy_img':'Копировать','fpv.copy_img.title':'Скопировать изображение в буфер','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
     'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.img_copied':'✓ Изображение скопировано','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
     'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено','ssh.search':'Поиск SSH-сервера...','ssh.no_hosts':'SSH-серверы не настроены',
@@ -4291,6 +4291,8 @@ function setLang(lang) {
   document.querySelectorAll('[data-i18n-aria]').forEach(el => { const k = el.getAttribute('data-i18n-aria'); if (t[k] !== undefined) el.setAttribute('aria-label', t[k]); });
   if (typeof updateHistBulkBar === 'function') updateHistBulkBar();
   if (typeof renderInterruptPill === 'function') renderInterruptPill();
+  // Restore current status after language change
+  if (_currentStatusKey) setStatus(_currentStatusKey, _currentStatusCls);
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -4773,7 +4775,7 @@ function connect() {
   ws.onopen = () => {
     _reconnectDelay = 1000; // reset backoff on successful connect
     _retryingSessions.clear(); // new WS connection — allow retries for all sessions again
-    setStatus(t('status.connected'), 'ok');
+    setStatus('status.connected', 'ok');
     loadFiles();
     loadHist();
     // On page refresh: currentSessionId is null (restoreUIState doesn't call loadSess),
@@ -4792,7 +4794,7 @@ function connect() {
   ws.onclose = (ev) => {
     // Clean close (e.g. server shutdown code 1001, or intentional nav) — reconnect
     if (_intentionalClose) return;
-    setStatus(t('status.reconnecting'), 'err');
+    setStatus('status.reconnecting', 'err');
     if (isGen) { isGen = false; setSendStop(false); generatingTabId = null; } // reset generating state
     // Exponential backoff with ±20 % jitter, capped at 30 s
     const jitter = _reconnectDelay * 0.2 * (Math.random() * 2 - 1);
@@ -5110,7 +5112,7 @@ function handleWsMsg(d) {
         if (!d.taskId) {
           isGen = false;
           setSendStop(false);
-          setStatus(t('status.connected'), 'ok');
+          setStatus('status.connected', 'ok');
         }
         // Clear streaming state
         streaming.el = null;
@@ -5131,7 +5133,7 @@ function handleWsMsg(d) {
           const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove();
         }
         if (d.taskId) {
-          if (tabId === activeTabId) setStatus(t('status.connected'), 'ok');
+          if (tabId === activeTabId) setStatus('status.connected', 'ok');
         } else {
           if (tabId === generatingTabId) {
             if (activeTabId === generatingTabId) {
@@ -5140,7 +5142,7 @@ function handleWsMsg(d) {
             }
             isGen = false;
             setSendStop(false);
-            setStatus(t('status.connected'), 'ok');
+            setStatus('status.connected', 'ok');
           }
         }
       }
@@ -5264,7 +5266,7 @@ function handleWsMsg(d) {
         streaming.toolCounts = {}; streaming.toolLog = [];
         isGen = false;
         setSendStop(false);
-        setStatus(t('status.error'), 'err');
+        setStatus('status.error', 'err');
         toast(d.error, true, 5000);
       }
       // For background tabs: clear saved streaming text on error
@@ -5288,7 +5290,7 @@ function handleWsMsg(d) {
         const timeStr = m > 0 ? `${m}${t('rl.time.m')} ${String(s).padStart(2,'0')}${t('rl.time.s')}` : `${s}${t('rl.time.s')}`;
         setStatus(`${t('rl.wait.status')} ${timeStr}`, 'warn');
       } else if (d.status === 'resuming') {
-        setStatus(t('rl.wait.resuming'), 'ok');
+        setStatus('rl.wait.resuming', 'ok');
       }
       break;
 
@@ -5493,8 +5495,8 @@ function handleWsMsg(d) {
       { const q = msgsEl.querySelector('.msg-queued'); if (q) q.remove(); }
       if (isVisible) {
         isGen = true;
-        showStatus(t('status.processing'));
-        setStatus(t('status.processing'), 'warn');
+        showStatus('status.processing');
+        setStatus('status.processing', 'warn');
         setSendStop(true);
       }
       break;
@@ -5519,7 +5521,7 @@ function handleWsMsg(d) {
     case 'task_lost': {
       const tl = openTabs.find(x => x.id === tabId);
       if (tl) { tl.generating = false; renderTabs(); saveUIState(); }
-      if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); toast(t('toast.task_lost'), true, 4000); }
+      if (isVisible) { isGen = false; setSendStop(false); setStatus('status.connected', 'ok'); toast(t('toast.task_lost'), true, 4000); }
       break;
     }
 
@@ -5527,7 +5529,7 @@ function handleWsMsg(d) {
       if (!d.prompt) {
         const ti = openTabs.find(x => x.id === tabId);
         if (ti) { ti.generating = false; renderTabs(); saveUIState(); }
-        if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
+        if (isVisible) { isGen = false; setSendStop(false); setStatus('status.connected', 'ok'); }
         break;
       }
       const targetSessionId = d.sessionId || tabId;
@@ -5537,7 +5539,7 @@ function handleWsMsg(d) {
         // Still reset generating state — the previous retry's done may have been lost
         const ti = openTabs.find(x => x.id === tabId);
         if (ti && ti.generating) { ti.generating = false; ti.done = true; renderTabs(); saveUIState(); }
-        if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
+        if (isVisible) { isGen = false; setSendStop(false); setStatus('status.connected', 'ok'); }
         break;
       }
       _retryingSessions.add(targetSessionId);
@@ -5554,7 +5556,7 @@ function handleWsMsg(d) {
         // Mark tab as generating and fire retry
         const targetTab = openTabs.find(x => x.id === targetSessionId);
         if (targetTab) { targetTab.generating = true; renderTabs(); saveUIState(); }
-        if (isVisible) { isGen = true; generatingTabId = activeTabId; showStatus(t('status.processing')); setStatus(t('status.processing'), 'warn'); setSendStop(true); }
+        if (isVisible) { isGen = true; generatingTabId = activeTabId; showStatus('status.processing'); setStatus('status.processing', 'warn'); setSendStop(true); }
         if (ws && ws.readyState === 1) {
           ws.send(JSON.stringify({
             type: 'chat', text: d.prompt,
@@ -5593,12 +5595,15 @@ function handleWsMsg(d) {
   }
 }
 
-// ─── UI helpers ───────────────────────────────────────────────────────────
-function setStatus(text, cls) {
+// ─── UI helpers ────────────────────────────────────────────────────
+let _currentStatusKey = '';
+let _currentStatusCls = 'warn';
+function setStatus(key, cls) {
+  _currentStatusKey = key;
+  _currentStatusCls = cls;
   const el = $i('statusEl');
-  el.textContent = text;
+  el.textContent = t(key);
   el.className = `status-dot ${cls}`;
-  // Sync mobile status dot
   if (typeof updateMobStatus === 'function') updateMobStatus(cls);
 }
 
@@ -5880,7 +5885,7 @@ function doStop() {
   // Remove spinner from current streaming message and show "Stopped" state
   if (streaming.el) {
     _msfRemove(streaming.el);
-    streaming.el.appendChild(_msfCreate('error', t('status.stopped')));
+    streaming.el.appendChild(_msfCreate('error', 'status.stopped'));
     // Finalize any partial text
     if (streaming.txt) {
       streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
@@ -5893,7 +5898,7 @@ function doStop() {
   generatingTabId = null;
   setSendStop(false);
   rmStatus();
-  setStatus(t('status.stopped'), 'ok');
+  setStatus('status.stopped', 'ok');
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'stop', tabId: activeTabId }));
 }
 function stopAgent() { confirmStop(); }
@@ -7166,7 +7171,7 @@ function switchTab(id) {
   if (newTab?.generating) {
     isGen = true;
     setSendStop(true);
-    setStatus(t('status.processing'), 'warn');
+    setStatus('status.processing', 'warn');
   } else {
     isGen = false;
     setSendStop(false);
@@ -7903,8 +7908,8 @@ async function send() {
     isGen = true;
     generatingTabId = activeTabId;
     if (activeTabId) { const at = openTabs.find(x => x.id === activeTabId); if (at) { at.generating = true; renderTabs(); } }
-    showStatus(t('status.processing'));
-    setStatus(t('status.processing'), 'warn');
+    showStatus('status.processing');
+    setStatus('status.processing', 'warn');
     setSendStop(true);
   }
 
@@ -8459,7 +8464,7 @@ async function loadSess(id) {
           tabObj.generating = true; renderTabs();
         } else if (!serverRunning && tabObj.generating) {
           tabObj.generating = false; tabObj.done = true; renderTabs();
-          if (activeTabId === id) { isGen = false; generatingTabId = null; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
+          if (activeTabId === id) { isGen = false; generatingTabId = null; setSendStop(false); setStatus('status.connected', 'ok'); }
         }
       }
     }
@@ -11155,7 +11160,7 @@ async function loadCliSessions() {
   try {
     const res = await fetch(`/api/sessions/cli-list?workdir=${encodeURIComponent(workdir)}`);
     const data = await res.json();
-    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || t('status.error')); return; }
+    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || 'status.error'); return; }
     _cliSessions = data.sessions || [];
     statusEl.textContent = t('cli.import.found_n').replace('{n}', _cliSessions.length) + ' ' + data.projectPath;
     if (_cliSessions.length === 0) {
@@ -11224,7 +11229,7 @@ async function doCliImport() {
   try {
     const res = await fetch('/api/sessions/cli-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionIds, workdir }) });
     const data = await res.json();
-    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || t('status.error')); btn.disabled = false; btn.textContent = t('cli.import.do'); return; }
+    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || 'status.error'); btn.disabled = false; btn.textContent = t('cli.import.do'); return; }
     const ok = data.imported?.length || 0;
     const sk = data.skipped?.length || 0;
     const er = data.errors?.length || 0;
@@ -12554,6 +12559,8 @@ async function _restoreDelegationState() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────
 setLang(localStorage.getItem('lang') || 'en');
+// Initialize status translation
+setStatus('status.connecting', 'warn');
 // Sync lang from server on load
 fetch('/api/lang').then(r => r.json()).then(d => {
   if (d.lang && d.lang !== localStorage.getItem('lang')) {
