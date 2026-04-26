@@ -145,47 +145,107 @@ class KiloRunner {
         }
       }
 
-      // Событие завершения шага - сигнал о том, что Kilo завершил обработку
-      if (event.type === 'step_finish' || event.type === 'step-finish') {
-        logger.info('[kilocode] step_finish', { sessionId: sessionIdFromOutput || sessionId });
-        // Сигнал завершения, но ждем закрытия процесса
+      const part = event.part;
+      const sid = sessionIdFromOutput || sessionId;
+
+      // step_start - начало нового шага
+      if (event.type === 'step_start') {
+        logger.info('[kilocode] step_start', {
+          sessionId: sid,
+          partId: part?.id,
+          messageId: part?.messageID,
+          type: part?.type,
+        });
         return;
       }
 
-      // Текстовое событие - Kilo отправляет текст в event.part.text
-      if (event.type === 'text' && event.part && event.part.text) {
-        logger.info('[kilocode] text', { sessionId: sessionIdFromOutput || sessionId, text: event.part.text });
-        if (handlers.onText) {
-          handlers.onText(event.part.text);
-        }
+      // step_finish - завершение шага (с токенами и reason)
+      if (event.type === 'step_finish' || event.type === 'step-finish') {
+        const tokens = part?.tokens || {};
+        logger.info('[kilocode] step_finish', {
+          sessionId: sid,
+          partId: part?.id,
+          reason: part?.reason,
+          tokens: {
+            total: tokens.total,
+            input: tokens.input,
+            output: tokens.output,
+            reasoning: tokens.reasoning,
+          },
+          cost: part?.cost,
+        });
+        return;
       }
 
-      // Событие инструмента
-      if ((event.type === 'tool' || event.type === 'tool_use') && event.part && event.part.name) {
-        logger.info('[kilocode] tool', { sessionId: sessionIdFromOutput || sessionId, tool: event.part.name, input: event.part.input });
+      // tool_use - использование инструмента
+      if ((event.type === 'tool' || event.type === 'tool_use') && part) {
+        const toolName = part.tool || part.name;
+        const state = part.state || {};
+        const input = state.input || part.input || {};
+        const output = state.output || part.output || '';
+        const status = state.status || 'unknown';
+        const exit = state.exit;
+        const time = state.time || {};
+
+        // Truncate long outputs
+        const outputStr = typeof output === 'string' ? output : JSON.stringify(output);
+        const truncatedOutput = outputStr.length > 500 ? outputStr.substring(0, 500) + '...' : outputStr;
+
+        logger.info('[kilocode] tool_use', {
+          sessionId: sid,
+          tool: toolName,
+          callId: part.callID,
+          status,
+          input: input.command || input.pattern || input,
+          output: truncatedOutput,
+          exit,
+          duration: time.end && time.start ? time.end - time.start : null,
+        });
+
         if (handlers.onTool) {
-          handlers.onTool(event.part.name, event.part.input || '');
+          handlers.onTool(toolName, input.command || input.pattern || JSON.stringify(input));
         }
+        return;
       }
 
-      // Результат
+      // text - текстовый ответ от модели
+      if (event.type === 'text' && part && part.text) {
+        // Truncate long texts
+        const text = part.text.length > 1000 ? part.text.substring(0, 1000) + '...' : part.text;
+        logger.info('[kilocode] text', { sessionId: sid, text });
+        if (handlers.onText) {
+          handlers.onText(part.text);
+        }
+        return;
+      }
+
+      // thinking - размышления модели (если включены)
+      if (event.type === 'thinking' && part && part.thinking) {
+        const thinking = part.thinking.length > 500 ? part.thinking.substring(0, 500) + '...' : part.thinking;
+        logger.debug('[kilocode] thinking', { sessionId: sid, thinking });
+        return;
+      }
+
+      // result - итоговый результат
       if (event.type === 'result' && event.result) {
-        logger.info('[kilocode] result', { sessionId: sessionIdFromOutput || sessionId, result: event.result });
+        logger.info('[kilocode] result', { sessionId: sid, result: event.result });
         if (handlers.onResult) {
           handlers.onResult(event.result);
         }
+        return;
       }
 
-      // Ошибка
+      // error
       if (event.type === 'error' && event.error) {
-        logger.error('[kilocode] error', { sessionId: sessionIdFromOutput || sessionId, error: event.error });
+        logger.error('[kilocode] error', { sessionId: sid, error: event.error });
         if (handlers.onError) {
           handlers.onError(event.error);
         }
+        return;
       }
 
       // Неизвестное событие
-      logger.debug('[kilocode] event', { type: event.type, sessionId: sessionIdFromOutput || sessionId });
+      logger.debug('[kilocode] event', { type: event.type, sessionId: sid });
     };
 
     // Обработка сигнала отмены
