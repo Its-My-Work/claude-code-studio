@@ -488,6 +488,7 @@
   "cli.import.skipped": " skipped: {n}",
   "cli.import.errors": " errors: {n}",
   "thinking.title": "Chain of thought",
+  "thinking.label": "Reasoning mode",
   "thinking.copy": "Copy",
   "thinking.copied": "✓ Copied",
   "thinking.copy_err": "Failed to copy",

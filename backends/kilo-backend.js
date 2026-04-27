@@ -33,6 +33,7 @@ class KiloBackend extends AgentBackend {
       abortController,
       mode,
       workdir,
+      thinking,
     } = options;
 
     // Маппировать режим Claude на режим Kilo
@@ -57,6 +58,7 @@ class KiloBackend extends AgentBackend {
       format: 'json',
       auto: true,
       abortController,
+      thinking,
     });
 
     // Обработчики

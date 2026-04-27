@@ -213,7 +213,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* ─── Model dropdown ─── */
-.model-dd-wrap { position: relative; display: inline-block; }
+.model-dd-wrap { position: relative; display: inline-flex; align-items: center; gap: 10px; }
 #modelDdPortal { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 2000; }
 .model-dd-btn {
   display: inline-flex; align-items: center; gap: 8px;
@@ -239,6 +239,26 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .model-dd-btn .model-dd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-dd-btn .model-dd-arrow { font-size: 10px; opacity: .6; transition: transform .2s; flex-shrink: 0; }
 .model-dd-btn.open .model-dd-arrow { transform: rotate(180deg); opacity: 1; }
+
+/* ─── Thinking toggle ─── */
+.thinking-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted); cursor: pointer;
+  padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--s3);
+  transition: all .2s ease; user-select: none;
+}
+.thinking-toggle:hover { border-color: var(--accent2); color: var(--text); }
+.thinking-toggle input[type="checkbox"] { display: none; }
+.thinking-toggle input[type="checkbox"] + .thinking-label::before {
+  content: '○'; margin-right: 4px; color: var(--muted);
+}
+.thinking-toggle input[type="checkbox"]:checked + .thinking-label::before {
+  content: '●'; color: var(--accent2);
+}
+.thinking-toggle input[type="checkbox"]:checked + .thinking-label { color: var(--accent2); }
+.thinking-toggle.on { border-color: var(--accent2); background: rgba(124,106,239,.1); }
+.thinking-toggle.on .thinking-label { color: var(--accent2); }
 .model-dd-menu {
   position: fixed;
   min-width: 250px; max-width: 350px; max-height: 300px;
@@ -2722,6 +2742,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <span class="model-dd-name" id="modelDdName">sonnet</span>
         <span class="model-dd-arrow">▼</span>
       </button>
+      <label class="thinking-toggle" id="thinkingToggle" title="Show thinking blocks (Kilo only)">
+        <input type="checkbox" id="thinkingChk" onchange="toggleThinking()">
+        <span class="thinking-label" data-i18n="thinking.label">Режим размышлений</span>
+      </label>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" id="turnsGroup">
@@ -3481,7 +3505,7 @@ let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
-let curMode = 'auto', curAgent = 'single', curModel = 'sonnet';
+let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curThinking = false;
 let availableModels = ['haiku', 'sonnet', 'opus']; // default, will be loaded
 let cliType = 'claude'; // 'claude' or 'kilocode'
 let availableModes = ['auto', 'planning', 'task']; // default Claude modes
@@ -4029,7 +4053,7 @@ const TRANSLATIONS = {
     'cli.import.msgs':'msgs','cli.import.already':'Already imported','cli.import.already_done':'✓ imported',
     'cli.import.doing':'Importing…','cli.import.doing_n':'Importing {n} sessions…',
     'cli.import.result':'Imported: {n}','cli.import.skipped':' skipped: {n}','cli.import.errors':' errors: {n}',
-    'thinking.title':'Chain of thought','thinking.copy':'Copy','thinking.copied':'✓ Copied','thinking.copy_err':'Failed to copy','thinking.translate':'Translate','thinking.show_original':'Show original','thinking.translating':'Translating…','thinking.translate_err':'Translation failed',
+    'thinking.title':'Chain of thought','thinking.label':'Reasoning mode','thinking.copy':'Copy','thinking.copied':'✓ Copied','thinking.copy_err':'Failed to copy','thinking.translate':'Translate','thinking.show_original':'Show original','thinking.translating':'Translating…','thinking.translate_err':'Translation failed',
     'dlg.title':'Delegate to Agent','dlg.agent':'Agent','dlg.agent.select':'Select agent...','dlg.mode':'Mode',
     'dlg.mode.handoff':'Handoff','dlg.mode.handoff.desc':'Full transfer. Opens terminal, you continue working there.',
     'dlg.mode.sync':'Sync','dlg.mode.sync.desc':'Parallel work. Both agents active, communicate via dialog file.',
@@ -4257,7 +4281,7 @@ const TRANSLATIONS = {
     'cli.import.msgs':'сообщ.','cli.import.already':'Уже импортировано','cli.import.already_done':'✓ импортировано',
     'cli.import.doing':'Импортирую…','cli.import.doing_n':'Импортирую {n} сессий…',
     'cli.import.result':'Импортировано: {n}','cli.import.skipped':' пропущено: {n}','cli.import.errors':' ошибок: {n}',
-    'thinking.title':'Цепочка рассуждений','thinking.copy':'Копировать','thinking.copied':'✓ Скопировано','thinking.copy_err':'Не удалось скопировать','thinking.translate':'Перевести','thinking.show_original':'Показать оригинал','thinking.translating':'Перевожу…','thinking.translate_err':'Ошибка перевода',
+    'thinking.title':'Цепочка рассуждений','thinking.label':'Режим размышлений','thinking.copy':'Копировать','thinking.copied':'✓ Скопировано','thinking.copy_err':'Не удалось скопировать','thinking.translate':'Перевести','thinking.show_original':'Показать оригинал','thinking.translating':'Перевожу…','thinking.translate_err':'Ошибка перевода',
     'dlg.title':'Делегировать агенту','dlg.agent':'Агент','dlg.agent.select':'Выберите агента...','dlg.mode':'Режим',
     'dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Полная передача. Откроет терминал, вы продолжите работу там.',
     'dlg.mode.sync':'Синхронизация','dlg.mode.sync.desc':'Параллельная работа. Оба агента активны, общаются через файл диалога.',
@@ -7427,6 +7451,13 @@ function updateSessBarSkills() {
   }
 }
 
+function toggleThinking() {
+  const chk = $i('thinkingChk');
+  curThinking = chk ? chk.checked : false;
+  const toggle = $i('thinkingToggle');
+  if (toggle) toggle.classList.toggle('on', curThinking);
+}
+
 function syncBtn(group, val) {
   const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: availableModels };
   if (!groups[group]?.includes(val)) return;
@@ -7943,6 +7974,7 @@ async function send() {
       model: curModel,
       maxTurns: parseInt($i('maxTurns').value) || 30,
       workdir: curWorkdir || undefined,
+      thinking: curThinking,
     }));
   }
 }

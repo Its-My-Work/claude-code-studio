@@ -488,6 +488,7 @@
   "cli.import.skipped": " пропущено: {n}",
   "cli.import.errors": " ошибок: {n}",
   "thinking.title": "Цепочка рассуждений",
+  "thinking.label": "Режим размышлений",
   "thinking.copy": "Копировать",
   "thinking.copied": "✓ Скопировано",
   "thinking.copy_err": "Не удалось скопировать",

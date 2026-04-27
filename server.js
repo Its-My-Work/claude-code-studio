@@ -2315,7 +2315,7 @@ function isResettableClaudeSessionError(errorText = '') {
 
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
-  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId } = p;
+  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId, thinking } = p;
 
   // Build mode prompt: only for Claude CLI modes (planning, task)
   // KiloCode agents handle their own prompts internally
@@ -2382,7 +2382,7 @@ async function runCliSingle(p) {
       CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
     };
 
-    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode })
+    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -6370,7 +6370,7 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false, thinking=false } = msg;
 
       let replyQuote = '';
       if (reply_to && reply_to.content) {

@@ -27,6 +27,7 @@ class KiloRunner {
       format = 'json',
       auto = true,
       abortController,
+      thinking = false,
     } = options;
 
     // Построить аргументы для kilo run
@@ -43,6 +44,11 @@ class KiloRunner {
     // Автоматическое одобрение разрешений
     if (auto) {
       args.push('--auto');
+    }
+
+    // Включить thinking блоки
+    if (thinking) {
+      args.push('--thinking');
     }
 
     // Модель
