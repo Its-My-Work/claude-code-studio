@@ -69,6 +69,8 @@ class KiloRunner {
       onDone: null,
       onSessionId: null,
       onResult: null,
+      onStepStart: null,
+      onStepFinish: null,
     };
 
     let fullOutput = '';
@@ -150,20 +152,22 @@ class KiloRunner {
 
       // step_start - начало нового шага
       if (event.type === 'step_start') {
-        logger.info('[kilocode] step_start', {
-          sessionId: sid,
+        const stepData = {
           partId: part?.id,
           messageId: part?.messageID,
           type: part?.type,
-        });
+        };
+        logger.info('[kilocode] step_start', { sessionId: sid, ...stepData });
+        if (handlers.onStepStart) {
+          handlers.onStepStart(stepData);
+        }
         return;
       }
 
       // step_finish - завершение шага (с токенами и reason)
       if (event.type === 'step_finish' || event.type === 'step-finish') {
         const tokens = part?.tokens || {};
-        logger.info('[kilocode] step_finish', {
-          sessionId: sid,
+        const stepData = {
           partId: part?.id,
           reason: part?.reason,
           tokens: {
@@ -173,7 +177,11 @@ class KiloRunner {
             reasoning: tokens.reasoning,
           },
           cost: part?.cost,
-        });
+        };
+        logger.info('[kilocode] step_finish', { sessionId: sid, ...stepData });
+        if (handlers.onStepFinish) {
+          handlers.onStepFinish(stepData);
+        }
         return;
       }
 
@@ -279,6 +287,14 @@ class KiloRunner {
       },
       onResult(callback) {
         handlers.onResult = callback;
+        return this;
+      },
+      onStepStart(callback) {
+        handlers.onStepStart = callback;
+        return this;
+      },
+      onStepFinish(callback) {
+        handlers.onStepFinish = callback;
         return this;
       },
     };

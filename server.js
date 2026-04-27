@@ -2410,6 +2410,12 @@ async function runCliSingle(p) {
         if (info && info.status === 'rejected') rateLimitInfo = info;
       })
       .onResult(r => { resultData = r; _resultReceived = true; })
+      .onStepStart(stepData => {
+        ws.send(JSON.stringify({ type: 'step_start', data: stepData, ...(tabId ? { tabId } : {}) }));
+      })
+      .onStepFinish(stepData => {
+        ws.send(JSON.stringify({ type: 'step_finish', data: stepData, ...(tabId ? { tabId } : {}) }));
+      })
       .onError(err => {
         // Capture error text for the main loop to inspect (e.g. thinking block signature errors)
         errorText += err;

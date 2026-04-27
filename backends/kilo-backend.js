@@ -73,6 +73,8 @@ class KiloBackend extends AgentBackend {
       onDone: null,
       onSessionId: null,
       onResult: null,
+      onStepStart: null,
+      onStepFinish: null,
     };
 
     // Регистрировать обработчики один раз
@@ -125,6 +127,19 @@ class KiloBackend extends AgentBackend {
       }
     });
 
+    // step callbacks - каждый шаг отправляется в чат
+    kiloRunner.onStepStart((stepData) => {
+      if (callbacks.onStepStart) {
+        callbacks.onStepStart(stepData);
+      }
+    });
+
+    kiloRunner.onStepFinish((stepData) => {
+      if (callbacks.onStepFinish) {
+        callbacks.onStepFinish(stepData);
+      }
+    });
+
     // Вернуть объект совместимый с Claude интерфейсом
     return {
       onText(callback) {
@@ -153,6 +168,14 @@ class KiloBackend extends AgentBackend {
       },
       onResult(callback) {
         callbacks.onResult = callback;
+        return this;
+      },
+      onStepStart(callback) {
+        callbacks.onStepStart = callback;
+        return this;
+      },
+      onStepFinish(callback) {
+        callbacks.onStepFinish = callback;
         return this;
       },
       onRateLimit(callback) {

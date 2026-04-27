@@ -2685,7 +2685,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </div>
       </div>
       <button class="hb" onclick="newSession()" data-tip="Новий чат" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Чат</span></button>
-      <button class="hb" onclick="openCliImport()" data-tip="Імпорт сесій Claude CLI" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+      <button class="hb" onclick="openCliImport()" data-tip="Імпорт сесій" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
       <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
       <select class="lang-sel" id="langSel" onchange="setLang(this.value)" aria-label="Interface language" data-tip="Мова інтерфейсу" data-i18n-tip="tip.lang">
         <option value="en">EN</option>
@@ -4020,7 +4020,7 @@ const TRANSLATIONS = {
     'hist.drag':'Drag to reorder','tg.device.connected':'📱 Telegram: {name} connected',
     'tg.bot.started':'✅ Telegram bot started: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Compact chat and start new session','compact.loading':'Compacting…','compact.success':'✅ Chat compacted — opening new session','compact.err':'Compact failed',
-    'cli.import.tip':'Import Claude CLI sessions','cli.import.title':'Import Claude CLI Sessions',
+         'cli.import.tip':'Import sessions','cli.import.title':'Import Claude CLI Sessions',
     'cli.import.project':'Project:','cli.import.load':'Load',
     'cli.import.hint':'Enter project path and click «Load»',
     'cli.import.do':'Import selected','cli.import.sel_all':'Select all',
@@ -4248,7 +4248,7 @@ const TRANSLATIONS = {
     'hist.drag':'Перетащить','tg.device.connected':'📱 Telegram: {name} подключён',
     'tg.bot.started':'✅ Telegram-бот запущен: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Сжать чат и открыть новую сессию','compact.loading':'Сжатие…','compact.success':'✅ Чат сжат — открываю новую сессию','compact.err':'Ошибка сжатия',
-    'cli.import.tip':'Импорт сессий Claude CLI','cli.import.title':'Импорт сессий Claude CLI',
+         'cli.import.tip':'Импорт сессий','cli.import.title':'Импорт сессий Claude CLI',
     'cli.import.project':'Проект:','cli.import.load':'Загрузить',
     'cli.import.hint':'Укажите проект и нажмите «Загрузить»',
     'cli.import.do':'Импортировать выбранные','cli.import.sel_all':'Выбрать все',
