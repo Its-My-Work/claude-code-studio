@@ -451,9 +451,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Add buttons & forms ─── */
 .add-btn { display: flex; align-items: center; gap: 6px; padding: 6px 9px; margin-top: 4px; border-radius: var(--r); cursor: pointer; font-size: 12px; color: var(--accent2); border: 1px dashed var(--border); background: none; width: 100%; transition: all .12s; }
-.auto-skills-btn { font-size: 11px; font-weight: 700; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; cursor: pointer; transition: all .15s; line-height: 1.6; letter-spacing: .3px; }
-.auto-skills-btn:hover { color: var(--accent2); border-color: var(--accent); }
-.auto-skills-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
 .auto-notif { font-size: 10px; color: var(--accent2); padding: 2px 10px 6px; }
 .add-btn:hover { background: var(--abg); border-color: var(--accent); }
 .af { margin-top: 7px; display: flex; flex-direction: column; gap: 6px; }
@@ -1160,8 +1158,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 /* ─── Session info bar ─── */
 .sess-bar { display:flex; align-items:center; gap:6px; padding:3px 14px; font-size:11px; color:var(--text-dim); border-bottom:1px solid var(--border); user-select:none; min-height:24px; flex-shrink:0; }
 .sess-project { font-weight:600; color:var(--accent2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:300px; }
-.sess-skill-chip { font-size:10px; color:var(--accent2); background:rgba(124,106,239,.12); border:1px solid rgba(124,106,239,.25); padding:1px 7px; border-radius:4px; white-space:nowrap; max-width:120px; overflow:hidden; text-overflow:ellipsis; }
-.sess-skill-auto { color:var(--orange); background:rgba(229,164,53,.12); border-color:rgba(229,164,53,.3); }
+
 
 /* ─── Compact button ─── */
 .sess-compact-btn { font-size:11px; color:var(--text-dim); background:transparent; border:1px solid var(--border); padding:1px 7px; border-radius:4px; cursor:pointer; flex-shrink:0; transition:all .15s; display:inline-flex; align-items:center; gap:3px; }
@@ -2403,24 +2400,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
     </div>
 
-    <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
-        <span data-i18n="sec.skills">Навички</span>
-        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="skillsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('skills')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button id="autoSkillsBtn" class="auto-skills-btn" onclick="event.stopPropagation();toggleAutoSkills()">⚡ Auto</button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();$i('skillUpload').click()" title="Завантажити .md файл" data-i18n-title="skills.upload">＋</button>
-          <span class="badge" id="skillsCount">0</span>
-        </div>
-      </div>
-      <div class="sec-body" id="skillsBody">
-        <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" placeholder="Фільтр..." aria-label="Фільтр навичок" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
-        <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Навички обираються автоматично по тексту завдання</div>
-        <div class="sec-list"><div id="skillsList"></div></div>
-        <input type="file" id="skillUpload" accept=".md,.txt" style="display:none" onchange="uploadSkill(this)">
-      </div>
-    </div>
+
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
@@ -2788,7 +2768,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   <div class="tabs-bar" id="tabsBar"></div>
 
   <div class="sess-bar" id="sessBar" style="display:none">
-    <span id="sessBarSkills" style="display:flex;gap:4px;align-items:center;overflow:hidden;flex-shrink:1;"></span>
+
     <span style="flex:1"></span>
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
     <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
@@ -3625,9 +3605,9 @@ function updateAgentModeVisibility() {
 async function loadModels() {
   // Show loading text
   const ddName = $i('modelDdName');
-  if (ddName) ddName.textContent = 'Получение моделей...';
+  if (ddName) ddName.textContent = t('models.loading');
   const mobDdName = $i('mobModelDdName');
-  if (mobDdName) mobDdName.textContent = 'Получение моделей...';
+  if (mobDdName) mobDdName.textContent = t('models.loading');
 
   try {
     const res = await fetch('/api/models');
@@ -3653,8 +3633,8 @@ async function loadModels() {
     console.error('Failed to load models:', e);
     // Fallback if loadModels fails
     curModel = 'sonnet';
-    if (ddName) ddName.textContent = 'Ошибка загрузки моделей';
-    if (mobDdName) mobDdName.textContent = 'Ошибка загрузки моделей';
+    if (ddName) ddName.textContent = t('models.error');
+    if (mobDdName) mobDdName.textContent = t('models.error');
   }
 }
 function renderModelButtons() {
@@ -3783,9 +3763,6 @@ let _pendingProjectSend = false;
 const $i = id => document.getElementById(id);
 const msgsEl = $i('messages');
 const inEl = $i('input');
-
-// Load models after $i is defined
-loadModels();
 const MODAL_FOCUSABLE_SEL = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const modalStack = [];
 
@@ -3893,8 +3870,7 @@ const TRANSLATIONS = {
     'mcp.hint':'Enable tools that Claude can use in this chat.',
     'mcp.add':'＋ Add MCP server','mcp.id':'ID (e.g. my-server)','mcp.label':'Label',
     'mcp.cmd':'Command (e.g. npx)','mcp.args':'Args comma-separated','mcp.add_btn':'Add',
-    'sec.skills':'Skills','skills.hint':'Skills are instruction files added to the system prompt.',
-    'skills.upload':'＋ Upload .md file','sec.projects':'Projects','proj.add':'＋ Add project',
+    'sec.projects':'Projects','proj.add':'＋ Add project',
     'tip.new':'New chat','tip.cfg':'Configuration','tip.logout':'Logout',
     'tip.panels.left':'Toggle left panel','tip.panels.right':'Toggle right panel',
     'btn.new':'Chat','btn.cfg':'Config','btn.logout':'Logout','mob.files':'Files','mob.tabs':'Sessions',
@@ -3951,11 +3927,11 @@ const TRANSLATIONS = {
     'mcp.cfg.cancel':'Cancel','mcp.cfg.save':'Save',
     'mcp.add.id_req':'ID is required','mcp.add.url_req':'URL is required',
     'mcp.add.cmd_req':'Command is required','mcp.add.ok':'✓ MCP server added',
-        'skill.active':'● In system prompt','skill.inactive':'○ Inactive','skill.del.title':'Remove skill','skill.name_prompt':'Skill name:',
-    'skills.auto_hint':'⚡ Skills are auto-selected based on task text',
-    'auto.title.on':'⚡ Auto-Skills: enabled — click to disable',
-    'auto.title.off':'⚡ Auto-Skills: disabled — click to enable',
+    
+
+
     'status.connecting':'Connecting...','status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.classifying':'⚡ Classifying specialists...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
+    'models.loading':'Getting models...','models.error':'Error loading models',
     'fpv.download':'Download','fpv.download.title':'Download file','fpv.copy_img':'Copy','fpv.copy_img.title':'Copy image to clipboard','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
     'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.img_copied':'✓ Image copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
     'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found','ssh.search':'Search SSH server...','ssh.no_hosts':'No SSH servers configured',
@@ -4086,7 +4062,7 @@ const TRANSLATIONS = {
     'me.err.cmd_req':'Command is required for stdio servers.','me.err.request':'Request failed — check the server logs.',
     'me.toast.added':'MCP server added.','me.toast.updated':'MCP server updated.','me.kv.del':'Remove',
     'notif.dismiss':'Dismiss','msf.plan_kanban':'Plan → Kanban','msf.open_kanban':'Open Kanban →','msf.sent':'✅ Sent',
-    'skill.custom_desc':'Custom skill','skill.custom_cat':'🔧 Custom',
+
     'files.remote_unavail':'🌐 Remote project —<br>file browser not available',
     'hist.drag':'Drag to reorder','tg.device.connected':'📱 Telegram: {name} connected',
     'tg.bot.started':'✅ Telegram bot started: @{bot}',
@@ -4121,8 +4097,7 @@ const TRANSLATIONS = {
     'mcp.hint':'Включите инструменты, которые Claude может использовать в этом чате.',
     'mcp.add':'＋ Добавить MCP-сервер','mcp.id':'ID (напр. my-server)','mcp.label':'Название',
     'mcp.cmd':'Команда (напр. npx)','mcp.args':'Аргументы через запятую','mcp.add_btn':'Добавить',
-    'sec.skills':'Навыки','skills.hint':'Навыки — файлы инструкций, добавляемые в системный промпт.',
-    'skills.upload':'＋ Загрузить .md файл','sec.projects':'Проекты','proj.add':'＋ Добавить проект',
+    'sec.projects':'Проекты','proj.add':'＋ Добавить проект',
     'tip.new':'Новый чат','tip.cfg':'Настройки','tip.logout':'Выйти',
     'tip.panels.left':'Скрыть/показать левую панель','tip.panels.right':'Скрыть/показать правую панель',
     'btn.new':'Чат','btn.cfg':'Конфиг','btn.logout':'Выйти','mob.files':'Файлы','mob.tabs':'Сессии',
@@ -4179,11 +4154,12 @@ const TRANSLATIONS = {
     'mcp.cfg.cancel':'Отмена','mcp.cfg.save':'Сохранить',
     'mcp.add.id_req':'ID обязателен','mcp.add.url_req':'URL обязателен',
     'mcp.add.cmd_req':'Команда обязательна','mcp.add.ok':'✓ MCP сервер добавлен',
-        'skill.active':'● В системном промпте','skill.inactive':'○ Неактивен','skill.del.title':'Удалить skill','skill.name_prompt':'Название навыка:',
-    'skills.auto_hint':'⚡ Навыки выбираются автоматически по тексту задачи',
+    
+
     'auto.title.on':'⚡ Auto-Skills: включено — клик для отключения',
     'auto.title.off':'⚡ Auto-Skills: отключено — клик для включения',
     'status.connecting':'Подключение...','status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.classifying':'⚡ Определение специалистов...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
+    'models.loading':'Получение моделей...','models.error':'Ошибка загрузки моделей',
     'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.copy_img':'Копировать','fpv.copy_img.title':'Скопировать изображение в буфер','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
     'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.img_copied':'✓ Изображение скопировано','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
     'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено','ssh.search':'Поиск SSH-сервера...','ssh.no_hosts':'SSH-серверы не настроены',
@@ -4208,7 +4184,7 @@ const TRANSLATIONS = {
     'status.connecting':'Подключение...',
     'toast.cmd_copied':'✓ Команда скопирована','toast.json_req':'Требуется .json файл','toast.json_enter':'Введите или загрузите JSON',
     'toast.mcp_imported':'✓ Импортировано {n} MCP серверов','toast.mcp_import_err':'Ошибка импорта: ','toast.mcp_export_err':'Ошибка экспорта',
-    'skill.toggle.on':'Клик — отключить навык','skill.toggle.off':'Клик — добавить навык в системный промпт',
+
     'files.empty':'Пусто','files.view':'Просмотр',
     'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
     'proj.search':'Поиск проекта...','search.empty':'Не найдено',
@@ -4314,7 +4290,7 @@ const TRANSLATIONS = {
     'me.err.cmd_req':'Команда обязательна для stdio серверов.','me.err.request':'Ошибка запроса — проверьте логи сервера.',
     'me.toast.added':'MCP-сервер добавлен.','me.toast.updated':'MCP-сервер обновлён.','me.kv.del':'Удалить',
     'notif.dismiss':'Закрыть','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Открыть Kanban →','msf.sent':'✅ Отправлено',
-    'skill.custom_desc':'Пользовательский навык','skill.custom_cat':'🔧 Кастомные',
+
     'files.remote_unavail':'🌐 Удалённый проект —<br>файловый браузер недоступен',
     'hist.drag':'Перетащить','tg.device.connected':'📱 Telegram: {name} подключён',
     'tg.bot.started':'✅ Telegram-бот запущен: @{bot}',
@@ -4365,6 +4341,9 @@ function setLang(lang) {
   // Restore current status after language change
   if (_currentStatusKey) setStatus(_currentStatusKey, _currentStatusCls);
 }
+
+// Load models after everything is initialized
+loadModels();
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
 (async () => {
@@ -5170,7 +5149,7 @@ function handleWsMsg(d) {
       if (d.skills?.length) {
         const newSkills = d.skills.filter(id => !activeSkills.has(id));
         for (const s of d.skills) activeSkills.add(s);
-        renderSkills(); updateSessBarSkills();
+        updateSessBarSkills();
         // Ensure session bar is visible (skills_auto may arrive before first 'done')
         const _bar = $i('sessBar');
         if (_bar && currentSessionId) _bar.style.display = 'flex';
@@ -7342,7 +7321,7 @@ function newTab() {
   // New tab is never generating — reset interrupt bar and stop button
   isGen = false; generatingTabId = null; setSendStop(false);
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
-  renderMcp(); renderSkills();
+    renderMcp();
   userScrolled = false; renderTabs(); saveUIState(); updateSessBar();
   inEl.focus();
 }
@@ -8622,7 +8601,7 @@ async function loadSess(id) {
       // If session has no MCPs saved (or all were stale), keep current global activeMcp
     } catch { /* keep current activeMcp */ }
     try { activeSkills = new Set(JSON.parse(d.active_skills || '[]')); } catch { activeSkills = new Set(); }
-    renderMcp(); renderSkills();
+  renderMcp();
 
     // Build display messages, attaching tool activity counts to each assistant text message.
     // Multi-agent: tools grouped by agent_id (tools may arrive before/after text in any order).
@@ -8926,7 +8905,6 @@ async function loadCfg() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     config = await r.json();
     renderMcp();
-    renderSkills();
     renderCommands();
   } catch (e) {
     console.error('loadCfg:', e);
@@ -9757,7 +9735,7 @@ function tSkill(id) {
     const hint = $i('autoSkillsHint');
     if (hint) hint.style.display = 'none';
   }
-  renderSkills(); saveUIState(); updateSessBarSkills();
+  saveUIState(); updateSessBarSkills();
   // Save skills state to current session immediately (mirrors tMcp behaviour)
   if (currentSessionId) {
     fetch(`/api/sessions/${currentSessionId}`, {
@@ -9771,7 +9749,6 @@ async function rSkill(id) {
   activeSkills.delete(id);
   await fetch(`/api/skills/${id}`, { method: 'DELETE' });
   delete config.skills[id];
-  renderSkills();
 }
 async function uploadSkill(input) {
   const file = input.files[0];

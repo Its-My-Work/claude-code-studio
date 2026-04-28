@@ -97,42 +97,14 @@ const ALLOWED_BROWSE_ROOTS = [
   path.resolve(APP_DIR),
   path.resolve(__dirname),
 ];
-const SKILLS_DIR = path.join(APP_DIR, 'skills');
+
 const DB_PATH = path.join(APP_DIR, 'data', 'chats.db');
 const PROJECTS_FILE = path.join(APP_DIR, 'data', 'projects.json');
 const REMOTE_HOSTS_FILE = path.join(APP_DIR, 'data', 'remote-hosts.json');
 const HOSTS_KEY_FILE    = path.join(APP_DIR, 'data', 'hosts.key');
 const UPLOADS_DIR   = path.join(APP_DIR, 'data', 'uploads');
 
-// Category map for bundled skills — used when skill is auto-discovered (not in config)
-const BUNDLED_SKILL_META = {
-  'auto-mode':         { label:'🎯 Auto-Skill Mode',           category:'system'      },
-  'backend':           { label:'⚙️ Backend Engineer',           category:'engineering' },
-  'api-designer':      { label:'🔌 API Designer',              category:'engineering' },
-  'frontend':          { label:'🎨 Frontend Engineer',          category:'engineering' },
-  'fullstack':         { label:'🔗 Fullstack Engineer',         category:'engineering' },
-  'devops':            { label:'🐳 DevOps Engineer',            category:'engineering' },
-  'postgres-wizard':   { label:'🗄️ PostgreSQL Wizard',          category:'engineering' },
-  'data-engineer':     { label:'📊 Data Engineer',              category:'engineering' },
-  'llm-architect':     { label:'🧠 LLM Architect',              category:'ai'          },
-  'prompt-engineer':   { label:'✍️ Prompt Engineer',            category:'ai'          },
-  'rag-engineer':      { label:'🔍 RAG Engineer',               category:'ai'          },
-  'code-quality':      { label:'💎 Code Quality',               category:'quality'     },
-  'debugging-master':  { label:'🐛 Debugging Master',           category:'quality'     },
-  'code-review':       { label:'👁️ Code Reviewer',              category:'quality'     },
-  'system-designer':   { label:'🏗️ System Designer',            category:'quality'     },
-  'security':          { label:'🔒 Security Expert',            category:'security'    },
-  'auth-specialist':   { label:'🛡️ Auth Specialist',            category:'security'    },
-  'ui-design':         { label:'🎭 UI Designer',                category:'design'      },
-  'ux-design':         { label:'🧩 UX Designer',                category:'design'      },
-  'product-management':{ label:'📋 Product Manager',            category:'product'     },
-  'docs-engineer':     { label:'📚 Docs Engineer',              category:'product'     },
-  'technical-writer':  { label:'✒️ Technical Writer',           category:'product'     },
-  'investment-banking':{ label:'💼 Investment Banking Analyst', category:'finance'     },
-  'researcher':        { label:'🔬 Deep Researcher',            category:'research'    },
-  'interview':         { label:'🎤 Interview First',            category:'workflow'    },
-  'plan-execute':      { label:'📐 Plan & Execute',             category:'workflow'    },
-};
+
 
 // ─── Server-side i18n for user-facing defaults ──────────────────────────────
 const SERVER_I18N = {
@@ -153,7 +125,7 @@ function i18nTask()    { return SERVER_I18N[getUserLang()]?.newTask    || SERVER
 
 // ─── Global Claude Code directory (priority: global → local) ─────────────────
 const GLOBAL_CLAUDE_DIR  = path.join(os.homedir(), '.claude');
-const GLOBAL_SKILLS_DIR  = path.join(GLOBAL_CLAUDE_DIR, 'skills');
+
 const GLOBAL_PLUGINS_DIR = path.join(GLOBAL_CLAUDE_DIR, 'plugins');
 const GLOBAL_PLUGIN_CACHE_DIR = path.join(GLOBAL_PLUGINS_DIR, 'cache');
 const GLOBAL_PLUGIN_MARKETPLACES_DIR = path.join(GLOBAL_PLUGINS_DIR, 'marketplaces');
@@ -190,7 +162,7 @@ function killByPid(pid) {
   } catch {} // Process may already be dead (ESRCH)
 }
 
-[WORKDIR, SKILLS_DIR, path.dirname(DB_PATH), UPLOADS_DIR].forEach(d => {
+[WORKDIR, path.dirname(DB_PATH), UPLOADS_DIR].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 });
 
@@ -315,7 +287,6 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     claude_session_id TEXT,
     active_mcp TEXT DEFAULT '[]',
-    active_skills TEXT DEFAULT '[]',
     mode TEXT DEFAULT 'auto',
     agent_mode TEXT DEFAULT 'single',
     model TEXT DEFAULT 'sonnet',
@@ -379,6 +350,7 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN fork_from_cid TEXT`); } catch {}
+try { db.exec(`ALTER TABLE sessions DROP COLUMN active_skills`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -487,7 +459,7 @@ function wrapStmt(stmt, label) {
 }
 
 const stmts = {
-  createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir) VALUES (?,?,?,?,?,?,?,?)`),
+  createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,mode,agent_mode,model,workdir) VALUES (?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
     const _stmt = db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`);
@@ -499,7 +471,7 @@ const stmts = {
     };
     return _stmt;
   })(),
-  updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
+  updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
@@ -936,7 +908,7 @@ async function startTask(task) {
     db.transaction(() => {
       if (!sessionId) {
         sessionId = genId();
-        stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', task.workdir || null);
+        stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', task.workdir || null);
         stmts.setTaskSession.run(sessionId, task.id);
       }
       stmts.setTaskInProgress.run(task.id);
@@ -1291,7 +1263,7 @@ function scheduleNextChainRun(chain, oldTasks) {
   const newSessionId = genId();
   db.transaction(() => {
     // Fresh shared session for next chain run
-    stmts.createSession.run(newSessionId, chain.title, '[]', '[]',
+    stmts.createSession.run(newSessionId, chain.title, '[]',
       chain.mode || 'auto', chain.agent_mode || 'single', chain.model || 'sonnet',
       chain.workdir || null);
     // Re-arm chain with next scheduled_at + new session
@@ -1898,53 +1870,7 @@ function discoverCachedPluginSkills() {
   return out;
 }
 
-function addAutoDiscoveredSkills(config) {
-  const merged = {
-    ...config,
-    skills: { ...(config.skills || {}) },
-  };
 
-  const globalSkills = discoverFlatSkills(GLOBAL_SKILLS_DIR, (fileName, id) => ({
-    label: `🌐 ${id}`,
-    description: 'Global skill (~/.claude/skills/)',
-    file: path.join(GLOBAL_SKILLS_DIR, fileName),
-    global: true,
-  }));
-  for (const [id, skill] of Object.entries(globalSkills)) addDiscoveredSkill(merged.skills, id, skill);
-
-  const localSkills = discoverFlatSkills(SKILLS_DIR, (fileName, id) => {
-    const meta = BUNDLED_SKILL_META[id] || {};
-    return {
-      label: meta.label || `📄 ${id}`,
-      description: 'Local skill',
-      file: `skills/${fileName}`,
-      ...(meta.category ? { category: meta.category } : {}),
-    };
-  });
-  for (const [id, skill] of Object.entries(localSkills)) addDiscoveredSkill(merged.skills, id, skill);
-
-  const bundledSkillsDir = path.join(__dirname, 'skills');
-  if (bundledSkillsDir !== SKILLS_DIR) {
-    const bundledSkills = discoverFlatSkills(bundledSkillsDir, (fileName, id) => {
-      const meta = BUNDLED_SKILL_META[id] || {};
-      return {
-        label: meta.label || `📄 ${id}`,
-        description: 'Bundled skill',
-        file: path.join(bundledSkillsDir, fileName),
-        ...(meta.category ? { category: meta.category } : {}),
-      };
-    });
-    for (const [id, skill] of Object.entries(bundledSkills)) addDiscoveredSkill(merged.skills, id, skill);
-  }
-
-  const marketplaceSkills = discoverMarketplacePluginSkills();
-  for (const [id, skill] of Object.entries(marketplaceSkills)) addDiscoveredSkill(merged.skills, id, skill);
-
-  const cachedPluginSkills = discoverCachedPluginSkills();
-  for (const [id, skill] of Object.entries(cachedPluginSkills)) addDiscoveredSkill(merged.skills, id, skill);
-
-  return merged;
-}
 
 /** Write to temp file then atomic rename — prevents partial reads on concurrent access. */
 function atomicWriteJSON(filePath, data) {
@@ -1956,8 +1882,7 @@ function atomicWriteJSON(filePath, data) {
 function saveConfig(c) {
   atomicWriteJSON(CONFIG_PATH, c);
   _mergedConfigCache = null; // invalidate on every write
-  _skillContentCache.clear(); // skill files may have changed
-  _systemPromptCache.clear(); // prompts depend on skill content
+  _systemPromptCache.clear(); // prompts may have changed
 }
 
 // In-memory cache for the merged (global + local) config.
@@ -1974,42 +1899,15 @@ function loadMergedConfig() {
   let g = {}, l = {};
   try { g = JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')); } catch {}
   try { l = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
-  _mergedConfigCache = addAutoDiscoveredSkills({
+  _mergedConfigCache = {
     mcpServers:    { ...(g.mcpServers||{}), ...(l.mcpServers||{}) },
-    skills:        { ...(g.skills||{}),     ...(l.skills||{})     },
     slashCommands: [...(l.slashCommands||[])],
     lang:          l.lang || g.lang || 'en',
-  });
+  };
   return _mergedConfigCache;
 }
 
-/** Resolve skill file path.
- *  - Absolute path → used as-is.
- *  - Relative path → try ~/.claude/skills/<basename> first, then project root. */
-function resolveSkillFile(file) {
-  if (path.isAbsolute(file)) return file;
-  const globalPath = path.join(GLOBAL_SKILLS_DIR, path.basename(file));
-  if (fs.existsSync(globalPath)) return globalPath;
-  // Try APP_DIR first (user-uploaded skills), then __dirname (bundled skills)
-  const appPath = path.join(APP_DIR, file);
-  if (fs.existsSync(appPath)) return appPath;
-  return path.join(__dirname, file);
-}
 
-// ─── Skill content cache (avoids fs.readFileSync on every chat turn) ─────────
-// Key: resolved file path → { content, mtimeMs }
-// Invalidated when file mtime changes. saveConfig() clears entire cache.
-const _skillContentCache = new Map();
-function getSkillContent(filePath) {
-  try {
-    const stat = fs.statSync(filePath);
-    const cached = _skillContentCache.get(filePath);
-    if (cached && cached.mtimeMs >= stat.mtimeMs) return cached.content;
-    const content = fs.readFileSync(filePath, 'utf-8');
-    _skillContentCache.set(filePath, { content, mtimeMs: stat.mtimeMs });
-    return content;
-  } catch { return ''; }
-}
 
 // ─── System prompt builder with caching ──────────────────────────────────────
 // Caches assembled system prompt by sorted skill IDs → avoids repeated string
@@ -2099,7 +1997,7 @@ FINAL: ✅ All requirements verified [/ ⚠️ N issues found and fixed]
  */
 function buildSystemPrompt(skillIds, config) {
   const uiLang = config.lang || 'en';
-  const cacheKey = [...skillIds].sort().join('|') + `|lang:${uiLang}`;
+  const cacheKey = `base|lang:${uiLang}`;
   const cached = _systemPromptCache.get(cacheKey);
   if (cached) return cached;
 
@@ -2109,20 +2007,7 @@ function buildSystemPrompt(skillIds, config) {
   const langName = LANG_NAMES[uiLang] || 'English';
   prompt += `\n\nLANGUAGE: All internal reasoning, thinking, and inter-agent communication MUST be in English (token-efficient). All user-facing text (responses, explanations, questions) MUST be in ${langName}.`;
 
-  for (const sid of skillIds) {
-    const s = config.skills[sid];
-    if (!s) continue;
-    const resolvedFile = resolveSkillFile(s.file);
-    const content = getSkillContent(resolvedFile);
-    if (!content) continue;
-    if (s.plugin) {
-      const skillDir = s.skillDir || path.dirname(resolvedFile);
-      const pluginRoot = s.pluginRoot || path.resolve(skillDir, '..', '..');
-      prompt += `\n\n--- SKILL: ${s.label} ---\nPLUGIN CONTEXT:\n- Plugin root: ${pluginRoot}\n- Skill directory: ${skillDir}\n- If the skill text references \${CLAUDE_PLUGIN_ROOT}, use the plugin root above.\n- Relative paths like references/, examples/, and scripts/ are relative to the skill directory above.\n${content}`;
-      continue;
-    }
-    prompt += `\n\n--- SKILL: ${s.label} ---\n${content}`;
-  }
+  // Skills removed
 
   prompt += ASK_USER_INSTRUCTION;
   prompt += NOTIFY_USER_INSTRUCTION;
@@ -2141,86 +2026,10 @@ function buildSystemPrompt(skillIds, config) {
 }
 
 // ============================================
-// LLM-BASED TASK CLASSIFIER (haiku)
+// PROJECTS
 // ============================================
-// Single haiku call returns both specialist skills AND a short chat title.
-// Replaces client-side keyword matching + ugly message truncation.
-// Haiku via CLI → ~10-15s (CLI overhead), but runs before main agent.
-const CLASSIFY_TIMEOUT_MS = 45000;
 
-async function classifyTask(userMessage, currentSkills, config, workdir) {
-  // Filter out meta/system skills that are never useful for task classification
-  const CLASSIFIER_SKIP = /^auto-mode$|:cancel$|:help$|:doctor$|:setup$|:omc-setup$|:release$|:skill$|:learner$|:local-skills-setup$|:mcp-setup$|:hud$|:note$|:psm$|:project-session-manager$|:learn-about-omc$/;
-  const catalog = Object.entries(config.skills || {})
-    .filter(([id]) => !CLASSIFIER_SKIP.test(id))
-    .map(([id, s]) => {
-      const label = (s.label || id).replace(/^\S+\s/, '');
-      const desc = s.description || '';
-      const kw = Array.isArray(s.keywords) && s.keywords.length ? ` [${s.keywords.join(', ')}]` : '';
-      return `- ${id}: ${label} — ${desc}${kw}`;
-    })
-    .join('\n');
 
-  const currentCtx = currentSkills.length
-    ? `\nCurrently active: ${currentSkills.filter(id => id !== 'auto-mode').join(', ')}`
-    : '';
-
-  const prompt = `Specialists:\n${catalog}${currentCtx}\n\nUser task: "${userMessage.substring(0, 600)}"`;
-
-  const cli = new ClaudeCLI({ cwd: workdir });
-
-  return new Promise((resolve) => {
-    let fullText = '';
-    let settled = false;
-    const fallback = { skills: [], title: '' };
-    const timer = setTimeout(() => {
-      if (!settled) { settled = true; resolve(fallback); }
-    }, CLASSIFY_TIMEOUT_MS);
-
-    cli.send({
-      prompt,
-      model: 'haiku',
-      maxTurns: 1,
-      settingSources: 'user', // skip project CLAUDE.md — service call, everything explicit
-      tools: '',           // disable all built-in tools (--tools "")
-      mcpServers: {},
-      systemPrompt: 'You are a task classifier. Analyze the user task and:\n1. Select 1-4 most relevant specialist IDs from the list\n2. Generate a short chat title (3-7 words, in the SAME language as user\'s message)\n\nRules:\n- Match the INTENT and DOMAIN of the task to specialists. The user may write in any language — match meaning, not exact words.\n- When the task clearly relates to a domain (design, UI, UX, security, backend, frontend, etc.) — always select ALL matching specialists from the list, including plugin specialists (IDs starting with "plugin:").\n- For coding tasks — select the most relevant engineering specialist(s).\n- Prefer selecting a relevant specialist over skipping. When in doubt, include it.\n- Plugin skills (IDs like "plugin:name:skill") are equally valid — select them when their description matches the task.\n- Skip only: generic meta/system/setup/cancel skills, and pure general-knowledge questions with no coding/design/engineering aspect.\n- Use the keywords field [in brackets] (if present) to improve matching — they describe typical tasks for each specialist.\n- Return the EXACT skill IDs as shown in the list. Copy them precisely, including any "plugin:" prefix.\n\nReturn ONLY a JSON object: {"skills":["id1","id2"],"title":"Short title here"}\nNo explanation, no markdown.',
-    })
-    .onText(t => { fullText += t; })
-    .onDone(() => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        const match = fullText.match(/\{[\s\S]*\}/);
-        if (match) {
-          const parsed = JSON.parse(match[0]);
-          const rawSkills = parsed.skills || [];
-          const skills = rawSkills.filter(id => typeof id === 'string' && config.skills[id] && id !== 'auto-mode');
-          const rejected = rawSkills.filter(id => typeof id === 'string' && !config.skills[id]);
-          const title = typeof parsed.title === 'string' ? parsed.title.trim().substring(0, 80) : '';
-          if (rejected.length) log.warn('[classify] Haiku returned unknown skill IDs', { rejected });
-          log.info('[classify] raw response', { rawSkills, accepted: skills, title });
-          resolve({
-            skills: skills.length > 0 && config.skills['auto-mode'] ? ['auto-mode', ...skills] : skills,
-            title,
-          });
-          return;
-        }
-        log.warn('[classify] No JSON found in Haiku response', { fullText: fullText.substring(0, 300) });
-        resolve(fallback);
-      } catch {
-        resolve(fallback);
-      }
-    })
-    .onError(() => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(fallback);
-    });
-  });
-}
 
 // ============================================
 // PROJECTS
@@ -3218,7 +3027,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const chainSessionId = genId();
         const effectiveModel = chainModel || callerTask?.model || 'sonnet';
 
-        stmts.createSession.run(chainSessionId, String(title).substring(0, 200), '[]', '[]',
+        stmts.createSession.run(chainSessionId, String(title).substring(0, 200), '[]',
           'auto', 'single', effectiveModel, workdir);
         stmts.createChain.run(chainId, String(title).substring(0, 200), workdir,
           effectiveModel, 'auto', 'single', 30,
@@ -3906,7 +3715,7 @@ app.post('/api/task-chains', (req, res) => {
   const id = genId();
   // Create shared session for the chain
   const sessionId = genId();
-  stmts.createSession.run(sessionId, String(title).substring(0, 200), '[]', '[]',
+  stmts.createSession.run(sessionId, String(title).substring(0, 200), '[]',
     sqlVal(mode), sqlVal(agent_mode), sqlVal(model), sqlVal(workdir) || null);
   stmts.createChain.run(id, String(title).substring(0, 200), sqlVal(workdir) || null,
     sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns),
@@ -4084,7 +3893,6 @@ app.post('/api/tasks/dispatch', (req, res) => {
     chainSessionId,
     (plan_description || 'Task chain').substring(0, 200),
     source?.active_mcp || '[]',
-    source?.active_skills || '[]',
     'auto', 'single', sqlVal(model) || 'sonnet',
     sqlVal(workdir) || null
   );
@@ -4142,7 +3950,7 @@ app.get('/api/sessions', (req,res) => {
 app.post('/api/sessions', (req, res) => {
   const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single' } = req.body || {};
   const id = genId();
-  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', sqlVal(mode), sqlVal(agentMode), sqlVal(model), sqlVal(workdir) || null);
+  stmts.createSession.run(id, String(title).substring(0, 200), '[]', sqlVal(mode), sqlVal(agentMode), sqlVal(model), sqlVal(workdir) || null);
   res.json(stmts.getSession.get(id));
 });
 // Fork session — create a branch from an existing conversation
@@ -4152,7 +3960,7 @@ app.post('/api/sessions/:id/fork', (req, res) => {
   if (!source.claude_session_id) return res.status(400).json({ error: 'session has no Claude session to fork from' });
   const id = genId();
   const title = `Fork: ${(source.title || '').substring(0, 80)}`;
-  stmts.createSession.run(id, title, source.active_mcp || '[]', source.active_skills || '[]',
+  stmts.createSession.run(id, title, source.active_mcp || '[]',
     source.mode || 'auto', source.agent_mode || 'single', source.model || 'sonnet', source.workdir || null);
   // Set claude_session_id to source's so --resume picks it up, and fork_from_cid to trigger --fork-session
   db.prepare(`UPDATE sessions SET claude_session_id=?, fork_from_cid=? WHERE id=?`).run(source.claude_session_id, source.claude_session_id, id);
@@ -4335,7 +4143,7 @@ app.post('/api/sessions/cli-import', (req, res) => {
         if (!title) title = 'CLI: ' + sessionId.substring(0, 8);
 
         const newId = genId();
-        stmts.createSession.run(newId, title.substring(0, 200), '[]', '[]', 'auto', 'single', 'sonnet', cwd || null);
+        stmts.createSession.run(newId, title.substring(0, 200), '[]', 'auto', 'single', 'sonnet', cwd || null);
         updateClaudeId.run(sessionId, newId);
         if (sessionTs) updateTimestamps.run(sessionTs, sessionTs, newId);
         for (const m of msgs) insertMsg.run(newId, m.role, m.type, m.content, m.tool_name, null, m.ts || sessionTs);
@@ -4441,7 +4249,6 @@ app.post('/api/sessions/import', (req, res) => {
       newId,
       String(session.title || 'Imported session').substring(0, 200),
       session.active_mcp || '[]',
-      session.active_skills || '[]',
       session.mode || 'auto',
       session.agent_mode || 'single',
       session.model || 'sonnet',
@@ -4482,13 +4289,14 @@ app.get('/api/sessions/:id', (req,res) => {
   res.json(s);
 });
 app.put('/api/sessions/:id', (req, res) => {
-  const { title, active_mcp, active_skills } = req.body;
-  if (title) stmts.updateTitle.run(title, req.params.id);
-  if (active_mcp !== undefined || active_skills !== undefined) {
-    db.prepare(`UPDATE sessions SET active_mcp=COALESCE(?,active_mcp),active_skills=COALESCE(?,active_skills),updated_at=datetime('now') WHERE id=?`)
+  const { title, active_mcp } = req.body;
+  if (title !== undefined) {
+    stmts.updateTitle.run(title, req.params.id);
+  }
+  if (active_mcp !== undefined) {
+    db.prepare(`UPDATE sessions SET active_mcp=COALESCE(?,active_mcp),updated_at=datetime('now') WHERE id=?`)
       .run(
-        active_mcp !== undefined ? JSON.stringify(active_mcp) : null,
-        active_skills !== undefined ? JSON.stringify(active_skills) : null,
+        JSON.stringify(active_mcp),
         req.params.id
       );
   }
@@ -4569,7 +4377,6 @@ ${transcript}`;
     newId,
     compactTitle,
     sess.active_mcp || '[]',
-    sess.active_skills || '[]',
     sess.mode || 'auto',
     sess.agent_mode || 'single',
     sess.model || 'sonnet',
@@ -4793,15 +4600,7 @@ app.get('/api/mcp/export', (req, res) => {
   res.json({ mcpServers });
 });
 
-const upload = multer({ dest: path.join(os.tmpdir(), 'skills-upload') });
-app.post('/api/skills/upload', upload.single('file'), (req,res) => {
-  if(!req.file) return res.status(400).json({error:'No file'});
-  const name=req.body.name||path.parse(req.file.originalname).name;
-  const id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');
-  const destFile=`skills/${id}.md`; fs.mkdirSync(SKILLS_DIR,{recursive:true}); fs.copyFileSync(req.file.path, path.join(APP_DIR,destFile)); fs.unlinkSync(req.file.path);
-  const c=loadConfig(); c.skills[id]={label:req.body.label||`📄 ${name}`,description:req.body.description||'Custom',file:destFile,custom:true}; saveConfig(c); res.json({ok:true,id});
-});
-app.delete('/api/skills/:id', (req,res) => { const c=loadConfig(); const s=c.skills[req.params.id]; if(s?.custom){try{fs.unlinkSync(path.join(APP_DIR,s.file))}catch{} delete c.skills[req.params.id]; saveConfig(c)} res.json({ok:true}); });
+
 
 // ============================================
 // SLASH COMMANDS CRUD
@@ -5410,11 +5209,8 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     const mode = session.mode || 'auto';
     const workdir = session.workdir || WORKDIR;
 
-    // Parse active MCP and skills
-    let mcpIds = [];
+    // Parse active MCP
     let skillIds = [];
-    try { mcpIds = JSON.parse(session.active_mcp || '[]'); } catch(e) {}
-    try { skillIds = JSON.parse(session.active_skills || '[]'); } catch(e) {}
 
     // Build system prompt from skills (same logic as processChat)
     const config = loadMergedConfig();
@@ -6356,7 +6152,7 @@ wss.on('connection', (ws) => {
       let isNewSession = false;
       if (!localSessionId || !existSess) {
         localSessionId = genId();
-        stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.workdir)||null);
+        stmts.createSession.run(localSessionId,i18nSession(),'[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
         localClaudeId = sanitizeSessionId(existSess.claude_session_id) || undefined;
@@ -6430,38 +6226,14 @@ wss.on('connection', (ws) => {
       if (effectiveTabId) ws._tabAbort[effectiveTabId] = abortController;
       else ws._abort = abortController;
 
-      // ─── LLM-based task classification ──────────────────────────────
-      // When autoSkill=true, classify the user message with haiku (~10-15s via CLI).
-      // Returns both specialist skills AND a short chat title in one call.
-      // Skip on resumed sessions (localClaudeId set) — skills already baked into session
-      // context, no need to pay for a Haiku call on every subsequent message.
-      let effectiveSkills = sIds;
+      // Skills removed - no classification needed
+      let effectiveSkills = [];
       let classifiedTitle = '';
-      const shouldClassify = autoSkill && !localClaudeId;
-      log.info('[classify] start', { autoSkill, shouldClassify, sIds, msgLen: userMessage.length });
-      if (shouldClassify) {
-        try {
-          proxy.send(JSON.stringify({ type:'agent_status', status:'⚡ Classifying task...', statusKey:'status.classifying', tabId: effectiveTabId }));
-          const classification = await classifyTask(userMessage, sIds, config, workdir || WORKDIR);
-          classifiedTitle = classification.title;
-          // Merge classified skills into existing (not replace)
-          const merged = new Set(sIds);
-          for (const s of classification.skills) merged.add(s);
-          effectiveSkills = [...merged];
-          log.info('[classify] done', { newSkills: classification.skills, merged: effectiveSkills, title: classifiedTitle, msgPreview: userMessage.substring(0, 120) });
-          if (effectiveSkills.length > 0) {
-            proxy.send(JSON.stringify({ type:'skills_auto', skills: effectiveSkills, tabId: effectiveTabId }));
-          }
-        } catch (err) {
-          log.error('[classify] Failed', { err: err.message });
-          if (!effectiveSkills.length) effectiveSkills = config.skills['auto-mode'] ? ['auto-mode'] : [];
-        }
-      }
 
       // Bail out early if user pressed Stop during classification
       if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-      try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,localSessionId); }
+      try { stmts.updateConfig.run(JSON.stringify(mIds),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
 
       // Auto-title: use LLM-generated title if available, otherwise smart-truncate message
@@ -6751,7 +6523,7 @@ wss.on('connection', (ws) => {
         // handler resets streaming.el which destroys the just-restored _bgTxt bubble on tab switch.
         // session_started is only needed for NEW sessions (to map temp tab ID → real session ID).
       } else {
-        stmts.createSession.run(legacySessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',null);
+        stmts.createSession.run(legacySessionId,i18nSession(),'[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',null);
         ws.send(JSON.stringify({ type:'session_started', sessionId:legacySessionId }));
       }
       return;
@@ -7207,7 +6979,6 @@ wss.on('connection', (ws) => {
             chainSessionId,
             (finalPlan || 'Task chain').substring(0, 200),
             source?.active_mcp || '[]',
-            source?.active_skills || '[]',
             'auto', 'single', sqlVal(model) || 'sonnet',
             sqlVal(workdir) || null
           );
