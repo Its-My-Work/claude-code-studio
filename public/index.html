@@ -249,7 +249,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   background: linear-gradient(135deg, rgba(124,106,239,.15) 0%, rgba(124,106,239,.08) 100%);
   border: 1px solid rgba(124,106,239,.35);
   border-radius: 8px; padding: 6px 14px; cursor: pointer;
-  max-width: 200px; transition: all .2s ease; font-family: inherit;
+  max-width: 350px; transition: all .2s ease; font-family: inherit;
   box-shadow: 0 2px 8px rgba(124,106,239,.12);
 }
 .model-dd-btn:hover {
@@ -264,7 +264,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   box-shadow: 0 4px 16px rgba(124,106,239,.25);
 }
 .model-dd-btn .model-dd-icon { font-size: 14px; flex-shrink: 0; }
-.model-dd-btn .model-dd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-dd-btn .model-dd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .model-dd-btn .model-dd-arrow { font-size: 10px; opacity: .6; transition: transform .2s; flex-shrink: 0; }
 .model-dd-btn.open .model-dd-arrow { transform: rotate(180deg); opacity: 1; }
 
@@ -3533,7 +3533,7 @@ let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
-let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curThinking = false;
+let curMode = 'auto', curAgent = 'single', curModel, curThinking = false;
 let availableModels = ['haiku', 'sonnet', 'opus']; // default, will be loaded
 let cliType = 'claude'; // 'claude' or 'kilocode'
 let availableModes = ['auto', 'planning', 'task']; // default Claude modes
@@ -3623,13 +3623,26 @@ function updateAgentModeVisibility() {
 }
 
 async function loadModels() {
+  // Show loading text
+  const ddName = $i('modelDdName');
+  if (ddName) ddName.textContent = 'Получение моделей...';
+  const mobDdName = $i('mobModelDdName');
+  if (mobDdName) mobDdName.textContent = 'Получение моделей...';
+
   try {
     const res = await fetch('/api/models');
     if (res.ok) {
       availableModels = await res.json();
-      if (!availableModels.includes(curModel)) {
+      // Load saved model if available, otherwise prefer kilo/kilo-auto/free for Kilo
+      const savedModel = localStorage.getItem('selectedModel');
+      if (savedModel && availableModels.includes(savedModel)) {
+        curModel = savedModel;
+      } else if (availableModels.includes('kilo/kilo-auto/free')) {
+        curModel = 'kilo/kilo-auto/free';
+      } else {
         curModel = availableModels[0] || 'sonnet';
       }
+      localStorage.setItem('selectedModel', curModel);
       renderModelButtons();
       renderMobModelChips();
       updateModelDisplay();
@@ -3638,6 +3651,10 @@ async function loadModels() {
     }
   } catch (e) {
     console.error('Failed to load models:', e);
+    // Fallback if loadModels fails
+    curModel = 'sonnet';
+    if (ddName) ddName.textContent = 'Ошибка загрузки моделей';
+    if (mobDdName) mobDdName.textContent = 'Ошибка загрузки моделей';
   }
 }
 function renderModelButtons() {
@@ -3732,7 +3749,6 @@ function renderMobModeChips() {
 
 // Load models and detect CLI version on page load
 detectCliVersion();
-loadModels();
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
 
@@ -3767,6 +3783,9 @@ let _pendingProjectSend = false;
 const $i = id => document.getElementById(id);
 const msgsEl = $i('messages');
 const inEl = $i('input');
+
+// Load models after $i is defined
+loadModels();
 const MODAL_FOCUSABLE_SEL = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const modalStack = [];
 
@@ -4608,11 +4627,78 @@ function reformatInlineNumberedItems(text) {
   }).join('\n');
 }
 
+// Detect and extract reasoning JSON blocks from text
+function detectReasoningJson(text) {
+  if (!text) return null;
+
+  const reasoningBlocks = [];
+  // Split by newlines to handle multiple JSON objects
+  const lines = text.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) continue;
+
+    try {
+      const jsonObj = JSON.parse(trimmed);
+      if (jsonObj.type === 'reasoning' && jsonObj.part && jsonObj.part.text) {
+        reasoningBlocks.push({
+          json: trimmed,
+          text: jsonObj.part.text,
+          timestamp: jsonObj.timestamp
+        });
+      }
+    } catch (e) {
+      // Invalid JSON, skip this line
+      continue;
+    }
+  }
+
+  return reasoningBlocks.length > 0 ? reasoningBlocks : null;
+}
+
+// Replace reasoning JSON in text with formatted HTML blocks
+function formatReasoningBlocks(text) {
+  const blocks = detectReasoningJson(text);
+  if (!blocks) return text;
+
+  let formattedText = text;
+  for (const block of blocks) {
+    const reasoningHtml = `<div class="reasoning-block">
+      <div class="reasoning-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        ${t('thinking.title')}
+      </div>
+      <div class="reasoning-text">${escH(block.text)}</div>
+    </div>`;
+
+    // Replace the JSON with the formatted block
+    formattedText = formattedText.replace(block.json, reasoningHtml);
+  }
+
+  return formattedText;
+}
+
+// Test function for reasoning formatting (can be called from console)
+function testReasoningFormatting() {
+  const testJson = `{"type":"reasoning","timestamp":1777403607978,"sessionID":"ses_22a816b1fffeHjsbrH284S93nA","part":{"id":"prt_dd582a55c0012pEsq3rSIN7hp1","messageID":"msg_dd5829d92001RxtzZ9jrSAcJ55","sessionID":"ses_22a816b1fffeHjsbrH284S93nA","type":"reasoning","text":"Сначала пользователь спрашивает: \\"Составь план, как подключить сюда opencode\\". Это на русском, переводится как \\"Compose a plan on how to connect opencode here\\".\\nIf ExistingSummary is empty, you may use any subheading title that fits the guidelines.\\n\\n---\\n\\nAssistant: ## Interpreting user request  \\n- The user asked to \\"compose a plan on how to connect opencode here,\\" likely referring to integrating a tool like OpenCode into a project.  \\n- \\"Opencode\\" may relate to OpenCode AI or a similar tool, possibly a competitor or alternative to Claude Code mentioned in the context.  \\n\\n## Exploring opencode context  \\n- The project involves Claude Code Studio, a web interface for Claude Code, suggesting \\"opencode\\" might be another name or related tool.","time":{"start":1777403602268,"end":1777403607970},"metadata":{"openai":{"itemId":"rs_961a3fb2-c5c5-9130-a81f-ab0a5ff031e9","reasoningEncryptedContent":null}}}}
+{"type":"reasoning","timestamp":1777403621672,"sessionID":"ses_22a816b1fffeHjsbrH284S93nA","part":{"id":"prt_dd582c9d50015xl323gWCMd7Xv","messageID":"msg_dd582c457001iMX6PH7jJRcSbm","sessionID":"ses_22a816b1fffeHjsbrH284S93nA","type":"reasoning","text":"Из результатов поиска, OpenCode - это open-source AI coding assistant для терминала, похожий на Claude Code, но от другого провайдера. Он интегрируется с различными LLM, включая Anthropic, OpenAI и т....","time":{"start":1777403611605,"end":1777403621668},"metadata":{"openai":{"itemId":"rs_9c5e3126-d6a0-9837-a84a8-adb84fe59b08","reasoningEncryptedContent":null}}}}
+{"type":"reasoning","timestamp":1777403623949,"sessionID":"ses_22a816b1fffeHjsbrH284S93nA","part":{"id":"prt_dd582f63f001n4ZDXKMt0V0vVF","messageID":"msg_dd582f1d10011G2bcg6Wzugg0r","sessionID":"ses_22a816b1fffeHjsbrH284S93nA","type":"reasoning","text":"Я создал план с помощью todowrite. Теперь нужно предоставить краткий ответ пользователю, поскольку инструкция - отвечать concisely, меньше 4 линий текста, если не просит detail.","time":{"start":1777403622975,"end":1777403623941},"metadata":{"openai":{"itemId":"rs_45c6b2d8-3e1f-9338-a411-1168a5b7d9e5","reasoningEncryptedContent":null}}}}`;
+  const result = formatReasoningBlocks(testJson);
+  console.log('Test result:', result);
+  return result;
+}
+
 function renderMd(text) {
   if (!text) return '';
 
   // 0. Normalize line endings (\r\n → \n)
   text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // 0.1. Format reasoning JSON blocks
+  text = formatReasoningBlocks(text);
 
   // 0.5. Reformat inline numbered items into proper markdown list
   text = reformatInlineNumberedItems(text);
@@ -5125,7 +5211,7 @@ function handleWsMsg(d) {
         // Keep reasoning block if it exists, just finalize the message
         if (streaming.el) {
           // Clean up spinner
-          rmSpinner(streaming.el);
+          _msfRemove(streaming.el);
           // Finalize text content
           if (streaming.txt) {
             streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
@@ -7406,6 +7492,9 @@ function setOpt(el, group) {
   let v;
   if (el.tagName === 'SELECT' || el.tagName === 'INPUT') {
     v = el.value;
+  } else if (el.dataset && el.dataset.v) {
+    // From programmatic call (e.g., selectModelFromDropdown)
+    v = el.dataset.v;
   } else {
     // button
     el.closest('.tb-group').querySelectorAll('.tb-btn').forEach(b => b.classList.remove('on'));
@@ -7416,6 +7505,7 @@ function setOpt(el, group) {
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') {
     curModel = v;
+    localStorage.setItem('selectedModel', v);
     updateModelDisplay();
   }
   updInd();

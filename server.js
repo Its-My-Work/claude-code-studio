@@ -3600,11 +3600,21 @@ app.get('/api/models', (req, res) => {
       const output = execSync('kilo models', { encoding: 'utf-8' });
       // Parse output - assume one model per line
       const models = output.trim().split('\n').filter(line => line.trim());
+      // Ensure kilo/kilo-auto/free is first if available, or add it
+      const preferredModel = 'kilo/kilo-auto/free';
+      if (!models.includes(preferredModel)) {
+        models.unshift(preferredModel);
+      } else {
+        // Move to front
+        const index = models.indexOf(preferredModel);
+        models.splice(index, 1);
+        models.unshift(preferredModel);
+      }
       res.json(models);
     } catch (error) {
       console.error('Error getting Kilo models:', error);
       // Fallback to some default models
-      res.json(['anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-4', 'openai/gpt-4-turbo-preview']);
+      res.json(['kilo/kilo-auto/free', 'x-ai/grok-code-fast-1:optimized:free', 'anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-4', 'openai/gpt-4-turbo-preview']);
     }
   } else {
     res.status(400).json({ error: 'Unknown agent engine' });
