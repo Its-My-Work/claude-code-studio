@@ -1717,18 +1717,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .tg-device-rm { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; padding:2px 6px; border-radius:4px; }
 .tg-device-rm:hover { background:rgba(255,80,80,.15); color:#f66; }
 
-/* ─── Tunnel Provider Cards ─── */
-.tn-provider-card { flex:1; display:flex; flex-direction:column; gap:2px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; cursor:pointer; background:var(--s1); transition:border-color .15s, background .15s; position:relative; }
-.tn-provider-card:hover { border-color: var(--accent); background: var(--abg); }
-.tn-provider-card.selected { border-color: var(--accent); background: var(--abg); }
-.tn-provider-name { font-size:11px; font-weight:700; color:var(--text); font-family:monospace; }
-.tn-provider-desc { font-size:10px; color:var(--muted); line-height:1.3; }
-/* Spinner inside tunnel start button */
-.tn-spinner { width:10px; height:10px; border:1.5px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; animation:spin .65s linear infinite; flex-shrink:0; }
-/* Stop state — muted destructive color so it reads as "danger zone" without being alarming */
-.tn-btn-stop { background: rgba(248,81,73,.18) !important; color: #f87171 !important; border: 1px solid rgba(248,81,73,.35) !important; }
-.tn-btn-stop:hover { background: rgba(248,81,73,.28) !important; }
-
 /* ─── Confirm Stop Dialog ─── */
 .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 300; backdrop-filter: blur(4px); animation: fadeUp .12s ease; }
 .confirm-dialog { background: var(--s1); border: 1px solid var(--border); border-radius: 14px; padding: 28px 32px 24px; width: 320px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.65); text-align: center; }
@@ -2427,67 +2415,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-body" id="agentsBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">Зовнішні агенти для делегування завдань.</div>
         <div class="sec-list"><div id="agentsList"></div></div>
-      </div>
-    </div>
-
-    <!-- Tunnel Manager -->
-    <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('tunnel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tunnel')}">
-        <span data-i18n="sec.tunnel">Remote Access</span>
-        <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
-          <span class="tg-status-dot" id="tunnelStatusDot">●</span>
-        </div>
-      </div>
-      <div class="sec-body collapsed" id="tunnelBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tn.hint">Відкрийте доступ до Studio через інтернет.</div>
-
-        <!-- Provider selector -->
-        <div class="tg-section">
-          <label style="font-size:11px;color:var(--muted)" data-i18n="tn.provider">Провайдер:</label>
-          <div style="display:flex;gap:6px;margin-top:5px">
-            <label class="tn-provider-card" id="tnCardCf">
-              <input type="radio" name="tunnelProvider" value="cloudflared" checked style="position:absolute;opacity:0;width:0;height:0">
-              <span class="tn-provider-name">cloudflared</span>
-              <span class="tn-provider-desc" data-i18n="tn.cf.desc">Без реєстрації</span>
-            </label>
-            <label class="tn-provider-card" id="tnCardNg">
-              <input type="radio" name="tunnelProvider" value="ngrok" style="position:absolute;opacity:0;width:0;height:0">
-              <span class="tn-provider-name">ngrok</span>
-              <span class="tn-provider-desc" data-i18n="tn.ng.desc">Потрібен токен</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Ngrok authtoken (shown only for ngrok) -->
-        <div class="tg-section" id="tunnelNgrokAuth" style="display:none;margin-top:8px">
-          <label style="font-size:11px;color:var(--muted)">Authtoken: <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:none;opacity:.8" data-i18n="tn.ng.get_token">↗ отримати</a></label>
-          <div style="display:flex;gap:4px;margin-top:4px">
-            <input id="tunnelNgrokToken" type="password" placeholder="ngrok authtoken..." style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace">
-            <button class="bg" onclick="tunnelToggleNgrokPwd(this)" title="Show/hide" style="padding:5px 7px;font-size:12px;flex-shrink:0" aria-label="Show token">👁</button>
-          </div>
-        </div>
-
-        <!-- Start/Stop button -->
-        <div style="margin-top:8px">
-          <button class="bp" id="tunnelToggleBtn" onclick="tunnelToggle()" style="width:100%;padding:7px 10px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px">
-            <span data-i18n="tn.start">▶ Запустити</span>
-          </button>
-        </div>
-
-        <!-- Inline error display -->
-        <div id="tunnelError" style="display:none;margin-top:6px;padding:6px 8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;font-size:11px;color:#f87171;line-height:1.4"></div>
-
-        <!-- Public URL display -->
-        <div id="tunnelUrlBox" style="display:none;margin-top:8px">
-          <label style="font-size:11px;color:var(--muted)" data-i18n="tn.url">Публічний URL:</label>
-          <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
-            <input id="tunnelUrlDisplay" readonly style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--accent);border-radius:6px;color:var(--text);font-family:monospace;cursor:copy" onclick="this.select()">
-            <button class="bg" id="tunnelCopyBtn" onclick="tunnelCopyUrl()" title="Copy URL" aria-label="Copy tunnel URL" style="padding:5px 8px;font-size:13px;transition:color .15s">📋</button>
-          </div>
-          <div style="display:flex;gap:4px;margin-top:6px" id="tunnelUrlActions">
-            <button class="bg" id="tunnelSendTgBtn" onclick="tunnelSendToTelegram()" style="display:none;flex:1;font-size:11px;padding:5px 8px" data-i18n="tn.send_tg">📤 Telegram</button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -4016,16 +3943,6 @@ const TRANSLATIONS = {
     'ssh.err.no_host':'Enter host','ssh.err.no_label':'Enter name','ssh.err.no_password':'Enter password','ssh.err.reenter_password_test':'Re-enter the password to test this password-based host','ssh.err':'Error',
     'ssh.saved':'✓ Host "{name}" saved','ssh.updated':'✓ Host "{name}" updated',
     'ssh.select.ph':'— select host —','ssh.sel.err':'Select a host',
-    'sec.tunnel':'Remote Access','tn.hint':'Expose Studio to the internet.',
-    'tn.provider':'Provider:','tn.start':'▶ Start','tn.stop':'⏹ Stop',
-    'tn.starting':'Starting...','tn.stopping':'Stopping...','tn.url':'Public URL:','tn.copy':'Copied!',
-    'tn.copy.manual':'Select and copy manually (Ctrl+C)',
-    'tn.stopped':'Remote access stopped','tn.send_tg':'📤 Telegram',
-    'tn.sent_tg':'URL sent to Telegram','tn.err.not_installed':'Not installed',
-    'tn.err.start':'Failed to start remote access','tn.err.tg':'Failed to send',
-    'tn.cf.desc':'No signup needed','tn.ng.desc':'Token required','tn.ng.get_token':'↗ get token',
-    'tn.install.or':'or run','tn.install.link':'📥 Installation guide',
-    'tn.confirm':'⚠️ This will expose Studio to the internet. Authentication is required. Continue?',
     'sec.telegram':'Telegram','tg.hint':'Control Studio remotely via Telegram bot.',
     'tg.token':'Bot Token (from @BotFather):','tg.start':'▶ Start','tg.stop':'⏹ Stop',
     'tg.accept_new':'New connections:','tg.toggle.title':'Allow/deny new connections','tg.pair':'🔗 Connect Telegram',
@@ -4244,16 +4161,6 @@ const TRANSLATIONS = {
     'ssh.err.no_host':'Укажите хост','ssh.err.no_label':'Укажите имя','ssh.err.no_password':'Укажите пароль','ssh.err.reenter_password_test':'Чтобы протестировать password-host, введите пароль заново','ssh.err':'Ошибка',
     'ssh.saved':'✓ Хост "{name}" сохранён','ssh.updated':'✓ Хост "{name}" обновлён',
     'ssh.select.ph':'— выберите хост —','ssh.sel.err':'Выберите хост',
-    'sec.tunnel':'Remote Access','tn.hint':'Откройте доступ к Studio через интернет.',
-    'tn.provider':'Провайдер:','tn.start':'▶ Запустить','tn.stop':'⏹ Остановить',
-    'tn.starting':'Запуск...','tn.stopping':'Остановка...','tn.url':'Публичный URL:','tn.copy':'Скопировано!',
-    'tn.copy.manual':'Выделите и скопируйте вручную (Ctrl+C)',
-    'tn.stopped':'Доступ остановлен','tn.send_tg':'📤 Telegram',
-    'tn.sent_tg':'URL отправлен в Telegram','tn.err.not_installed':'Не установлено',
-    'tn.err.start':'Не удалось открыть доступ','tn.err.tg':'Ошибка отправки',
-    'tn.cf.desc':'Без регистрации','tn.ng.desc':'Нужен токен','tn.ng.get_token':'↗ получить',
-    'tn.install.or':'или','tn.install.link':'📥 Инструкция по установке',
-    'tn.confirm':'⚠️ Это откроет доступ к Studio через интернет. Авторизация обязательна. Продолжить?',
     'sec.telegram':'Telegram','tg.hint':'Управляйте Studio удалённо через Telegram-бота.',
     'tg.token':'Bot Token (от @BotFather):','tg.start':'▶ Запустить','tg.stop':'⏹ Остановить',
     'tg.accept_new':'Новые подключения:','tg.toggle.title':'Разрешить/запретить новые подключения','tg.pair':'🔗 Подключить Telegram',
@@ -5679,16 +5586,6 @@ function handleWsMsg(d) {
 
     case 'telegram_device_removed':
       tgLoadStatus();
-      break;
-
-    case 'tunnel_url':
-      toast(`🟢 Remote Access: ${d.url}`);
-      tunnelLoadStatus();
-      break;
-
-    case 'tunnel_closed':
-      toast(t('tn.stopped') || '⬛ Remote access stopped');
-      tunnelLoadStatus();
       break;
   }
 }
@@ -11436,235 +11333,6 @@ async function saveNewSshHost() {
   if (curProjType === 'remote') renderRemoteHostSelect();
 }
 
-// ─── Tunnel Manager ─────────────────────────────────────────────────────
-let _tunnelRunning = false;
-
-// Provider card selection — radio + visual card highlight + ngrok auth show/hide
-function tunnelSelectProvider(value) {
-  document.querySelectorAll('input[name="tunnelProvider"]').forEach(r => { r.checked = r.value === value; });
-  $i('tnCardCf')?.classList.toggle('selected', value === 'cloudflared');
-  $i('tnCardNg')?.classList.toggle('selected', value === 'ngrok');
-  $i('tunnelNgrokAuth').style.display = value === 'ngrok' ? '' : 'none';
-}
-
-document.querySelectorAll('input[name="tunnelProvider"]').forEach(radio => {
-  radio.addEventListener('change', () => tunnelSelectProvider(radio.value));
-});
-document.querySelectorAll('.tn-provider-card').forEach(card => {
-  card.addEventListener('click', () => {
-    const val = card.querySelector('input[type="radio"]')?.value;
-    if (val) tunnelSelectProvider(val);
-  });
-});
-// Init default selected state
-tunnelSelectProvider('cloudflared');
-
-function tunnelToggleNgrokPwd(btn) {
-  const input = $i('tunnelNgrokToken');
-  if (!input) return;
-  input.type = input.type === 'password' ? 'text' : 'password';
-  btn.textContent = input.type === 'password' ? '👁' : '🙈';
-}
-
-function tunnelSetError(msg, opts) {
-  const el = $i('tunnelError');
-  if (!el) return;
-  if (msg) {
-    el.style.display = '';
-    if (opts?.installUrl) {
-      const cmdText = opts.installCmd ? `<code style="background:var(--s2);padding:1px 5px;border-radius:3px;font-size:11px;user-select:all">${_esc(opts.installCmd)}</code>` : '';
-      const safeUrl = /^https?:\/\//.test(opts.installUrl) ? _esc(opts.installUrl) : '#';
-      el.innerHTML =
-        `<div style="margin-bottom:4px">${_esc(msg)}</div>` +
-        (cmdText ? `<div style="margin-bottom:4px">${t('tn.install.or')||'або'}: ${cmdText}</div>` : '') +
-        `<a href="${safeUrl}" target="_blank" rel="noopener" style="color:var(--accent2);font-size:11px;text-decoration:underline">${t('tn.install.link')||'📥 Інструкція з встановлення'} ↗</a>`;
-    } else {
-      el.textContent = msg;
-    }
-  } else {
-    el.innerHTML = '';
-    el.style.display = 'none';
-  }
-}
-
-function tunnelSetBtnState(state) {
-  // state: 'start' | 'stop' | 'starting' | 'stopping'
-  const btn = $i('tunnelToggleBtn');
-  if (!btn) return;
-  const span = btn.querySelector('span');
-  // Remove any existing spinner
-  btn.querySelectorAll('.tn-spinner').forEach(s => s.remove());
-
-  if (state === 'start') {
-    btn.disabled = false;
-    btn.classList.remove('tn-btn-stop');
-    if (span) span.textContent = t('tn.start') || '▶ Запустити';
-  } else if (state === 'stop') {
-    btn.disabled = false;
-    btn.classList.add('tn-btn-stop');
-    if (span) span.textContent = t('tn.stop') || '⏹ Зупинити';
-  } else if (state === 'starting') {
-    btn.disabled = true;
-    btn.classList.remove('tn-btn-stop');
-    const sp = document.createElement('span');
-    sp.className = 'tn-spinner';
-    btn.insertBefore(sp, btn.firstChild);
-    if (span) span.textContent = t('tn.starting') || 'Запуск...';
-  } else if (state === 'stopping') {
-    btn.disabled = true;
-    btn.classList.add('tn-btn-stop');
-    const sp = document.createElement('span');
-    sp.className = 'tn-spinner';
-    sp.style.borderTopColor = 'var(--muted)';
-    btn.insertBefore(sp, btn.firstChild);
-    if (span) span.textContent = t('tn.stopping') || 'Зупинка...';
-  }
-}
-
-async function tunnelLoadStatus() {
-  try {
-    const r = await fetch('/api/tunnel/status');
-    const d = await r.json();
-    const dot = $i('tunnelStatusDot');
-
-    _tunnelRunning = d.running;
-
-    if (d.running) {
-      dot?.classList.add('online');
-      tunnelSetBtnState('stop');
-      // Show URL
-      const urlBox = $i('tunnelUrlBox');
-      const urlInput = $i('tunnelUrlDisplay');
-      if (urlBox) urlBox.style.display = '';
-      if (urlInput) urlInput.value = d.publicUrl || '';
-      tunnelSetError(null);
-      // Show "Send to Telegram" button if Telegram is running
-      tunnelUpdateTgButton();
-    } else {
-      dot?.classList.remove('online');
-      tunnelSetBtnState('start');
-      const urlBox = $i('tunnelUrlBox');
-      if (urlBox) urlBox.style.display = 'none';
-    }
-
-    // Restore saved provider (validate before CSS selector interpolation)
-    const savedProvider = ['cloudflared', 'ngrok'].includes(d.savedProvider) ? d.savedProvider : 'cloudflared';
-    const provRadio = document.querySelector(`input[name="tunnelProvider"][value="${savedProvider}"]`);
-    if (provRadio) tunnelSelectProvider(savedProvider);
-  } catch {}
-}
-
-let _tunnelStarting = false;
-async function tunnelStart() {
-  // Prevent double-click / rapid re-entry
-  if (_tunnelStarting) return;
-
-  // Confirmation dialog
-  if (!confirm(t('tn.confirm') || '⚠️ This will expose Studio to the internet. Authentication is required. Continue?')) return;
-
-  _tunnelStarting = true;
-  const provider = document.querySelector('input[name="tunnelProvider"]:checked')?.value || 'cloudflared';
-  const ngrokAuthtoken = $i('tunnelNgrokToken')?.value?.trim() || undefined;
-
-  tunnelSetBtnState('starting');
-  tunnelSetError(null);
-
-  try {
-    const r = await fetch('/api/tunnel/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, ngrokAuthtoken }),
-    });
-    const d = await r.json();
-    if (d.ok || d.publicUrl) {
-      toast(`🟢 Remote Access: ${d.publicUrl}`);
-      tunnelLoadStatus();
-    } else {
-      const errMsg = d.error || t('tn.err.start') || 'Failed to start remote access';
-      tunnelSetError(errMsg, { installUrl: d.installUrl, installCmd: d.installCmd });
-      toast(`❌ ${errMsg}`, true);
-      tunnelSetBtnState('start');
-    }
-  } catch (e) {
-    const errMsg = e.message || 'Network error';
-    tunnelSetError(errMsg);
-    toast(`❌ ${errMsg}`, true);
-    tunnelSetBtnState('start');
-  } finally {
-    _tunnelStarting = false;
-  }
-}
-
-function tunnelToggle() {
-  if (_tunnelRunning) tunnelStop();
-  else tunnelStart();
-}
-
-async function tunnelStop() {
-  const btn = $i('tunnelToggleBtn');
-  if (btn) btn.disabled = true;
-  tunnelSetBtnState('stopping');
-  try {
-    await fetch('/api/tunnel/stop', { method: 'POST' });
-    toast(t('tn.stopped') || '⬛ Remote access stopped');
-    // Set definitive state first, then refresh from server
-    _tunnelRunning = false;
-    tunnelSetBtnState('start');
-    tunnelLoadStatus();
-  } catch (e) {
-    toast(`❌ ${e.message}`, true);
-    tunnelSetBtnState('stop'); // restore — it might still be running
-  }
-}
-
-function tunnelCopyUrl() {
-  const url = $i('tunnelUrlDisplay')?.value;
-  if (!url) return;
-  navigator.clipboard.writeText(url).then(() => {
-    const copyBtn = $i('tunnelCopyBtn');
-    if (copyBtn) {
-      const orig = copyBtn.textContent;
-      copyBtn.textContent = '✓';
-      copyBtn.style.color = 'var(--green, #4ade80)';
-      setTimeout(() => { copyBtn.textContent = orig; copyBtn.style.color = ''; }, 1500);
-    }
-    toast(t('tn.copy') || '📋 Скопійовано!');
-  }).catch(() => {
-    // Clipboard API unavailable (insecure context) — select text for manual copy
-    $i('tunnelUrlDisplay')?.select();
-    toast(t('tn.copy.manual') || 'Select and copy manually (Ctrl+C)');
-  });
-}
-
-async function tunnelSendToTelegram() {
-  const url = $i('tunnelUrlDisplay').value;
-  if (!url) return;
-  const btn = $i('tunnelSendTgBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '...'; }
-  try {
-    const r = await fetch('/api/tunnel/notify-telegram', { method: 'POST' });
-    const d = await r.json().catch(() => ({}));
-    if (d.ok === false) {
-      toast(d.error || t('tn.err.tg') || 'Failed to send', true);
-    } else {
-      toast(t('tn.sent_tg') || '📤 URL надіслано в Telegram');
-    }
-  } catch (e) {
-    toast(`❌ ${e.message}`, true);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = t('tn.send_tg') || '📤 Telegram'; }
-  }
-}
-
-function tunnelUpdateTgButton() {
-  // Show "Send to Telegram" only if tunnel is running AND Telegram is running
-  const btn = $i('tunnelSendTgBtn');
-  if (btn) {
-    const showTg = _tunnelRunning && $i('tgStatusDot')?.classList?.contains('online');
-    btn.style.display = showTg ? '' : 'none';
-  }
-}
-
 // ─── Telegram Remote Access ──────────────────────────────────────────────
 let _tgCodeTimer = null;
 
@@ -11699,8 +11367,6 @@ async function tgLoadStatus() {
     const devices = d.devices || [];
     tgRenderDevices(devices);
     $i('tgCount').textContent = devices.length;
-    // Update tunnel's "Send to Telegram" button visibility
-    tunnelUpdateTgButton();
   } catch {}
 }
 
@@ -11832,8 +11498,7 @@ function _tgTimeAgo(iso) {
 
 function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-// Auto-load Tunnel & Telegram status on page load
-setTimeout(tunnelLoadStatus, 300);
+// Auto-load Telegram status on page load
 setTimeout(tgLoadStatus, 500);
 
 // ─── Persist UI state across page refreshes ──────────────────────────────
@@ -11882,7 +11547,7 @@ function saveUIState() {
       autoSkillsMode,
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
-      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), agents: c('agentsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tunnel: c('tunnelBody'), tg: c('tgBody') },
+      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), agents: c('agentsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tg: c('tgBody') },
       openTabs: savedOpenTabs.map(saveTab),
       activeTabId: savedOpenTabs.some(t => t.id === activeTabId) ? activeTabId : null,
       allProjTabs,
@@ -11919,7 +11584,7 @@ function restoreUIState() {
       setPanel('rightPanel', isMobile ? true : s.panels.right);
     }
     if (s.sections) {
-      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', agents: 'agentsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tunnel: 'tunnelBody', tg: 'tgBody' };
+      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', agents: 'agentsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tg: 'tgBody' };
       for (const [k, elId] of Object.entries(secs)) {
         const el = $i(elId);
         if (!el) continue;

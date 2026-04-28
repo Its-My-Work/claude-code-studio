@@ -17,7 +17,6 @@ const ClaudeCLI = require('./claude-cli');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
-const TunnelManager = require('./tunnel-manager');
 const BackendFactory = require('./backends/backend-factory');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
@@ -5071,35 +5070,6 @@ app.post('/api/project/init', (req, res) => {
 });
 
 // ============================================
-// TUNNEL MANAGER
-// ============================================
-let tunnelManager = null;
-
-function initTunnelManager() {
-  tunnelManager = new TunnelManager({ log, port: PORT });
-
-  tunnelManager.on('url', (url) => {
-    // Notify all WebSocket clients
-    wss.clients.forEach(ws => {
-      try { ws.send(JSON.stringify({ type: 'tunnel_url', url })); } catch {}
-    });
-    // Notify all paired Telegram devices
-    if (telegramBot?.isRunning()) {
-      telegramBot.notifyTunnelUrl(url).catch(e => log.error('[tunnel] notifyTunnelUrl failed:', e.message));
-    }
-  });
-
-  tunnelManager.on('close', (reason) => {
-    wss.clients.forEach(ws => {
-      try { ws.send(JSON.stringify({ type: 'tunnel_closed', reason })); } catch {}
-    });
-    if (telegramBot?.isRunning()) {
-      telegramBot.notifyTunnelClosed().catch(e => log.error('[tunnel] notifyTunnelClosed failed:', e.message));
-    }
-  });
-}
-
-// ============================================
 // TELEGRAM BOT
 // ============================================
 let telegramBot = null;
@@ -5377,58 +5347,6 @@ function _attachTelegramListeners(bot) {
     callback(chats);
   });
 
-  // Tunnel: status query from Telegram
-  bot.on('tunnel_get_status', (callback) => {
-    const status = tunnelManager?.getStatus() || { running: false };
-    callback(status);
-  });
-
-  // Tunnel control from Telegram
-  bot.on('tunnel_start', async ({ chatId }) => {
-    try {
-      if (!tunnelManager) initTunnelManager();
-      if (tunnelManager.isRunning()) {
-        const s = tunnelManager.getStatus();
-        await bot.sendMessage(chatId, `🟢 Already running:\n${bot.escHtml(s.publicUrl)}`);
-        return;
-      }
-      const c = loadConfig();
-      const provider = c.tunnel?.provider || 'cloudflared';
-      const config = { ngrokAuthtoken: c.tunnel?.ngrokAuthtoken };
-      await bot.sendMessage(chatId, `⏳ Starting ${bot.escHtml(provider)}...`);
-      const { publicUrl } = await tunnelManager.start(provider, config);
-      await bot.sendMessage(chatId, `🟢 Remote Access active!\n\n🔗 ${bot.escHtml(publicUrl)}`);
-    } catch (err) {
-      await bot.sendMessage(chatId, `❌ Error: ${bot.escHtml(err.message)}`);
-    }
-  });
-
-  bot.on('tunnel_stop', async ({ chatId }) => {
-    try {
-      if (!tunnelManager?.isRunning()) {
-        await bot.sendMessage(chatId, bot.t('tn_not_running'));
-        return;
-      }
-      tunnelManager.stop();
-      await bot.sendMessage(chatId, bot.t('tn_notify_stopped'));
-    } catch (err) {
-      try { await bot.sendMessage(chatId, `❌ ${bot.escHtml(err.message)}`); } catch {}
-    }
-  });
-
-  bot.on('tunnel_status', async ({ chatId }) => {
-    try {
-      const s = tunnelManager?.getStatus();
-      if (s?.running) {
-        await bot.sendMessage(chatId, `🟢 Remote Access active\n\n🔗 ${bot.escHtml(s.publicUrl)}\n⏱ Since: ${bot.escHtml(String(s.startedAt))}`);
-      } else {
-        await bot.sendMessage(chatId, bot.t('tn_not_running'));
-      }
-    } catch (err) {
-      try { await bot.sendMessage(chatId, `❌ ${bot.escHtml(err.message)}`); } catch {}
-    }
-  });
-
   // Phase 2: Stop running task from Telegram
   bot.on('stop_task', async ({ sessionId, chatId }) => {
     const task = activeTasks.get(sessionId);
@@ -5548,91 +5466,6 @@ app.put('/api/telegram/accept-connections', (req, res) => {
   }
 
   res.json({ ok: true, acceptNewConnections: accept });
-});
-
-// ============================================
-// TUNNEL API
-// ============================================
-
-app.get('/api/tunnel/status', (_, res) => {
-  const s = tunnelManager?.getStatus() || { running: false };
-  const c = loadConfig();
-  res.json({
-    running: s.running,
-    provider: s.provider || c.tunnel?.provider || 'cloudflared',
-    publicUrl: s.publicUrl || null,
-    startedAt: s.startedAt || null,
-    pid: s.pid || null,
-    error: s.error || null,
-    savedProvider: c.tunnel?.provider || 'cloudflared',
-    hasNgrokToken: !!c.tunnel?.ngrokAuthtoken,
-  });
-});
-
-let _tunnelStartLock = false;
-app.post('/api/tunnel/start', async (req, res) => {
-  if (tunnelManager?.isRunning()) {
-    return res.json({ ok: true, publicUrl: tunnelManager.getStatus().publicUrl, already: true });
-  }
-  if (_tunnelStartLock) {
-    return res.status(409).json({ error: 'Tunnel start already in progress' });
-  }
-
-  const { provider, ngrokAuthtoken } = req.body;
-  const prov = provider || 'cloudflared';
-  if (!['cloudflared', 'ngrok'].includes(prov)) {
-    return res.status(400).json({ error: `Unknown provider: ${prov}` });
-  }
-
-  // Save preferences to config
-  const c = loadConfig();
-  if (!c.tunnel) c.tunnel = {};
-  c.tunnel.provider = prov;
-  if (ngrokAuthtoken) c.tunnel.ngrokAuthtoken = ngrokAuthtoken;
-  saveConfig(c);
-
-  // Initialize manager if not done
-  if (!tunnelManager) initTunnelManager();
-
-  _tunnelStartLock = true;
-  try {
-    const { publicUrl } = await tunnelManager.start(prov, {
-      ngrokAuthtoken: ngrokAuthtoken || c.tunnel.ngrokAuthtoken,
-    });
-    res.json({ ok: true, publicUrl });
-  } catch (err) {
-    const resp = { error: err.message };
-    if (err.installUrl) {
-      resp.installUrl = err.installUrl;
-      resp.installCmd = err.installCmd;
-    }
-    res.status(400).json(resp);
-  } finally {
-    _tunnelStartLock = false;
-  }
-});
-
-app.post('/api/tunnel/notify-telegram', async (_, res) => {
-  if (!tunnelManager?.isRunning()) {
-    return res.status(400).json({ error: 'Remote access is not running' });
-  }
-  if (!telegramBot?.isRunning()) {
-    return res.status(400).json({ error: 'Telegram bot is not running' });
-  }
-  const url = tunnelManager.getStatus().publicUrl;
-  try {
-    await telegramBot.notifyTunnelUrl(url);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to notify Telegram devices' });
-  }
-});
-
-app.post('/api/tunnel/stop', (_, res) => {
-  if (tunnelManager?.isRunning()) {
-    tunnelManager.stop();
-  }
-  res.json({ ok: true });
 });
 
 // ============================================
@@ -7153,9 +6986,6 @@ wss.on('connection', (ws) => {
 // (not deferred until the first config-write operation).
 loadConfig();
 
-// Initialize tunnel manager
-initTunnelManager();
-
 // Start Telegram bot if configured
 initTelegramBot();
 
@@ -7171,7 +7001,6 @@ server.listen(PORT, () => {
     nodeEnv:   process.env.NODE_ENV || 'development',
     logLevel:  process.env.LOG_LEVEL || 'info',
     telegram:  telegramBot?.isRunning() ? 'running' : 'off',
-    tunnel:    tunnelManager?.isRunning() ? tunnelManager.getStatus().publicUrl : 'off',
   });
 });
 
@@ -7184,9 +7013,6 @@ process.on('unhandledRejection', (reason) => {
 // ─── Graceful shutdown ────────────────────────────────────────────────────
 function gracefulShutdown(signal) {
   console.log(`\n⚠️  ${signal} received — shutting down gracefully…`);
-
-  // 0. Stop tunnel first (close external access immediately)
-  if (tunnelManager?.isRunning()) { tunnelManager.stop(); }
 
   // 0b. Stop Telegram bot
   if (telegramBot) { telegramBot.stop(); telegramBot = null; }

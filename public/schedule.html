@@ -299,20 +299,20 @@ button{font-family:inherit;cursor:pointer}
 <div class="hdr">
   <div class="hdr-l">
     <div class="logo">CCS</div>
-    <nav class="nav-sw" aria-label="Навігація між розділами">
-      <a class="nav-sw-btn" href="/" data-tip="Чат">
+    <nav class="nav-sw" data-i18n-aria="nav.aria">
+      <a class="nav-sw-btn" href="/" data-tip="" data-i18n-tip="nav.chat">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         <span data-i18n="nav.chat">Chat</span>
       </a>
-      <a class="nav-sw-btn" href="/kanban" data-tip="Kanban дошка">
+      <a class="nav-sw-btn" href="/kanban" data-tip="" data-i18n-tip="nav.kanban">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
         <span data-i18n="nav.kanban">Kanban</span>
       </a>
-      <a class="nav-sw-btn active" href="/schedule" data-tip="Розклад завдань">
+      <a class="nav-sw-btn active" href="/schedule" data-tip="" data-i18n-tip="nav.schedule">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         <span data-i18n="nav.schedule">Schedule</span>
       </a>
-      <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard">
+      <a class="nav-sw-btn" href="/dashboard" data-tip="" data-i18n-tip="nav.dashboard">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
         <span data-i18n="nav.dashboard">Dashboard</span>
       </a>
@@ -321,12 +321,12 @@ button{font-family:inherit;cursor:pointer}
       <div class="proj-dd-wrap" id="projDdWrap">
         <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDd()">
           <span class="proj-dd-icon">📁</span>
-          <span class="proj-dd-name" id="projDdName">Всі проекти</span>
+          <span class="proj-dd-name" id="projDdName" data-i18n="proj.all">All projects</span>
           <span class="proj-dd-arrow">▼</span>
         </button>
         <div class="proj-dd-menu" id="projDdMenu">
           <div class="proj-dd-search">
-            <input type="text" id="projDdSearch" placeholder="Пошук проекту..." oninput="filterProj(this.value)">
+            <input type="text" id="projDdSearch" data-i18n-placeholder="proj.search" placeholder="Search project..." oninput="filterProj(this.value)">
           </div>
           <div class="proj-dd-list" id="projDdList"></div>
         </div>
@@ -335,8 +335,8 @@ button{font-family:inherit;cursor:pointer}
   </div>
   <div class="hdr-btns">
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
-    <button class="hb" onclick="refresh()" id="refreshBtn" title="Оновити">&#8635;</button>
-    <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
+    <button class="hb" onclick="refresh()" id="refreshBtn" data-i18n-title="hdr.refresh" title="Refresh">&#8635;</button>
+    <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel" data-i18n="hdr.add">Task</span></button>
     <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
     </a>
@@ -348,25 +348,25 @@ button{font-family:inherit;cursor:pointer}
   <div class="stat-chip stat-chip-overdue" id="chipOverdue">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span class="stat-chip-num" id="cntOverdue">0</span>
-    <span id="lblStatOverdue">прострочено</span>
+    <span id="lblStatOverdue">overdue</span>
   </div>
   <div class="stats-spacer"></div>
   <div class="stat-chip stat-chip-today" id="chipToday">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     <span class="stat-chip-num" id="cntToday">0</span>
-    <span id="lblStatToday">сьогодні</span>
+    <span id="lblStatToday">today</span>
   </div>
   <div class="stats-spacer"></div>
   <div class="stat-chip stat-chip-upcoming" id="chipUpcoming">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     <span class="stat-chip-num" id="cntUpcoming">0</span>
-    <span id="lblStatUpcoming">заплановано</span>
+    <span id="lblStatUpcoming">upcoming</span>
   </div>
   <div class="stats-spacer"></div>
   <div class="stat-chip stat-chip-recurring" id="chipRecurring">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
     <span class="stat-chip-num" id="cntRecurring">0</span>
-    <span id="lblStatRecurring">повторюваних</span>
+    <span id="lblStatRecurring">recurring</span>
   </div>
   <span class="status-dot ok" id="schStatusEl">Connected</span>
 </div>
@@ -390,7 +390,7 @@ button{font-family:inherit;cursor:pointer}
       <div class="modal-hd-icon">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       </div>
-      <span class="modal-hd-title" id="modalTitle">Нове завдання з розкладом</span>
+      <span class="modal-hd-title" id="modalTitle" data-i18n="modal.add">New scheduled task</span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
@@ -407,8 +407,8 @@ const lang = localStorage.getItem('lang') || 'ru';
 const TR = {
   en: {
     'page.title': 'Schedule — Claude Code Studio',
-    'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
-    'nav.aria': 'Navigation',
+    'nav.chat': 'Chat', 'nav.kanban': 'Kanban board', 'nav.schedule': 'Schedule', 'nav.dashboard': 'Dashboard',
+    'nav.aria': 'Navigation between sections',
     'hdr.add': 'Task', 'hdr.refresh': 'Refresh', 'hdr.connected': 'Connected', 'hdr.disconnected': 'Disconnected',
     'proj.all': 'All projects', 'proj.search': 'Search…', 'proj.noname': 'No name',
     'stat.overdue': 'overdue', 'stat.today': 'today',
@@ -457,8 +457,8 @@ const TR = {
   },
   ru: {
     'page.title': 'Расписание — Claude Code Studio',
-    'nav.chat': 'Чат', 'nav.kanban': 'Kanban', 'nav.schedule': 'Расписание',
-    'nav.aria': 'Навигация',
+    'nav.chat': 'Чат', 'nav.kanban': 'Kanban доска', 'nav.schedule': 'Расписание', 'nav.dashboard': 'Dashboard',
+    'nav.aria': 'Навигация между разделами',
     'hdr.add': 'Задача', 'hdr.refresh': 'Обновить', 'hdr.connected': 'Подключено', 'hdr.disconnected': 'Отключено',
     'proj.all': 'Все проекты', 'proj.search': 'Поиск…', 'proj.noname': 'Без проекта',
     'stat.overdue': 'просрочено', 'stat.today': 'сегодня',
@@ -1265,14 +1265,17 @@ function startAutoRefresh() {
 // ─── i18n: static HTML ────────────────────────────────────────────────────
 function applyStaticI18n() {
   document.title = t('page.title');
-  document.querySelector('.nav-sw')?.setAttribute('aria-label', t('nav.aria'));
-  document.querySelector('.hb[onclick="refresh()"]')?.setAttribute('title', t('hdr.refresh'));
-  const addLbl = $i('addBtnLabel'); if (addLbl) addLbl.textContent = t('hdr.add');
+  document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.getAttribute('data-i18n')));
+  document.querySelectorAll('[data-i18n-tip]').forEach(el => el.setAttribute('data-tip', t(el.getAttribute('data-i18n-tip'))));
+  document.querySelectorAll('[data-i18n-title]').forEach(el => el.setAttribute('title', t(el.getAttribute('data-i18n-title'))));
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder'))));
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria'))));
+
+  // Legacy elements that need manual updates
   const lo = $i('lblStatOverdue'); if (lo) lo.textContent = ' ' + t('stat.overdue');
   const lt = $i('lblStatToday'); if (lt) lt.textContent = ' ' + t('stat.today');
   const lu = $i('lblStatUpcoming'); if (lu) lu.textContent = ' ' + t('stat.upcoming');
   const lr = $i('lblStatRecurring'); if (lr) lr.textContent = ' ' + t('stat.recurring');
-  const ps = $i('projDdSearch'); if (ps) ps.placeholder = t('proj.search');
   const se = $i('schStatusEl'); if (se) se.textContent = t('hdr.connected');
 }
 
