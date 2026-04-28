@@ -3368,10 +3368,7 @@ app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
 // ─── Health check ─────────────────────────────────────────────────────────────
 // Deep health check: verifies DB connectivity, reports uptime / memory / WS connections.
 // Returns HTTP 503 if any critical subsystem is degraded.
-app.get('/api/version', (_, res) => {
-  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'));
-  res.json({ version: pkg.version, name: pkg.name });
-});
+
 
 app.get('/api/health', (_, res) => {
   let dbOk = false;
@@ -4447,20 +4444,20 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
   let fullCmd, ok = false;
   try {
     if (platform === 'win32') {
-      fullCmd = `cd /d "${workdir}" && set CLAUDECODE= && claude --resume ${safeSid}`;
+      fullCmd = `cd /d "${workdir}" && set CLAUDECODE= && kilo`;
       // Empty title "" required: without it cmd.exe treats first quoted arg as window title
       execSync(`start "" cmd /k "${fullCmd.replace(/"/g, '\\"')}"`, { shell: true });
       ok = true;
     } else if (platform === 'darwin') {
       const safeWorkdir = workdir.replace(/'/g, "'\\''");
-      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
+      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; kilo`;
       execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "${fullCmd.replace(/"/g, '\\"')}"'`);
       ok = true;
     } else {
       // Linux: try common terminal emulators using spawn+detach (non-blocking)
       // execSync would kill xterm after the timeout; spawnProc+unref lets it live.
       const safeWorkdir = workdir.replace(/'/g, "'\\''");
-      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
+      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; kilo`;
       if (!process.env.DISPLAY) {
         // Headless mode (e.g., Docker): run directly without terminal
         try {

@@ -171,9 +171,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .sec-filter-row .sfx { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 1px 4px; border-radius: 3px; transition: color .15s; flex-shrink: 0; line-height: 1; }
 .sec-filter-row .sfx:hover { color: var(--red); }
 
-/* ─── Version badge in header ─── */
-#versionBadge { font-size: 11px; color: var(--muted); cursor: default; letter-spacing: .3px; }
-#versionBadge.update { color: var(--orange); cursor: pointer; text-decoration: underline dotted; }
+
 
 /* ─── Project dropdown in header ─── */
 .proj-dd-wrap { position: relative; display: none; }
@@ -2694,7 +2692,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
             <div class="proj-dd-list" id="projDdList"></div>
           </div>
         </div>
-        <span id="versionBadge" data-i18n-title="ver.checking" title="Перевірка версії..."></span>
+
       </div>
     </div>
     <div class="hdr-btns">
@@ -2771,8 +2769,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
     <span style="flex:1"></span>
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
-    <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
-    <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
+    <span id="sessBarClaudeId" style="font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;min-width:90px;" title="Скопировать ID сессии Claude" onclick="copySessId()"></span>
+    <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openKilo()">⚡ Kilo</a>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
     <button id="sessBarExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSession()" title="Export session as JSON">↓ Export</button>
@@ -3952,7 +3950,7 @@ const TRANSLATIONS = {
     'rl.notify.title':'Claude Max — limit','rl.notify.body':'{type} limit: {pct}% used',
     'rl.wait.status':'Rate limit — waiting for reset','rl.wait.resuming':'Rate limit reset — resuming…',
     'queue.badge':'{n} in queue',
-    'ver.current':'Current version','ver.update':'Update available {tag}!\nRun: npx github:Lexus2016/claude-code-studio','ver.latest':' — latest ✓','ver.checking':'Checking version...',
+
     'status.connecting':'Connecting...',
     'toast.cmd_copied':'✓ Command copied','toast.json_req':'.json file required','toast.json_enter':'Enter or upload JSON',
     'toast.mcp_imported':'✓ {n} MCP servers imported','toast.mcp_import_err':'Import error: ','toast.mcp_export_err':'Export error',
@@ -4180,7 +4178,7 @@ const TRANSLATIONS = {
     'rl.notify.title':'Claude Max — лимит','rl.notify.body':'{type} лимит: использовано {pct}%',
     'rl.wait.status':'Лимит — ожидание сброса','rl.wait.resuming':'Лимит сброшен — продолжение…',
     'queue.badge':'{n} в очереди',
-    'ver.current':'Текущая версия','ver.update':'Доступно обновление {tag}!\nЗапустите: npx github:Lexus2016/claude-code-studio','ver.latest':' — последняя ✓','ver.checking':'Проверка версии...',
+
     'status.connecting':'Подключение...',
     'toast.cmd_copied':'✓ Команда скопирована','toast.json_req':'Требуется .json файл','toast.json_enter':'Введите или загрузите JSON',
     'toast.mcp_imported':'✓ Импортировано {n} MCP серверов','toast.mcp_import_err':'Ошибка импорта: ','toast.mcp_export_err':'Ошибка экспорта',
@@ -7123,7 +7121,7 @@ async function updateSessBar(opts = {}) {
         delete idEl.dataset.fullId;
       }
     }
-    if (openBtn) { openBtn.style.display = hasClaudeId ? '' : 'none'; }
+    if (openBtn) { openBtn.style.display = ''; }
     updateSessBarSkills();
     const tab = findTabAcrossProjects(sessionId)?.tab || openTabs.find(t => t.id === sessionId);
     // Show compact button when session has messages and is not actively generating
@@ -7152,7 +7150,7 @@ function copySessId() {
   if (!id) return;
   navigator.clipboard.writeText(id).then(() => toast('✓ ' + t('session.copy_id')));
 }
-async function openInClaude() {
+async function openKilo() {
   if (!currentSessionId) return;
   try {
     const r = await fetch(`/api/sessions/${currentSessionId}/open-terminal`, { method: 'POST' });
@@ -8164,29 +8162,7 @@ inEl.addEventListener('keydown', e => {
 function loadStats() { /* removed */ }
 
 // ─── Version check ────────────────────────────────────────────────────────
-async function checkVersion() {
-  try {
-    const local = await fetch('/api/version').then(r => r.json());
-    const el = $i('versionBadge');
-    if (!el) return;
-    const cur = local.version || '?';
-    el.textContent = `v${cur}`;
-    el.title = t('ver.current');
-    try {
-      const gh = await fetch('https://api.github.com/repos/Lexus2016/claude-code-studio/releases/latest',
-        { headers: { Accept: 'application/vnd.github.v3+json' } }).then(r => r.json());
-      const latest = (gh.tag_name || '').replace(/^v/, '');
-      if (latest && latest !== cur) {
-        el.textContent = `v${cur} → v${latest} ↑`;
-        el.className = 'update';
-        el.title = t('ver.update').replace('{tag}', gh.tag_name);
-        el.onclick = () => window.open(gh.html_url, '_blank');
-      } else if (latest) {
-        el.title = `v${cur}${t('ver.latest')}`;
-      }
-    } catch { /* GitHub API unavailable, keep local version only */ }
-  } catch { /* API not ready */ }
-}
+
 
 // ─── Session History ──────────────────────────────────────────────────────
 let histSelectMode = false;
@@ -12697,7 +12673,6 @@ loadCfg();
 loadProjectsList();
 loadRemoteHosts();
 connect();
-checkVersion();
 // ─── Image chip hover preview ───
 {
   const _prev = $i('imgChipPreview');
