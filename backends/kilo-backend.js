@@ -60,6 +60,7 @@ class KiloBackend extends AgentBackend {
       abortController,
       thinking,
     });
+    console.log('[kilo-backend] DEBUG: sending to runner.run, thinking =', thinking);
 
     // Обработчики
     let fullText = '';
@@ -77,6 +78,7 @@ class KiloBackend extends AgentBackend {
       onResult: null,
       onStepStart: null,
       onStepFinish: null,
+      onReasoning: null,
     };
 
     // Регистрировать обработчики один раз
@@ -142,6 +144,13 @@ class KiloBackend extends AgentBackend {
       }
     });
 
+    kiloRunner.onReasoning((text) => {
+      this.logger.info('[kilo-backend] onReasoning called', { textLen: text.length, hasCallback: !!callbacks.onReasoning });
+      if (callbacks.onReasoning) {
+        callbacks.onReasoning(text);
+      }
+    });
+
     // Вернуть объект совместимый с Claude интерфейсом
     return {
       onText(callback) {
@@ -178,6 +187,10 @@ class KiloBackend extends AgentBackend {
       },
       onStepFinish(callback) {
         callbacks.onStepFinish = callback;
+        return this;
+      },
+      onReasoning(callback) {
+        callbacks.onReasoning = callback;
         return this;
       },
       onRateLimit(callback) {

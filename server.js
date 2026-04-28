@@ -2316,6 +2316,7 @@ function isResettableClaudeSessionError(errorText = '') {
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId, thinking } = p;
+  console.log('[server] runCliSingle: thinking =', thinking);
 
   // Build mode prompt: only for Claude CLI modes (planning, task)
   // KiloCode agents handle their own prompts internally
@@ -2386,12 +2387,17 @@ async function runCliSingle(p) {
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        ws.send(JSON.stringify({ type:'text', text:t, ...(tabId ? { tabId } : {}) }));
+        ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t, timestamp: Date.now() }, ...(tabId ? { tabId } : {}) }));
         if (++chunkCount % 5 === 0) {
           try { stmts.setPartialText.run(fullText, sessionId); } catch {}
         }
       })
-      .onThinking(t => { fullThinking += t; log.info('[THINKING-DIAG-CLI] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
+      .onThinking(t => { fullThinking += t; log.info('[THINKING-DIAG-CLI] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'reasoning', text: t, timestamp: Date.now() }, ...(tabId ? { tabId } : {}) })); })
+      .onReasoning(t => {
+        fullThinking += t;
+        log.info('[REASONING-DIAG-CLI] onReasoning fired', { len: t.length, totalLen: fullThinking.length, sessionId, firstChars: t.substring(0, 50) });
+        ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'reasoning', text: t, timestamp: Date.now() }, ...(tabId ? { tabId } : {}) }));
+      })
       .onTool((name, inp) => {
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
@@ -6556,7 +6562,9 @@ wss.on('connection', (ws) => {
         mode,
         workdir: workdir || WORKDIR,
         tabId: effectiveTabId,
+        thinking,
       };
+      console.log('[server] params.thinking =', params.thinking);
 
       let newCid;
       let resultMeta = null;

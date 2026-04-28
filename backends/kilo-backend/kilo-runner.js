@@ -17,7 +17,7 @@ class KiloRunner {
   /**
    * Запустить Kilo с сообщением
    * @param {Object} options
-   * @returns {Object} объект с методами .onText(), .onTool(), .onError(), .onDone()
+   * @returns {Object} объект с методами .onText(), .onTool(), .onError(), .onDone(), .onReasoning()
    */
   run(options) {
     const {
@@ -61,10 +61,19 @@ class KiloRunner {
       args.push('--session', sessionId);
     }
 
+    const logger = this.logger;
+
     // Создать процесс
     const proc = spawn(this.kiloBin, args, {
       cwd: this.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    logger.info('[kilocode] subprocess spawned', {
+      command: this.kiloBin,
+      args,
+      cwd: this.cwd,
+      thinking: thinking,
     });
 
     // Обработчики событий
@@ -77,12 +86,14 @@ class KiloRunner {
       onResult: null,
       onStepStart: null,
       onStepFinish: null,
+      onReasoning: null,
     };
 
     let fullOutput = '';
     let fullError = '';
     let sessionIdFromOutput = null;
     let timeoutHandle = null;
+    let pendingReasoningEvents = [];
 
     // Обработка stdout
     const decoder = new StringDecoder('utf8');
@@ -103,6 +114,8 @@ class KiloRunner {
           const event = JSON.parse(line);
           handleJsonEvent(event);
         } catch (e) {
+          // Логировать ошибку парсинга
+          logger.debug('[kilocode] json parse error', { error: e.message, line: line.substring(0, 100) });
           // Не JSON - обработать как текст
           if (handlers.onText) {
             handlers.onText(line);
@@ -117,6 +130,7 @@ class KiloRunner {
       fullError += text;
 
       // Логировать ошибки
+      logger.info('[kilocode] stderr', { text: text.substring(0, 200) });
       if (handlers.onError) {
         handlers.onError(text);
       }
@@ -125,9 +139,18 @@ class KiloRunner {
     // Завершение процесса
     proc.on('close', (code) => {
       clearTimeout(timeoutHandle);
+      logger.info('[kilocode] process closed', { code, hasPendingReasoning: pendingReasoningEvents.length });
 
       if (handlers.onDone) {
         handlers.onDone(sessionIdFromOutput || sessionId);
+      }
+    });
+
+    // Ошибка запуска процесса
+    proc.on('error', (err) => {
+      logger.error('[kilocode] process error', { error: err.message });
+      if (handlers.onError) {
+        handlers.onError(err.message);
       }
     });
 
@@ -140,9 +163,11 @@ class KiloRunner {
     }, this.timeout);
 
     // Обработка JSON событий
-    const logger = this.logger;
     const handleJsonEvent = (event) => {
       if (!event || typeof event !== 'object') return;
+
+      // Debug log for ALL events
+      logger.debug('[kilocode] json event', { type: event.type, hasPart: !!event.part, partType: event.part?.type });
 
       // Извлечь sessionID из события
       if (event.sessionID) {
@@ -233,7 +258,32 @@ class KiloRunner {
         return;
       }
 
-      // thinking - размышления модели (если включены)
+      // reasoning - размышления модели (новый формат)
+      if (event.type === 'reasoning' && part) {
+        logger.info('[kilocode] reasoning event received', { sessionId: sid, hasText: !!part.text, hasMetadata: !!event.metadata?.openrouter?.reasoning_details });
+        let reasoningText = part.text;
+        // Если текст отсутствует, взять из metadata.openrouter.reasoning_details
+        if (!reasoningText && event.metadata?.openrouter?.reasoning_details) {
+          reasoningText = event.metadata.openrouter.reasoning_details
+            .map(detail => detail.text)
+            .filter(text => text)
+            .join('');
+        }
+        if (reasoningText) {
+          logger.info('[kilocode] reasoning text extracted', { sessionId: sid, textLen: reasoningText.length, hasHandler: !!handlers.onReasoning });
+          if (handlers.onReasoning) {
+            handlers.onReasoning(reasoningText);
+          } else {
+            logger.info('[kilocode] buffering reasoning event', { sessionId: sid });
+            pendingReasoningEvents.push(reasoningText);
+          }
+        } else {
+          logger.info('[kilocode] no reasoning text found', { sessionId: sid });
+        }
+        return;
+      }
+
+      // thinking - размышления модели (если включены, старый формат)
       if (event.type === 'thinking' && part && part.thinking) {
         const thinking = part.thinking.length > 500 ? part.thinking.substring(0, 500) + '...' : part.thinking;
         logger.debug('[kilocode] thinking', { sessionId: sid, thinking });
@@ -301,6 +351,18 @@ class KiloRunner {
       },
       onStepFinish(callback) {
         handlers.onStepFinish = callback;
+        return this;
+      },
+      onReasoning(callback) {
+        handlers.onReasoning = callback;
+        // Flush any buffered reasoning events immediately after handler is set
+        if (pendingReasoningEvents.length > 0) {
+          logger.info('[kilocode] flushing pending reasoning events', { count: pendingReasoningEvents.length });
+          for (const text of pendingReasoningEvents) {
+            callback(text);
+          }
+          pendingReasoningEvents = [];
+        }
         return this;
       },
     };

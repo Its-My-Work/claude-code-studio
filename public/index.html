@@ -44,6 +44,34 @@ body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
 .mw.assistant.thinking-msg { background: transparent; padding: 2px 12px 2px 34px; }
 .mw.assistant.thinking-msg .msg { background: transparent; box-shadow: none; padding: 0; }
 
+/* ─── Reasoning block (streaming) ─── */
+.reasoning-block {
+  background: linear-gradient(135deg, rgba(100,100,120,.08) 0%, rgba(100,100,120,.04) 100%);
+  border: 1px solid rgba(100,100,120,.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.reasoning-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(100,100,120,.2);
+}
+.reasoning-label svg { width: 14px; height: 14px; opacity: .7; }
+.reasoning-text {
+  color: var(--text);
+  opacity: .85;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 
 /* ─── Thinking modal ─── */
 .thinking-modal-body {
@@ -4948,6 +4976,73 @@ function handleWsMsg(d) {
       }
       break;
 
+    case 'ai_chunk':
+      const chunk = d.payload;
+      if (chunk.kind === 'reasoning') {
+        // Reasoning chunks - create/update reasoning element
+        if (!isVisible) {
+          const ts = getTS(tabId); ts._thinkingTxt = (ts._thinkingTxt || '') + (chunk.text || '');
+          break;
+        }
+        if (!streaming.el) {
+          rmW();
+          streaming.el = addMsg('assistant');
+          streaming.txt = '';
+          addSpinner(streaming.el);
+        }
+        // Create or update reasoning element
+        let reasonEl = streaming.el.querySelector('.reasoning-block');
+        if (!reasonEl) {
+          reasonEl = document.createElement('div');
+          reasonEl.className = 'reasoning-block';
+          const reasonLabel = document.createElement('div');
+          reasonLabel.className = 'reasoning-label';
+          reasonLabel.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> ${t('thinking.title')}`;
+          reasonEl.appendChild(reasonLabel);
+          const reasonText = document.createElement('div');
+          reasonText.className = 'reasoning-text';
+          reasonEl.appendChild(reasonText);
+          streaming.el.insertBefore(reasonEl, streaming.el.querySelector('.msg'));
+        }
+        const reasonTextEl = reasonEl.querySelector('.reasoning-text');
+        if (reasonTextEl) {
+          streaming.reasoningTxt = (streaming.reasoningTxt || '') + (chunk.text || '');
+          reasonTextEl.textContent = streaming.reasoningTxt;
+          // Auto-scroll for reasoning
+          scrollBottom();
+        }
+      } else if (chunk.kind === 'answer') {
+        // Answer chunks - treat as regular text
+        getTS(tabId).agentStatus = ''; // text has arrived — status no longer relevant
+        if (!isVisible) {
+          // Accumulate text for background tabs
+          const ts = getTS(tabId);
+          if (!d.catchUp && ts.curTxt && ts._hadTool) {
+            if (!ts.curTxt.endsWith('\n\n') && !chunk.text.startsWith('\n')) {
+              ts.curTxt = ts.curTxt.replace(/\n*$/, '\n\n');
+            }
+            ts._hadTool = false;
+          }
+          ts.curTxt = d.catchUp ? chunk.text : (ts.curTxt || '') + chunk.text;
+          break;
+        }
+        rmStatus();
+        if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+        // Ensure paragraph break between text blocks separated by tool calls
+        if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
+          if (!streaming.txt.endsWith('\n\n') && !chunk.text.startsWith('\n')) {
+            streaming.txt = streaming.txt.replace(/\n*$/, '\n\n');
+          }
+          getTS(tabId)._hadTool = false;
+        }
+        // catchUp = full replay from server after reconnect → replace, not append
+        if (d.catchUp) { streaming.txt = chunk.text; } else { streaming.txt += chunk.text; }
+        streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+        if (d.agent) addAgentBadge(streaming.el, d.agent);
+        scrollBottom();
+      }
+      break;
+
     case 'thinking':
       { const ts = getTS(tabId); ts._thinkingTxt = (ts._thinkingTxt || '') + (d.text || ''); }
       if (!streaming.el && isVisible) showStatus(t('status.thinking'));
@@ -5027,122 +5122,38 @@ function handleWsMsg(d) {
       }
       getTS(tabId).agentStatus = ''; // task finished — clear saved status
       if (isVisible) {
-        // Render thinking badge before the assistant text bubble (if thinking was accumulated during streaming)
-        { const _tts = getTS(tabId); const _tt = _tts._thinkingTxt || '';
-          if (_tt && streaming.el) {
-            const charCount = _tt.length;
-            const wordsEst = Math.round(charCount / 5);
-            const w = document.createElement('div');
-            w.className = 'mw assistant thinking-msg';
-            const div = document.createElement('div');
-            div.className = 'msg';
-            const badge = document.createElement('button');
-            badge.className = 'thinking-badge';
-            badge.setAttribute('aria-label', 'View chain of thought');
-            badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Chain of thought</span><span style="color:var(--muted)">·</span><span>${wordsEst.toLocaleString()} words</span><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>`;
-            badge.onclick = () => openThinkingModal(_tt);
-            div.appendChild(badge);
-            w.appendChild(div);
-            streaming.el.parentNode.insertBefore(w, streaming.el);
+        // Keep reasoning block if it exists, just finalize the message
+        if (streaming.el) {
+          // Clean up spinner
+          rmSpinner(streaming.el);
+          // Finalize text content
+          if (streaming.txt) {
+            streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
           }
-        }
-        if (streaming.el && streaming.txt) { streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt); applyMsgClamp(streaming.el); }
-        // Finalize tool activity: if live panel exists, keep it (collapsed + done); otherwise show pills summary
-        if (streaming.el && streaming.el.querySelector('.tool-live')) {
-          _finalizeToolLive(streaming.el);
-        } else if (streaming.el && Object.keys(streaming.toolCounts).length > 0) {
-          _renderToolActivity(streaming.el, streaming.toolCounts);
-        }
-        // If agent didn't write a status line, show a "Done" badge so user knows it's finished
-        if (streaming.el && streaming.txt && !/---\s*\n\s*[✅⏳❓⚠️]/.test(streaming.txt) && !/✅\s*Done/.test(streaming.txt)) {
-          const badge = document.createElement('div');
-          badge.className = 'msg-done-badge';
-          // Build short summary from tool activity
-          const tc = Object.keys(streaming.toolCounts).length;
-          const total = tc ? Object.values(streaming.toolCounts).reduce((a,b) => a+b, 0) : 0;
-          badge.textContent = total > 0 ? `✅ ${t('msf.done')} — ${total} ${t('ta.calls')}` : `✅ ${t('msf.done')}`;
-          const footer = streaming.el.querySelector('.msg-status-footer');
-          if (footer) streaming.el.insertBefore(badge, footer); else streaming.el.appendChild(badge);
-        }
-        // ─── Result stats (cost / tokens / duration) ────────────────────────────
-        if (d.resultMeta && streaming.el) {
-          const rm = d.resultMeta;
-          const parts = [];
-          if (rm.cost != null) parts.push(`$${rm.cost < 0.01 ? rm.cost.toFixed(4) : rm.cost.toFixed(3)}`);
-          if (rm.usage) {
-            const inT = rm.usage.input_tokens; const outT = rm.usage.output_tokens;
-            const fmt = n => n >= 1000 ? (n/1000).toFixed(1) + 'K' : String(n);
-            if (inT || outT) parts.push(`${fmt(inT||0)} in / ${fmt(outT||0)} out`);
+          applyMsgClamp(streaming.el);
+          // Finalize tool activity
+          if (streaming.el.querySelector('.tool-live')) {
+            _finalizeToolLive(streaming.el);
+          } else if (Object.keys(streaming.toolCounts).length > 0) {
+            _renderToolActivity(streaming.el, streaming.toolCounts);
           }
-          if (rm.numTurns) parts.push(`${rm.numTurns} turn${rm.numTurns > 1 ? 's' : ''}`);
-          if (rm.contextWindow && rm.usage) {
-            const ctxUsed = (rm.usage.input_tokens || 0) + (rm.usage.cache_creation_input_tokens || 0) + (rm.usage.cache_read_input_tokens || 0);
-            const ctxPct = Math.round(ctxUsed / rm.contextWindow * 100);
-            if (ctxPct > 0) parts.push(`${ctxPct}% ctx`);
-          }
-          const dur = rm.durationMs || d.duration;
-          if (dur) parts.push(`${(dur/1000).toFixed(1)}s`);
-          if (parts.length) {
-            const statsEl = document.createElement('div');
-            statsEl.className = 'msg-stats';
-            statsEl.textContent = parts.join(' · ');
+          // Done badge
+          if (streaming.txt && !/---\s*\n\s*[✅⏳❓⚠️]/.test(streaming.txt) && !/✅\s*Done/.test(streaming.txt)) {
+            const badge = document.createElement('div');
+            badge.className = 'msg-done-badge';
+            const tc = Object.keys(streaming.toolCounts).length;
+            const total = tc ? Object.values(streaming.toolCounts).reduce((a,b) => a+b, 0) : 0;
+            badge.textContent = total > 0 ? `✅ ${t('msf.done')} — ${total} ${t('ta.calls')}` : `✅ ${t('msf.done')}`;
             const footer = streaming.el.querySelector('.msg-status-footer');
-            if (footer) streaming.el.insertBefore(statsEl, footer); else streaming.el.appendChild(statsEl);
+            if (footer) streaming.el.insertBefore(badge, footer); else streaming.el.appendChild(badge);
           }
+          // Clear streaming state
+          streaming.el = null;
+          streaming.txt = '';
+          streaming.reasoningTxt = '';
+          streaming.toolCounts = {};
         }
-        markDone(streaming.el);
-
-        // ─── Plan Mode: Show "Execute Plan" button ──────────────────────────────
-        // When in planning mode and response contains a plan, offer to execute it
-        const _planText = streaming.txt; // Save before clearing
-        _maybeAttachExecPlanBtn(streaming.el, _planText);
-
-        // ─── Session Restart: Show restart button if session failed ────────────
-        const _restartSessionId = getTS(tabId)._sessionRestartAvailable;
-        if (_restartSessionId && streaming.el) {
-          const restartBtn = document.createElement('button');
-          restartBtn.className = 'session-restart-btn';
-          restartBtn.innerHTML = '🔄 Restart Session';
-          restartBtn.style.cssText = 'margin-top:12px;padding:8px 16px;background:var(--bg,#1a1a2e);border:1px solid var(--accent,#00d4aa);color:var(--accent,#00d4aa);border-radius:6px;cursor:pointer;font-size:14px;';
-          restartBtn.onclick = () => {
-            restartBtn.disabled = true;
-            restartBtn.textContent = 'Restarting...';
-            ws.send(JSON.stringify({ type: 'restart_session', sessionId: _restartSessionId }));
-          };
-          const footer = streaming.el.querySelector('.msg-status-footer');
-          if (footer) streaming.el.insertBefore(restartBtn, footer); else streaming.el.appendChild(restartBtn);
-          delete getTS(tabId)._sessionRestartAvailable;
-        }
-
-        // ─── Text-parsing fallback for automatic plan completion detection ───
-        // When in planning mode and response looks done, text-parsing fallback for automatic mode switching
-        if (curMode === 'planning' && streaming.el && _planText) {
-          // Check for phrases indicating plan completion
-          const planPhrases = [
-            /plan\s+(complete|is ready|готов|план готов|exiting plan mode|switching to execution|starting execution|moving to execution)/i,
-            /now\s+(executing|implementing)/i,
-            /exiting\s*plan mode|switching to execution mode|starting execution/i
-          ];
-          if (planPhrases.some(p => p.test(_planText))) {
-            // Auto-switch to auto mode
-            curMode = 'auto';
-            syncBtn('mode', 'auto');
-            // Show success toast
-            toast('✅ Auto-switched to auto mode', false, 2000);
-          }
-        }
-        // Reset generating state for the visible tab (non-task done events only;
-        // task-done events are per-subtask and the parent generation may still be running)
-        if (!d.taskId) {
-          isGen = false;
-          setSendStop(false);
-          setStatus('status.connected', 'ok');
-        }
-        // Clear streaming state
-        streaming.el = null;
-        streaming.txt = '';
-        streaming.toolCounts = {};
-        streaming.toolLog = [];
+        setSendStop(false);
       } else {
         // Only clear global streaming state if the done event is for the currently
         // generating tab. Without this guard, a done event from a background tab
@@ -7976,6 +7987,7 @@ async function send() {
       workdir: curWorkdir || undefined,
       thinking: curThinking,
     }));
+    console.log('[client] Sending chat message, thinking =', curThinking);
   }
 }
 

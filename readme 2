@@ -1,0 +1,50 @@
+# Claude Code Studio
+
+Легковесный веб-интерфейс для Claude Code. Express.js бэкенд + ванильный JS фронтенд, без инструментов сборки.
+
+## Описание проекта
+
+Claude Code Studio — это веб-UI для Claude Code, позволяющая взаимодействовать с Claude через WebSocket, с поддержкой мульти-агентной оркестрации, MCP-серверов и SQLite для истории.
+
+## Команды запуска
+
+```bash
+# Разработка (авто-перезагрузка)
+npm run dev        # node --watch server.js
+
+# Продакшен
+npm start          # node server.js
+
+# Docker
+docker compose up -d
+docker compose logs -f claude-chat
+```
+
+## Архитектура
+
+- **server.js**: Express HTTP + WebSocket сервер (главная точка входа)
+- **auth.js**: Аутентификация с токенами (bcrypt, 30-дневные токены)
+- **claude-cli.js**: Запуск CLI `claude`, парсинг JSON-потока
+- **public/index.html**: Однофайловое SPA (встроенный CSS + JS, темная тема)
+- **config.json**: Определения MCP-серверов + каталог навыков
+- **data/chats.db**: SQLite: таблицы sessions + messages
+
+## Ключевые потоки
+
+- **Чат-запрос → ответ**: Клиент отправляет WS-сообщение `{ type: 'chat', text, mode, model, mcpServers, skills }`, сервер обрабатывает через `runCliSingle()` или `runSshSingle()`, поток JSON обратно.
+- **Мульти-агент**: Оркестратор генерирует план, агенты выполняются независимо.
+
+## Безопасность
+
+- Пароли хэшируются bcrypt (12 раундов), хранятся в `data/auth.json`
+- Токены: 32-байтовый hex, 30-дневный TTL, httpOnly cookie или x-auth-token header
+
+## Модели
+
+- `haiku` → `claude-haiku-4-5-20251001`
+- `sonnet` → `claude-sonnet-4-5-20250929` (по умолчанию)
+- `opus` → `claude-opus-4-6`
+
+## Тестирование
+
+Нет автоматизированных тестов. Тестируйте вручную: запустите `npm run dev`, откройте браузер на localhost:PORT, отправьте сообщение, проверьте стриминг и WS-протокол.
