@@ -231,18 +231,18 @@ body::after{
     <!-- Hero cards -->
     <div class="hero-row" id="heroRow"></div>
 
-    <!-- Heatmap (full width) -->
-    <div class="card" id="heatmapCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-        Activity
-      </div>
+     <!-- Heatmap (full width) -->
+     <div class="card" id="heatmapCard">
+       <div class="card-title">
+         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+         <span data-i18n="dash.activity">Activity</span>
+       </div>
       <div class="heatmap-months" id="heatmapMonths"></div>
       <div class="heatmap-wrap"><div class="heatmap" id="heatmap"></div></div>
       <div class="heatmap-legend">
-        <span>Less</span>
+        <span data-i18n="dash.less">Less</span>
         <div class="hm-cell hm-0"></div><div class="hm-cell hm-1"></div><div class="hm-cell hm-2"></div><div class="hm-cell hm-3"></div><div class="hm-cell hm-4"></div>
-        <span>More</span>
+        <span data-i18n="dash.more">More</span>
       </div>
     </div>
 
@@ -251,14 +251,14 @@ body::after{
       <div class="card" id="toolsCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-          Tool Usage
+          <span data-i18n="dash.tool_usage">Tool Usage</span>
         </div>
         <div id="toolBars"></div>
       </div>
       <div class="card" id="gaugeCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Automation Index
+          <span data-i18n="dash.automation_index">Automation Index</span>
         </div>
         <div class="gauge-wrap" id="gaugeWrap"></div>
       </div>
@@ -269,33 +269,33 @@ body::after{
       <div class="card" id="modelCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-          Models
+          <span data-i18n="dash.models">Models</span>
         </div>
         <div id="modelDonut"></div>
       </div>
       <div class="card" id="agentCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-          Agent Modes
+          <span data-i18n="dash.agent_modes">Agent Modes</span>
         </div>
         <div id="agentBars"></div>
       </div>
       <div class="card" id="hourCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Peak Hours
+          <span data-i18n="dash.peak_hours">Peak Hours</span>
         </div>
         <div class="hourly-bars" id="hourlyBars"></div>
         <div class="hour-labels" id="hourLabels"></div>
       </div>
     </div>
 
-    <!-- Top sessions -->
-    <div class="card" id="sessionsCard">
-      <div class="card-title">
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        Top Sessions
-      </div>
+     <!-- Top sessions -->
+     <div class="card" id="sessionsCard">
+       <div class="card-title">
+         <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+         <span data-i18n="dash.top_sessions">Top Sessions</span>
+       </div>
       <div class="timeline" id="timeline"></div>
     </div>
 
@@ -307,11 +307,87 @@ body::after{
 const TR = {
   en: {
     'nav.chat':'Chat','nav.kanban':'Kanban','nav.schedule':'Schedule','nav.dashboard':'Dashboard',
-    'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.dashboard.tip':'Dashboard','nav.aria':'Navigation'
+    'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.dashboard.tip':'Dashboard','nav.aria':'Navigation',
+
+    // Dashboard content
+    'dash.activity':'Activity',
+    'dash.tool_usage':'Tool Usage',
+    'dash.automation_index':'Automation Index',
+    'dash.models':'Models',
+    'dash.agent_modes':'Agent Modes',
+    'dash.peak_hours':'Peak Hours',
+    'dash.top_sessions':'Top Sessions',
+
+    // Hero cards
+    'dash.sessions':'Sessions',
+    'dash.tool_calls':'Tool Calls',
+    'dash.messages':'Messages',
+    'dash.time_saved':'Time Saved',
+    'dash.conversations_total':'conversations total',
+    'dash.avg_per_session':'avg per session',
+    'dash.estimated_savings':'estimated automation savings',
+
+    // Empty states
+    'dash.no_tool_data':'No tool data',
+    'dash.no_data':'No data',
+    'dash.no_sessions':'No sessions',
+    'dash.failed_load':'Failed to load analytics',
+
+    // Heatmap
+    'dash.less':'Less',
+    'dash.more':'More',
+    'dash.msgs':'msgs',
+
+    // Gauge
+    'dash.tool_automation':'Tool automation',
+    'dash.multi_agent_sessions':'Multi-agent sessions',
+    'dash.tool_ratio':'tool ratio',
+
+    // Agent modes
+    'dash.single_agent':'Single Agent',
+    'dash.multi_agent':'Multi-Agent'
   },
   ru: {
     'nav.chat':'Чат','nav.kanban':'Канбан','nav.schedule':'Расписание','nav.dashboard':'Сводка',
-    'nav.chat.tip':'Чат','nav.kanban.tip':'Доска Канбан','nav.schedule.tip':'Расписание','nav.dashboard.tip':'Сводка','nav.aria':'Навигация'
+    'nav.chat.tip':'Чат','nav.kanban.tip':'Доска Канбан','nav.schedule.tip':'Расписание','nav.dashboard.tip':'Сводка','nav.aria':'Навигация',
+
+    // Dashboard content
+    'dash.activity':'Активность',
+    'dash.tool_usage':'Использование инструментов',
+    'dash.automation_index':'Индекс автоматизации',
+    'dash.models':'Модели',
+    'dash.agent_modes':'Режимы агентов',
+    'dash.peak_hours':'Пиковые часы',
+    'dash.top_sessions':'Топ сессий',
+
+    // Hero cards
+    'dash.sessions':'Сессии',
+    'dash.tool_calls':'Вызовы инструментов',
+    'dash.messages':'Сообщения',
+    'dash.time_saved':'Сэкономленное время',
+    'dash.conversations_total':'всего разговоров',
+    'dash.avg_per_session':'в среднем за сессию',
+    'dash.estimated_savings':'расчетная экономия от автоматизации',
+
+    // Empty states
+    'dash.no_tool_data':'Нет данных об инструментах',
+    'dash.no_data':'Нет данных',
+    'dash.no_sessions':'Нет сессий',
+    'dash.failed_load':'Не удалось загрузить аналитику',
+
+    // Heatmap
+    'dash.less':'Меньше',
+    'dash.more':'Больше',
+    'dash.msgs':'сообщ',
+
+    // Gauge
+    'dash.tool_automation':'Автоматизация инструментов',
+    'dash.multi_agent_sessions':'Мульти-агентные сессии',
+    'dash.tool_ratio':'соотношение инструментов',
+
+    // Agent modes
+    'dash.single_agent':'Одиночный агент',
+    'dash.multi_agent':'Мульти-агент'
   }
 };
 const lang = localStorage.getItem('lang') || 'ru';
@@ -361,7 +437,7 @@ async function loadData(){
     render(d);
     content.style.display = '';
   } catch(e){
-    content.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>Failed to load analytics</p><small>${e.message}</small></div>`;
+    content.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>${t('dash.failed_load')}</p><small>${e.message}</small></div>`;
     content.style.display = '';
   } finally {
     loader.style.display = 'none';
@@ -384,10 +460,10 @@ function render(d){
 function renderHero(d){
   const s = d.summary;
   const cards = [
-    { label:'Sessions', value:s.total_sessions, sub:'conversations total', icon:'<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>' },
-    { label:'Tool Calls', value:fmtNum(s.total_tool_calls), sub:`${Math.round(s.total_tool_calls/Math.max(1,s.total_sessions))} avg per session`, icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>' },
-    { label:'Messages', value:fmtNum(s.total_messages), sub:`${d.sessionStats?.avg_messages_per_session || 0} avg per session`, icon:'<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>' },
-    { label:'Time Saved', value:`~${s.estimated_hours_saved}h`, sub:'estimated automation savings', icon:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { label:t('dash.sessions'), value:s.total_sessions, sub:t('dash.conversations_total'), icon:'<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>' },
+    { label:t('dash.tool_calls'), value:fmtNum(s.total_tool_calls), sub:`${Math.round(s.total_tool_calls/Math.max(1,s.total_sessions))} ${t('dash.avg_per_session')}`, icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>' },
+    { label:t('dash.messages'), value:fmtNum(s.total_messages), sub:`${d.sessionStats?.avg_messages_per_session || 0} ${t('dash.avg_per_session')}`, icon:'<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>' },
+    { label:t('dash.time_saved'), value:`~${s.estimated_hours_saved}h`, sub:t('dash.estimated_savings'), icon:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
   ];
   const row = $('#heroRow');
   row.innerHTML = '';
@@ -429,7 +505,7 @@ function renderHeatmap(daily){
   const maxCount = Math.max(1, ...cells.map(c=>c.count));
   cells.forEach(c => {
     const level = c.count === 0 ? 0 : Math.min(4, Math.ceil(c.count / maxCount * 4));
-    const el = h('div',{class:`hm-cell hm-${level}`, 'data-tip':`${c.date}: ${c.count} msgs`});
+    const el = h('div',{class:`hm-cell hm-${level}`, 'data-tip':`${c.date}: ${c.count} ${t('dash.msgs')}`});
     hm.appendChild(el);
   });
 
@@ -456,7 +532,7 @@ function renderHeatmap(daily){
 function renderTools(tools){
   const wrap = $('#toolBars');
   wrap.innerHTML = '';
-  if(!tools.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No tool data</div>'; return; }
+  if(!tools.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">'+t('dash.no_tool_data')+'</div>'; return; }
   const max = tools[0].count;
   const colorClasses = ['c1','c2','c3','c4','c5','c6'];
   tools.slice(0,10).forEach((t,i) => {
@@ -492,8 +568,8 @@ function renderGauge(score, summary){
     </svg>
     <div class="gauge-score">${score}</div>
     <div class="gauge-label">
-      Tool automation: ${summary.total_tool_calls} calls<br>
-      Multi-agent sessions: ${Math.round((summary.total_messages > 0 ? summary.total_tool_calls/summary.total_messages : 0)*100)}% tool ratio
+      ${t('dash.tool_automation')}: ${summary.total_tool_calls} calls<br>
+      ${t('dash.multi_agent_sessions')}: ${Math.round((summary.total_messages > 0 ? summary.total_tool_calls/summary.total_messages : 0)*100)}% ${t('dash.tool_ratio')}
     </div>`;
 }
 
@@ -501,7 +577,7 @@ function renderGauge(score, summary){
 function renderModelDonut(models){
   const wrap = $('#modelDonut');
   const total = models.reduce((a,m)=>a+m.count,0);
-  if(!total){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No data</div>'; return; }
+  if(!total){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">'+t('dash.no_data')+'</div>'; return; }
 
   const r = 40, cx = 55, cy = 55, sw = 16;
   const circ = 2 * Math.PI * r;
@@ -534,8 +610,8 @@ function renderAgentBars(modes){
   const wrap = $('#agentBars');
   wrap.innerHTML = '';
   const total = modes.reduce((a,m)=>a+m.count,0);
-  if(!total){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No data</div>'; return; }
-  const labels = { single:'Single Agent', multi:'Multi-Agent' };
+  if(!total){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">'+t('dash.no_data')+'</div>'; return; }
+  const labels = { single:t('dash.single_agent'), multi:t('dash.multi_agent') };
   const colors = { single:'c3', multi:'c1' };
   modes.forEach(m => {
     const pct = Math.max(5, m.count/total*100);
@@ -564,7 +640,7 @@ function renderHourly(hourly){
 
   byHour.forEach((count, hour) => {
     const pct = Math.max(2, count/max*100);
-    bars.innerHTML += `<div class="hourly-bar" style="height:${pct}%" data-tip="${String(hour).padStart(2,'0')}:00 — ${count} msgs"></div>`;
+    bars.innerHTML += `<div class="hourly-bar" style="height:${pct}%" data-tip="${String(hour).padStart(2,'0')}:00 — ${count} ${t('dash.msgs')}"></div>`;
     if(hour % 3 === 0) labels.innerHTML += `<span>${String(hour).padStart(2,'0')}</span>`;
     else labels.innerHTML += `<span></span>`;
   });
@@ -574,10 +650,10 @@ function renderHourly(hourly){
 function renderTimeline(sessions){
   const wrap = $('#timeline');
   wrap.innerHTML = '';
-  if(!sessions.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No sessions</div>'; return; }
+  if(!sessions.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">'+t('dash.no_sessions')+'</div>'; return; }
   sessions.forEach((s,i) => {
     const model = s.model || 'sonnet';
-    const date = s.created_at ? new Date(s.created_at).toLocaleDateString('uk-UA',{day:'numeric',month:'short'}) : '';
+    const date = s.created_at ? new Date(s.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '';
     const title = s.title || 'Untitled';
     const proj = s.workdir ? s.workdir.split('/').pop() : '';
     wrap.innerHTML += `

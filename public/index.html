@@ -2321,13 +2321,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
         <span data-i18n="sec.projects">Проекти</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" title="Фильтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openAddProject()" title="Додати проект" data-i18n-title="proj.add">＋</button>
           <span class="badge" id="projCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="projBody">
-        <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" placeholder="Фільтр..." aria-label="Фільтр проектів" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
+         <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" placeholder="Фильтр..." aria-label="Фильтр проектов" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
         <div class="sec-list"><div id="projList"></div></div>
       </div>
     </div>
@@ -2337,13 +2337,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
         <span data-i18n="sec.sshHosts">SSH Хости</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" title="Фильтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openAddHostModal()" title="Додати SSH хост" data-i18n-title="ssh.add">＋</button>
           <span class="badge" id="sshHostCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="sshHostsBody">
-        <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" placeholder="Фільтр..." aria-label="Фільтр SSH хостів" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
+         <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" placeholder="Фильтр..." aria-label="Фильтр SSH хостов" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
         <div class="sec-list"><div id="sshHostList"></div></div>
       </div>
     </div>
@@ -2352,17 +2352,17 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
         <span data-i18n="sec.chats">Чати</span>
         <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
-          <button class="sec-filter-btn" id="histFilterBtn" onclick="event.stopPropagation();toggleSecFilter('hist')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" data-i18n-title="hist.sel.title" title="Вибрати кілька">☑</button>
+          <button class="sec-filter-btn" id="histFilterBtn" onclick="event.stopPropagation();toggleSecFilter('hist')" title="Фильтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+           <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" data-i18n-title="hist.sel.title" title="Выбрать несколько">☑</button>
           <span class="badge" id="histCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="histBody">
-        <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" placeholder="Фільтр..." aria-label="Фільтр чатів" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
+         <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" placeholder="Фильтр..." aria-label="Фильтр чатов" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
         <div class="sec-list"><div class="hist-list" id="histList"></div></div>
         <div class="hist-bulk-bar" id="histBulkBar">
           <span class="bulk-info" id="histBulkInfo">0 вибрано</span>
-          <button class="bulk-all" onclick="selectAllHist()" data-i18n="bulk.all">Всі</button>
+          <button class="bulk-all" onclick="selectAllHist()" data-i18n="bulk.all">Все</button>
           <button class="bulk-del" id="histBulkDel" onclick="delSelectedHist()" disabled data-i18n="bulk.del">Видалити</button>
         </div>
       </div>
@@ -2372,7 +2372,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
         <span data-i18n="sec.mcp">MCP</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" title="Фильтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openMcpImport()" title="Імпортувати MCP з JSON файлу" data-i18n-title="mcp.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();exportMcp()" title="Експортувати MCP у JSON файл" data-i18n-title="mcp.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openMcpModal('add')" title="Додати MCP-сервер" data-i18n-title="mcp.add">＋</button>
@@ -2380,8 +2380,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </div>
       </div>
       <div class="sec-body" id="mcpBody">
-        <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" placeholder="Фільтр..." aria-label="Фільтр MCP-серверів" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
+         <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" placeholder="Фильтр..." aria-label="Фильтр MCP-серверов" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
+
         <div class="sec-list"><div id="mcpList"></div></div>
       </div>
     </div>
@@ -2392,14 +2392,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
         <span data-i18n="sec.cmds">/ Команди</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" title="Фильтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openCmdForm()" title="Додати команду" data-i18n-title="cmd.add.new">＋</button>
           <span class="badge" id="cmdsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="cmdsBody">
-        <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" placeholder="Фільтр..." aria-label="Фільтр команд" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="cmds.hint">Слеш-команди — шорткати до промптів. Набирайте / в чаті.</div>
+         <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" placeholder="Фильтр..." aria-label="Фильтр команд" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="cmds.hint">Слеш-команды — шорткаты к промптам. Набирайте / в чате.</div>
         <div class="sec-list"><div id="cmdsList"></div></div>
       </div>
     </div>
@@ -2413,7 +2413,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </div>
       </div>
       <div class="sec-body" id="agentsBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">Зовнішні агенти для делегування завдань.</div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">Внешние агенты для делегирования задач.</div>
         <div class="sec-list"><div id="agentsList"></div></div>
       </div>
     </div>
@@ -2428,22 +2428,22 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </div>
       </div>
       <div class="sec-body" id="tgBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tg.hint">Керуйте Studio віддалено через Telegram-бота.</div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tg.hint">Управляйте Studio удалённо через Telegram-бота.</div>
 
         <!-- Bot Token -->
         <div class="tg-section">
-          <label style="font-size:11px;color:var(--muted)" data-i18n="tg.token">Bot Token (від @BotFather):</label>
+          <label style="font-size:11px;color:var(--muted)" data-i18n="tg.token">Bot Token (от @BotFather):</label>
           <div style="display:flex;gap:4px;margin-top:4px">
             <input id="tgBotToken" type="password" placeholder="123456:ABC-DEF..." style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace">
-            <button class="bp" id="tgStartBtn" onclick="tgStartBot()" style="padding:5px 10px;font-size:11px;white-space:nowrap" data-i18n="tg.start">▶ Запустити</button>
+            <button class="bp" id="tgStartBtn" onclick="tgStartBot()" style="padding:5px 10px;font-size:11px;white-space:nowrap" data-i18n="tg.start">▶ Запустить</button>
           </div>
           <div class="tg-bot-info" id="tgBotInfo" style="display:none;font-size:11px;color:var(--accent2);margin-top:4px"></div>
         </div>
 
         <!-- Lock Mode Toggle -->
         <div class="tg-section" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:12px" data-i18n="tg.accept_new">Нові підключення:</span>
-          <label class="tg-toggle" title="Дозволити/заборонити нові підключення" data-i18n-title="tg.toggle.title">
+          <span style="font-size:12px" data-i18n="tg.accept_new">Новые подключения:</span>
+          <label class="tg-toggle" title="Разрешить/запретить новые подключения" data-i18n-title="tg.toggle.title">
             <input type="checkbox" id="tgAcceptNew" onchange="tgToggleAccept(this.checked)" checked>
             <span class="tg-toggle-slider"></span>
           </label>
@@ -2451,18 +2451,18 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
         <!-- Pairing -->
         <div id="tgPairingSection" style="margin-top:8px">
-          <button class="add-btn" id="tgPairBtn" onclick="tgGenerateCode()" data-i18n="tg.pair">🔗 Підключити Telegram</button>
+          <button class="add-btn" id="tgPairBtn" onclick="tgGenerateCode()" data-i18n="tg.pair">🔗 Подключить Telegram</button>
           <div id="tgPairingCode" style="display:none;text-align:center;margin-top:10px">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="tg.pair.hint">Введіть цей код у Telegram-боті:</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="tg.pair.hint">Введите этот код в Telegram-боте:</div>
             <div id="tgCodeDisplay" style="font-size:28px;font-weight:800;letter-spacing:4px;color:var(--accent);font-family:monospace;padding:12px;background:var(--s1);border-radius:8px;border:2px dashed var(--accent)"></div>
             <div style="font-size:11px;color:var(--muted);margin-top:6px">⏱ <span id="tgCodeTimer">5:00</span></div>
-            <button class="bg" onclick="tgCancelPairing()" style="margin-top:6px;font-size:11px;padding:4px 10px" data-i18n="tg.pair.cancel">Скасувати</button>
+            <button class="bg" onclick="tgCancelPairing()" style="margin-top:6px;font-size:11px;padding:4px 10px" data-i18n="tg.pair.cancel">Отмена</button>
           </div>
         </div>
 
         <!-- Connected Devices -->
         <div style="margin-top:10px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px" data-i18n="tg.devices">Підключені пристрої:</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px" data-i18n="tg.devices">Подключённые устройства:</div>
           <div id="tgDeviceList" style="font-size:12px;color:var(--muted)">—</div>
         </div>
       </div>
@@ -2472,7 +2472,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- LEFT PANEL TAB -->
-<div class="panel-tab panel-tab-left active" role="button" tabindex="0" aria-label="Toggle left panel" onclick="toggle('leftPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('leftPanel')}" data-tip="Сховати/показати ліву панель" data-i18n-tip="tip.panels.left">
+    <div class="panel-tab panel-tab-left active" role="button" tabindex="0" aria-label="Toggle left panel" onclick="toggle('leftPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('leftPanel')}" data-tip="Скрыть/показать левую панель" data-i18n-tip="tip.panels.left">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
@@ -2587,7 +2587,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   <div class="hdr">
     <div class="hdr-l">
       <div class="logo">CCS</div>
-      <nav class="nav-sw" aria-label="Навігація між розділами" data-i18n-aria="nav.aria">
+       <nav class="nav-sw" aria-label="Навигация между разделами" data-i18n-aria="nav.aria">
         <a class="nav-sw-btn active" href="/" data-tip="Чат" data-i18n-tip="nav.chat.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
           <span data-i18n="nav.chat">Chat</span>
@@ -2628,7 +2628,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <span class="rl-label" id="rlBadgeLabel">Max ⚠</span>
         <button class="rl-dismiss" onclick="event.stopPropagation();_rlClear()" title="Закрити" data-i18n-title="cfg.close">×</button>
         <div id="rlTooltip">
-          <div class="rl-tt-title"><span id="rl-tt-icon">⚠️</span> <span id="rl-tt-title-text" data-i18n="rl.title.warn">Наближається ліміт</span></div>
+          <div class="rl-tt-title"><span id="rl-tt-icon">⚠️</span> <span id="rl-tt-title-text" data-i18n="rl.title.warn">Приближается лимит</span></div>
           <div class="rl-bar"><div class="rl-bar-fill" id="rl-bar-fill"></div></div>
           <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.type">Тип</span><span class="rl-tt-val" id="rl-tt-type">—</span></div>
           <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.used">Використано</span><span class="rl-tt-val" id="rl-tt-used">—</span></div>
@@ -2638,9 +2638,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </div>
       </div>
       <button class="hb" onclick="newSession()" data-tip="Новий чат" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Чат</span></button>
-      <button class="hb" onclick="openCliImport()" data-tip="Імпорт сесій" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+      <button class="hb" onclick="openCliImport()" data-tip="Импорт сессий" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2 2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
       <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
-      <select class="lang-sel" id="langSel" onchange="setLang(this.value)" aria-label="Interface language" data-tip="Мова інтерфейсу" data-i18n-tip="tip.lang">
+       <select class="lang-sel" id="langSel" onchange="setLang(this.value)" aria-label="Interface language" data-tip="Язык интерфейса" data-i18n-tip="tip.lang">
         <option value="en">EN</option>
         <option value="ru">RU</option>
       </select>
@@ -2686,7 +2686,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200">
     </div>
     <div style="flex:1"></div>
-    <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Підключення...</span>
+    <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Подключение...</span>
   </div>
   </div><!-- /hdr-collapse-zone -->
 
@@ -2699,7 +2699,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <span id="sessBarClaudeId" style="font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;    min-width:250px;" title="Скопировать ID сессии Claude" onclick="copySessId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openKilo()">⚡ Kilo</a>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
-    <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
+     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегировать внешнему агенту">⇗ <span data-i18n="dlg.btn">Делегировать</span></button>
     <button id="sessBarExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSession()" title="Export session as JSON">↓ Export</button>
     <input type="file" id="sessImportInput" accept=".json" style="display:none" onchange="importSessionFile(this)">
   </div>
@@ -2715,17 +2715,17 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <span class="dlg-panel-last-update" id="dlgPanelLastUpdate"></span>
     </div>
     <div class="dlg-panel-actions">
-      <button class="dlg-btn" onclick="checkDelegationBtn()" data-i18n="dlg.check">Перевірити</button>
-      <button class="dlg-btn dlg-sync-only" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Діалог</button>
-      <button class="dlg-btn dlg-sync-only" onclick="sendDelegateMsg()" data-i18n="dlg.message">Повідомлення</button>
+      <button class="dlg-btn" onclick="checkDelegationBtn()" data-i18n="dlg.check">Проверить</button>
+      <button class="dlg-btn dlg-sync-only" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Диалог</button>
+      <button class="dlg-btn dlg-sync-only" onclick="sendDelegateMsg()" data-i18n="dlg.message">Сообщение</button>
       <button class="dlg-btn danger" onclick="stopDelegation()" data-i18n="dlg.stop">Стоп</button>
     </div>
   </div>
   <div id="dlgDialogContainer" style="display:none;padding:0 14px 8px;background:var(--s1);border-bottom:1px solid var(--border);">
     <div class="dlg-dialog-view" id="dlgDialogView"></div>
     <div class="dlg-msg-input" id="dlgMsgInput">
-      <input id="dlgMsgText" data-i18n-ph="dlg.msg.ph" placeholder="Надіслати повідомлення агенту..." onkeydown="if(event.key==='Enter')sendDelegateMsgSubmit()">
-      <button onclick="sendDelegateMsgSubmit()" data-i18n="dlg.send">Надіслати</button>
+       <input id="dlgMsgText" data-i18n-ph="dlg.msg.ph" placeholder="Отправить сообщение агенту..." onkeydown="if(event.key==='Enter')sendDelegateMsgSubmit()">
+      <button onclick="sendDelegateMsgSubmit()" data-i18n="dlg.send">Отправить</button>
     </div>
   </div>
 
@@ -2733,12 +2733,12 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="welcome">
       <div class="wi">CCS</div>
       <h2>Claude Code Studio</h2>
-      <p data-i18n="welcome.desc">Виберіть MCP та Навички зліва, файли — справа.</p>
+      <p data-i18n="welcome.desc">Выберите MCP и Навыки слева, файлы — справа.</p>
       <div class="welcome-prompts">
         <div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; <span data-i18n="welcome.prompt.1">Поясни цей код крок за кроком</span></div>
         <div class="wp-card" onclick="setPrompt(this)">&#x1F41B; <span data-i18n="welcome.prompt.2">Знайди та виправ помилки</span></div>
         <div class="wp-card" onclick="setPrompt(this)">&#x2728; <span data-i18n="welcome.prompt.3">Напиши unit-тести</span></div>
-        <div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; <span data-i18n="welcome.prompt.4">Спроектуй архітектуру</span></div>
+        <div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; <span data-i18n="welcome.prompt.4">Спроектируй архитектуру</span></div>
       </div>
       <button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="welcome.import">Import session from JSON</span></button>
     </div>
@@ -2789,8 +2789,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
-      <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
-      <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
+       <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишите задачу... Ctrl+V — скриншот · @ — файлы · # — SSH · 📎 — любой файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
+       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Задач в очереди"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
         <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
       </button>
@@ -2808,7 +2808,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- RIGHT PANEL TAB (left side of right panel) -->
-<div class="panel-tab panel-tab-right active" role="button" tabindex="0" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
+<div class="panel-tab panel-tab-right active" role="button" tabindex="0" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Скрыть/показать правую панель" data-i18n-tip="tip.panels.right">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
@@ -2817,7 +2817,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 <!-- RIGHT PANEL: File Browser -->
 <div class="right" id="rightPanel">
   <div class="fh">
-    <span data-i18n="files.title">Робоча директорія</span>
+    <span data-i18n="files.title">Рабочая директория</span>
     <button onclick="loadFiles()" data-i18n-title="files.refresh" title="Оновити">↻</button>
   </div>
   <div class="ft" id="filesTree"></div>
@@ -2864,12 +2864,12 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 <div class="modal-overlay hidden" id="mcpImportModal" aria-hidden="true" onclick="if(event.target===this)closeMcpImport()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mcpImportTitle" tabindex="-1" style="width:500px;max-height:82vh;max-height:82dvh">
     <div class="modal-hdr">
-      <h2 id="mcpImportTitle" style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Імпорт MCP серверів</span></h2>
+      <h2 id="mcpImportTitle" style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Импорт MCP серверов</span></h2>
       <button class="modal-close" onclick="closeMcpImport()">✕</button>
     </div>
     <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto">
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
-        Підтримується формат <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) та будь-який JSON вигляду <code style="font-size:11px">{"mcpServers":{...}}</code>
+         Поддерживается формат <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) и любой JSON вида <code style="font-size:11px">{"mcpServers":{...}}</code>
       </div>
       <div id="mcpImportDrop"
            style="border:2px dashed var(--border);border-radius:8px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color .15s"
@@ -2877,7 +2877,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
            ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
            ondragleave="this.style.borderColor='var(--border)'"
            ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleMcpImportDrop(event)">
-        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg><span data-i18n="mcp.import.drop">Перетягніть .json файл або натисніть для вибору</span></div>
+        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg><span data-i18n="mcp.import.drop">Перетащите .json файл или нажмите для выбора</span></div>
         <input type="file" id="mcpImportFile" accept=".json" style="display:none" onchange="handleMcpImportFile(this)">
       </div>
       <div style="text-align:center;font-size:11px;color:var(--muted);margin:-2px 0" data-i18n="mcp.import.or">— або вставте JSON вручну —</div>
@@ -2888,13 +2888,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div id="mcpImportError" style="display:none;font-size:12px;color:var(--orange);padding:7px 10px;background:var(--s2);border-radius:6px;border:1px solid var(--orange)"></div>
       <div id="mcpImportPreview" style="display:none;flex-direction:column;gap:6px">
         <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">
-          <span data-i18n="mcp.import.found">Знайдено серверів:</span> <span id="mcpImportCount" style="color:var(--text)">0</span>
+          <span data-i18n="mcp.import.found">Найдено серверов:</span> <span id="mcpImportCount" style="color:var(--text)">0</span>
         </div>
         <div id="mcpImportList" style="display:flex;flex-direction:column;gap:3px;max-height:200px;overflow-y:auto"></div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px 10px;background:var(--s2);border-radius:6px">
         <input type="checkbox" id="mcpImportReplace">
-        <span data-i18n="mcp.import.replace">Замінити існуючі кастомні сервери (інакше — злиття)</span>
+         <span data-i18n="mcp.import.replace">Заменить существующие кастомные серверы (иначе — слияние)</span>
       </label>
     </div>
     <div class="modal-footer">
@@ -3006,17 +3006,17 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     </div>
     <div class="fpv-toolbar">
       <span class="fpv-ext" id="fpvExt"></span>
-      <button class="fpv-btn" id="fpvCopyImgBtn" onclick="fpvCopyImage()" style="display:none" data-i18n-title="fpv.copy_img.title" title="Скопіювати зображення">
+      <button class="fpv-btn" id="fpvCopyImgBtn" onclick="fpvCopyImage()" style="display:none" data-i18n-title="fpv.copy_img.title" title="Скопировать изображение">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        <span data-i18n="fpv.copy_img">Копіювати</span>
+         <span data-i18n="fpv.copy_img">Копировать</span>
       </button>
       <button class="fpv-btn" onclick="fpvDownload()" data-i18n-title="fpv.download.title" title="Завантажити файл">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span data-i18n="fpv.download">Завантажити</span>
       </button>
-      <button class="fpv-btn" onclick="fpvShare()" id="fpvShareBtn" data-i18n-title="fpv.share.title" title="Поділитись / Скопіювати посилання">
+      <button class="fpv-btn" onclick="fpvShare()" id="fpvShareBtn" data-i18n-title="fpv.share.title" title="Поделиться / Скопировать ссылку">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        <span data-i18n="fpv.share">Поділитись</span>
+         <span data-i18n="fpv.share">Поделиться</span>
       </button>
     </div>
     <div class="fpv-body" id="fpvBody"></div>
@@ -3034,17 +3034,17 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <!-- Local / Remote toggle -->
     <div class="proj-type-toggle">
       <button class="proj-type-btn active" id="projTypeLocal" onclick="setProjType('local')" data-i18n="proj.type.local">📁 Локальний</button>
-      <button class="proj-type-btn" id="projTypeRemote" onclick="setProjType('remote')" data-i18n="proj.type.remote">🌐 Віддалений SSH</button>
+       <button class="proj-type-btn" id="projTypeRemote" onclick="setProjType('remote')" data-i18n="proj.type.remote">🌐 Удалённый SSH</button>
     </div>
 
     <!-- LOCAL section -->
     <div id="projLocalSection">
       <div class="dir-path-bar">
-        <input type="text" class="dir-path-input" id="dirPathInput" data-i18n-ph="dir.path.ph" placeholder="Введіть шлях, напр. /Users/you/projects" spellcheck="false">
+        <input type="text" class="dir-path-input" id="dirPathInput" data-i18n-ph="dir.path.ph" placeholder="Введите путь, напр. /Users/you/projects" spellcheck="false">
         <button class="dir-path-go" onclick="navigateToPath()" data-i18n="dir.path.go">Перейти</button>
       </div>
       <div class="dir-filter-bar">
-        <input type="text" class="dir-filter-input" id="dirFilterInput" data-i18n-ph="dir.filter.ph" placeholder="Фільтрувати папки..." spellcheck="false">
+        <input type="text" class="dir-filter-input" id="dirFilterInput" data-i18n-ph="dir.filter.ph" placeholder="Фильтрувати папки..." spellcheck="false">
       </div>
       <div class="dir-list" id="dirList">
         <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Завантаження...</div>
@@ -3057,17 +3057,17 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <div class="rh-form-row">
           <span class="rh-label" data-i18n="dir.ssh_host">SSH Хост:</span>
           <select id="remoteHostSelect" style="flex:1">
-            <option value="">— оберіть хост —</option>
+            <option value="">— выберите хост —</option>
           </select>
           <button class="bg" onclick="openAddHostModal()" style="padding:5px 10px;font-size:12px;flex-shrink:0" data-i18n="dir.remote.add_new">＋ Новий</button>
         </div>
         <div class="rh-form-row">
-          <span class="rh-label" data-i18n="dir.remote.path">Шлях на сервері:</span>
+           <span class="rh-label" data-i18n="dir.remote.path">Путь на сервере:</span>
           <input id="remoteWorkdirInput" placeholder="/home/user/myproject" style="flex:1">
         </div>
         <div class="rh-form-row">
           <span class="rh-label"></span>
-          <button class="bg" onclick="testSelectedHost()" style="padding:5px 12px;font-size:12px" data-i18n="dir.remote.test">🔌 Тест з'єднання</button>
+           <button class="bg" onclick="testSelectedHost()" style="padding:5px 12px;font-size:12px" data-i18n="dir.remote.test">🔌 Тест подключения</button>
           <div class="rh-test-result" id="remoteTestResult"></div>
         </div>
       </div>
@@ -3080,7 +3080,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="dir-footer">
       <label id="gitInitLabel">
         <input type="checkbox" id="gitInitChk">
-        <span data-i18n="dir.git.init">git init (якщо ще не репозиторій)</span>
+         <span data-i18n="dir.git.init">git init (если ещё не репозиторий)</span>
       </label>
       <div style="flex:1"></div>
       <button class="bg" onclick="closeDirModal()" style="padding:6px 14px" data-i18n="dir.cancel">Cancel</button>
@@ -3160,7 +3160,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="ssh-host-form">
       <div>
         <label data-i18n="ssh.modal.label">Назва хоста *</label>
-        <input id="sshHostLabel" data-i18n-ph="ssh.modal.label.ph" placeholder="Мій продакшн сервер">
+        <input id="sshHostLabel" data-i18n-ph="ssh.modal.label.ph" placeholder="Мой продакшн сервер">
       </div>
       <div>
         <label data-i18n="ssh.modal.host">Хост (user@host або host) *</label>
@@ -3172,7 +3172,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <input id="sshHostPort" type="number" placeholder="22" value="22" style="width:100%;box-sizing:border-box">
         </div>
         <div style="flex:3">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.auth">Метод автентифікації</label>
+           <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.auth">Метод аутентификации</label>
           <div style="display:flex;gap:6px">
             <button class="proj-type-btn active" id="sshAuthBtnKey" onclick="setAuthType('key')" style="flex:1;padding:5px 0;font-size:11px" data-i18n="ssh.modal.auth.key">🔑 SSH ключ</button>
             <button class="proj-type-btn" id="sshAuthBtnPwd" onclick="setAuthType('pwd')" style="flex:1;padding:5px 0;font-size:11px" data-i18n="ssh.modal.auth.pwd">🔐 Пароль</button>
@@ -3188,7 +3188,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <input id="sshHostPassword" type="password" placeholder="••••••••" autocomplete="current-password">
       </div>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:2px 0" data-i18n="ssh.modal.tip">
-        💡 SSH ключ: без пароля або доданий у ssh-agent. Перше підключення автоматично підтвердить fingerprint. Пароль зберігається у відкритому вигляді — рекомендуємо використовувати ключ.
+        💡 SSH ключ: без пароля или добавлен в ssh-agent. Первое подключение автоматически подтвердит fingerprint. Пароль хранится в открытом виде — рекомендуем использовать ключ.
       </div>
       <div class="rh-test-result" id="sshHostTestResult"></div>
     </div>
@@ -3270,14 +3270,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="rlModalTitle">
     <div class="cd-icon">🚫</div>
     <div class="rl-modal-type" id="rlModalType">—</div>
-    <h3 id="rlModalTitle">Ліміт вичерпано</h3>
-    <p id="rlModalDesc">Ваш ліміт Claude Max вичерпано.</p>
+    <h3 id="rlModalTitle">Лимит исчерпан</h3>
+    <p id="rlModalDesc">Ваш лимит Claude Max исчерпан.</p>
     <div class="rl-modal-countdown">
       <span class="rl-cd-label" data-i18n="rl.modal.reset">Скидання через:</span>
       <span id="rlModalTimer">—</span>
     </div>
     <div class="confirm-actions" style="margin-top:18px">
-      <button class="cd-btn-ok" onclick="closeRlModal()" data-i18n="rl.modal.ok">Зрозуміло</button>
+       <button class="cd-btn-ok" onclick="closeRlModal()" data-i18n="rl.modal.ok">Понятно</button>
     </div>
   </div>
 </div>
@@ -3300,18 +3300,18 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <label class="dlg-mode-card selected" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
             <input type="radio" name="dlgMode" value="handoff" checked style="display:none">
             <span class="dlg-mode-title" data-i18n="dlg.mode.handoff">Передача</span>
-            <span class="dlg-mode-desc" data-i18n="dlg.mode.handoff.desc">Повна передача. Відкриє термінал, ви продовжите роботу там.</span>
+             <span class="dlg-mode-desc" data-i18n="dlg.mode.handoff.desc">Полная передача. Откроет терминал, вы продолжите работу там.</span>
           </label>
           <label class="dlg-mode-card" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
             <input type="radio" name="dlgMode" value="sync" style="display:none">
-            <span class="dlg-mode-title" data-i18n="dlg.mode.sync">Синхронізація</span>
-            <span class="dlg-mode-desc" data-i18n="dlg.mode.sync.desc">Паралельна робота. Обидва агенти активні, спілкуються через файл діалогу.</span>
+             <span class="dlg-mode-title" data-i18n="dlg.mode.sync">Синхронизация</span>
+             <span class="dlg-mode-desc" data-i18n="dlg.mode.sync.desc">Паралельная работа. Оба агента активны, общаются через файл диалога.</span>
           </label>
         </div>
       </div>
       <div class="cmd-field">
         <label data-i18n="dlg.task">Завдання</label>
-        <textarea id="dlgTask" rows="3" class="dlg-textarea" data-i18n-ph="dlg.task.ph" placeholder="Що має зробити агент..."></textarea>
+        <textarea id="dlgTask" rows="3" class="dlg-textarea" data-i18n-ph="dlg.task.ph" placeholder="Что должно сделать агента..."></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -3791,8 +3791,8 @@ document.addEventListener('keydown', e => {
 const TRANSLATIONS = {
   en: {
     'sec.proactive':'Status',
-    'sec.chats':'Chats','sec.mcp':'MCP',
-    'mcp.hint':'Enable tools that Claude can use in this chat.',
+    'sec.chats':'Chats','sec.mcp':'Kilo MCP',
+
     'mcp.add':'＋ Add MCP server','mcp.id':'ID (e.g. my-server)','mcp.label':'Label',
     'mcp.cmd':'Command (e.g. npx)','mcp.args':'Args comma-separated','mcp.add_btn':'Add',
     'sec.projects':'Projects','proj.add':'＋ Add project',
@@ -3843,9 +3843,9 @@ const TRANSLATIONS = {
     'agents.title':'Active agents',
     'sess.fork':'Create a copy of this chat with the same Claude history','sess.fork.na':'Fork unavailable — no Claude CLI session','sess.forked':'Session forked',
     'sess.delete.tip':'Delete chat','sess.delete.confirm':'Delete session?','sess.delete.tasks':'Delete session?\n\nLinked Kanban tasks: {n}. They will also be deleted.','sess.load.err':'Error loading session',
-    'mcp.active':'● Active in chat','mcp.inactive':'○ Disabled','mcp.del.title':'Remove server','mcp.del.confirm':'Remove server',
+    'mcp.active':'Connected','mcp.inactive':'Disconnected','mcp.del.title':'Remove server','mcp.del.confirm':'Remove server',
     'mcp.cfg.tip':'Settings','mcp.cfg.warn':'Configuration required',
-    'mcp.toggle.on':'Click to disable','mcp.toggle.off':'Click to enable',
+    'mcp.toggle.on':'Connected to Kilo MCP server','mcp.toggle.off':'Disconnected from Kilo MCP server',
     'mcp.cfg.api_warn':'⚠ Set API keys to enable',
     'mcp.cfg.no_params':'No parameters to configure',
     'mcp.cfg.saved':'✓ Settings saved','mcp.cfg.save_err':'Save error',
@@ -4008,8 +4008,8 @@ const TRANSLATIONS = {
   },
   ru: {
     'sec.proactive':'Статус',
-    'sec.chats':'Чаты','sec.mcp':'MCP',
-    'mcp.hint':'Включите инструменты, которые Claude может использовать в этом чате.',
+    'sec.chats':'Чаты','sec.mcp':'Kilo MCP',
+
     'mcp.add':'＋ Добавить MCP-сервер','mcp.id':'ID (напр. my-server)','mcp.label':'Название',
     'mcp.cmd':'Команда (напр. npx)','mcp.args':'Аргументы через запятую','mcp.add_btn':'Добавить',
     'sec.projects':'Проекты','proj.add':'＋ Добавить проект',
@@ -4060,9 +4060,9 @@ const TRANSLATIONS = {
     'agents.title':'Активные агенты',
     'sess.fork':'Создать копию чата с той же историей Claude','sess.fork.na':'Форк недоступен — нет сессии Claude CLI','sess.forked':'Сессия форкнута',
     'sess.delete.tip':'Удалить чат','sess.delete.confirm':'Удалить сессию?','sess.delete.tasks':'Удалить сессию?\n\nПривязанных задач в Kanban: {n}. Они также будут удалены.','sess.load.err':'Ошибка загрузки сессии',
-    'mcp.active':'● Активен в чате','mcp.inactive':'○ Отключен','mcp.del.title':'Удалить сервер','mcp.del.confirm':'Удалить сервер',
+    'mcp.active':'Подключен','mcp.inactive':'Отключен','mcp.del.title':'Удалить сервер','mcp.del.confirm':'Удалить сервер',
     'mcp.cfg.tip':'Настройки','mcp.cfg.warn':'Требуется настройка',
-    'mcp.toggle.on':'Клик — отключить','mcp.toggle.off':'Клик — включить',
+    'mcp.toggle.on':'Подключен к серверу Kilo MCP','mcp.toggle.off':'Отключен от сервера Kilo MCP',
     'mcp.cfg.api_warn':'⚠ Укажите API ключи для активации',
     'mcp.cfg.no_params':'Нет параметров для настройки',
     'mcp.cfg.saved':'✓ Настройки сохранены','mcp.cfg.save_err':'Ошибка сохранения',
@@ -8745,14 +8745,14 @@ function selectAllHist() {
 }
 
 async function delSelectedHist() {
-  const ids = [...histSelected];
-  if (ids.length === 0) return;
-  const lang = localStorage.getItem('lang') || 'uk';
-  let confirmMsg;
-  if (lang === 'en') confirmMsg = `Delete ${ids.length} chat${ids.length === 1 ? '' : 's'}?`;
-  else if (lang === 'ru') confirmMsg = `Удалить ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'а' : 'ов'}?`;
-  else confirmMsg = `Видалити ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'и' : 'ів'}?`;
-  if (!confirm(confirmMsg)) return;
+   const ids = [...histSelected];
+   if (ids.length === 0) return;
+   const lang = localStorage.getItem('lang') || 'ru';
+   let confirmMsg;
+   if (lang === 'en') confirmMsg = `Delete ${ids.length} chat${ids.length === 1 ? '' : 's'}?`;
+   else if (lang === 'ru') confirmMsg = `Удалить ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'а' : 'ов'}?`;
+    else confirmMsg = `Удалить ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'а' : 'ов'}?`;
+   if (!confirm(confirmMsg)) return;
   const btn = $i('histBulkDel');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
@@ -8875,39 +8875,81 @@ function buildAutoTooltipHtml() {
   return buildRichTooltipHtml('⚡ Auto', t('auto.title.on') || 'Skills are auto-selected based on task');
 }
 
+// Fetch kilo MCP servers list from backend
+async function fetchKiloMcpList() {
+  try {
+    const response = await fetch('/api/kilo-mcp-list');
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to fetch kilo MCP list:', error);
+    return { servers: [], error: 'Network error' };
+  }
+}
+
 function renderMcp() {
-  const el = $i('mcpList'); el.innerHTML = '';
-  const tipWarn = t('mcp.cfg.warn'), tipCfg = t('mcp.cfg.tip');
-  let c = 0;
-  for (const [id, m] of Object.entries(config.mcpServers || {})) {
-    const on = activeMcp.has(id);
-    if (on) c++;
-    const missing = getMcpMissingFields(m);
-    const mcpDescription = buildMcpDescription(m);
-    const mcpTooltip = buildMcpTextTooltip(id, m);
-    const mcpTooltipHtml = buildMcpTooltip(id, m);
+  const el = $i('mcpList');
+
+  // Show loading state
+  el.innerHTML = '<div style="padding:10px;text-align:center;color:#999;">Loading Kilo MCP servers...</div>';
+  $i('mcpCount').textContent = '0';
+
+  // Update asynchronously
+  updateMcpList();
+}
+
+async function updateMcpList() {
+  const el = $i('mcpList');
+
+  // Get kilo MCP servers
+  const { servers, error } = await fetchKiloMcpList();
+
+  if (error) {
+    // Show error message
+    el.innerHTML = `<div class="error-msg" style="padding:10px;color:#ff6b6b;text-align:center;">
+      ${error}<br>
+      <small style="color:#999;">Kilo MCP servers unavailable</small>
+    </div>`;
+    $i('mcpCount').textContent = '0';
+    return;
+  }
+
+  // Check if no servers
+  if (!servers || servers.length === 0) {
+    el.innerHTML = `<div style="padding:10px;text-align:center;color:#999;">MCP отсутствуют</div>`;
+    $i('mcpCount').textContent = '0';
+    return;
+  }
+
+  el.innerHTML = '';
+  let activeCount = 0;
+
+  for (const server of servers) {
+    const isActive = server.status === 'connected';
+    if (isActive) activeCount++;
+
     const div = document.createElement('div');
-    div.className = `ci ${on ? 'on' : ''}`;
-    div.title = on ? t('mcp.toggle.on') : t('mcp.toggle.off');
+    div.className = `ci ${isActive ? 'on' : ''}`;
+    div.title = isActive ? 'Connected' : 'Disconnected';
     div.setAttribute('role', 'switch');
     div.setAttribute('tabindex', '0');
-    div.setAttribute('aria-checked', String(on));
-    div.setAttribute('aria-label', m.label || id);
-    div.onclick = () => tMcp(id);
-    div.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tMcp(id); } };
+    div.setAttribute('aria-checked', String(isActive));
+    div.setAttribute('aria-label', server.name);
+
     div.innerHTML = `
-      ${mkToggle(on)}
+      <div class="toggle">${isActive ? '●' : '○'}</div>
       <div class="inf">
-        <div class="nm" data-tip="${escH(mcpTooltip)}" data-tip-html="${escH(mcpTooltipHtml)}">${escH(m.label || id)}</div>
-        <div class="ds" data-tip="${escH(mcpTooltip)}" data-tip-html="${escH(mcpTooltipHtml)}">${escH(mcpDescription)}</div>
-        <div class="st">${on ? t('mcp.active') : t('mcp.inactive')}</div>
+        <div class="nm">${escH(server.name)}</div>
+        <div class="ds">${escH(server.command || 'No command')}</div>
+        <div class="st">${isActive ? 'Connected' : 'Disconnected'}</div>
       </div>
-      ${missing.length ? `<div class="warn-dot" title="${escH(tipWarn)}"></div>` : ''}
-      <button class="cfg" onclick="event.stopPropagation();openMcpModal('edit','${id}')" title="${escH(tipCfg)}">⚙</button>
-      ${m.custom ? `<button class="rm" onclick="event.stopPropagation();rMcp('${id}')" title="${t('mcp.del.title')}">✕</button>` : ''}`;
+      ${isActive ? '<div class="status-dot" style="color:#4CAF50;">✓</div>' : '<div class="status-dot" style="color:#ff6b6b;">✗</div>'}
+    `;
+
     el.appendChild(div);
   }
-  $i('mcpCount').textContent = c;
+
+  $i('mcpCount').textContent = activeCount;
   _reapplySecFilter('mcp');
 }
 
@@ -9478,17 +9520,17 @@ async function exportMcp() {
 }
 
 const SKILL_CATS = {
-  engineering: { en: '⚙️ Engineering', uk: '⚙️ Розробка', ru: '⚙️ Разработка' },
-  ai:          { en: '🧠 AI & Prompts', uk: '🧠 AI та промпти', ru: '🧠 AI и промпты' },
-  quality:     { en: '💎 Code Quality', uk: '💎 Якість коду', ru: '💎 Качество кода' },
-  security:    { en: '🔒 Security', uk: '🔒 Безпека', ru: '🔒 Безопасность' },
-  design:      { en: '🎨 Design', uk: '🎨 Дизайн', ru: '🎨 Дизайн' },
-  product:     { en: '📋 Product', uk: '📋 Продукт', ru: '📋 Продукт' },
-  finance:     { en: '💼 Finance', uk: '💼 Фінанси', ru: '💼 Финансы' },
-  research:    { en: '🔬 Research', uk: '🔬 Дослідження', ru: '🔬 Исследования' },
-  workflow:    { en: '📐 Workflow', uk: '📐 Робочий процес', ru: '📐 Рабочий процесс' },
-  system:      { en: '⚙️ System', uk: '⚙️ Система', ru: '⚙️ Система' },
-  plugin:      { en: '🧩 Plugin Skills', uk: '🧩 Skills плагінів', ru: '🧩 Skills плагинов' },
+  engineering: { en: '⚙️ Engineering', ru: '⚙️ Разработка' },
+  ai:          { en: '🧠 AI & Prompts', ru: '🧠 AI и промпты' },
+  quality:     { en: '💎 Code Quality', ru: '💎 Качество кода' },
+  security:    { en: '🔒 Security', ru: '🔒 Безопасность' },
+  design:      { en: '🎨 Design', ru: '🎨 Дизайн' },
+  product:     { en: '📋 Product', ru: '📋 Продукт' },
+  finance:     { en: '💼 Finance', ru: '💼 Финансы' },
+  research:    { en: '🔬 Research', ru: '🔬 Исследования' },
+  workflow:    { en: '📐 Workflow', ru: '📐 Рабочий процесс' },
+  system:      { en: '⚙️ System', ru: '⚙️ Система' },
+  plugin:      { en: '🧩 Plugin Skills', ru: '🧩 Skills плагинов' },
 };
 
 // Skill classification is now server-side (LLM-based, haiku).
@@ -10444,7 +10486,7 @@ function renderModelDropdownList(filter = '') {
     : availableModels;
 
   if (!filtered.length) {
-    list.innerHTML = `<div class="model-dd-empty">${filter ? 'Не знайдено' : 'Немає моделей'}</div>`;
+    list.innerHTML = `<div class="model-dd-empty">${filter ? 'Не найдено' : 'Нет моделей'}</div>`;
     return;
   }
 
@@ -11373,7 +11415,7 @@ async function tgLoadStatus() {
 async function tgStartBot() {
   const token = $i('tgBotToken').value.trim();
   if (!token || token === '••••••••••••••••') {
-    toast(t('tg.err.no_token') || 'Введіть Bot Token від @BotFather', true);
+    toast(t('tg.err.no_token') || 'Введите Bot Token от @BotFather', true);
     return;
   }
   $i('tgStartBtn').disabled = true;
@@ -11416,7 +11458,7 @@ async function tgToggleAccept(checked) {
     $i('tgPairBtn').disabled = !checked;
     $i('tgPairBtn').style.opacity = checked ? '1' : '.5';
     if (!checked) tgCancelPairing();
-    toast(checked ? '🔓 Нові підключення дозволено' : '🔒 Нові підключення заблоковано');
+    toast(checked ? '🔓 Новые подключения разрешены' : '🔒 Новые подключения заблокированы');
   } catch {}
 }
 
@@ -12397,7 +12439,7 @@ modelDdPortal.id = 'modelDdPortal';
 modelDdPortal.innerHTML = `
   <div class="model-dd-menu" id="modelDdMenu">
     <div class="model-dd-search">
-      <input type="text" id="modelDdSearch" data-i18n-ph="model.search" placeholder="Пошук моделі..." oninput="filterModelDropdown(this.value)">
+      <input type="text" id="modelDdSearch" data-i18n-ph="model.search" placeholder="Поиск модели..." oninput="filterModelDropdown(this.value)">
     </div>
     <div class="model-dd-list" id="modelDdList"></div>
   </div>

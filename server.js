@@ -4597,6 +4597,61 @@ app.get('/api/mcp/export', (req, res) => {
   res.json({ mcpServers });
 });
 
+// Parse kilo mcp list output and return structured data
+function parseKiloMcpOutput(output) {
+  // Strip ANSI escape codes
+  const cleanOutput = output.replace(/\x1B\[[0-9;]*[mG]/g, '');
+
+  const servers = [];
+  const lines = cleanOutput.split('\n');
+
+  let currentServer = null;
+
+  for (const line of lines) {
+    // Skip headers and borders
+    if (line.includes('MCP Servers') || line.includes('┌') || line.includes('└') || line.includes('server(s)')) {
+      continue;
+    }
+
+    // Server line with status indicator
+    if (line.includes('●')) {
+      const statusMatch = line.match(/●\s+([✓✗])\s+(\w+)\s+(\w+)/);
+      if (statusMatch) {
+        const [, statusIcon, name, status] = statusMatch;
+        currentServer = {
+          name,
+          status: statusIcon === '✓' ? 'connected' : 'disconnected',
+          command: '',
+          enabled: statusIcon === '✓'
+        };
+        servers.push(currentServer);
+      }
+    }
+    // Command line
+    else if (currentServer && line.includes('│') && line.includes('node')) {
+      const cmdMatch = line.match(/│\s+(.+)/);
+      if (cmdMatch) {
+        currentServer.command = cmdMatch[1].trim();
+      }
+    }
+  }
+
+  return servers;
+}
+
+// Get kilo MCP servers list
+app.get('/api/kilo-mcp-list', async (req, res) => {
+  try {
+    const { execSync } = require('child_process');
+    const output = execSync('kilo mcp list', { encoding: 'utf-8' });
+    const servers = parseKiloMcpOutput(output);
+    res.json({ servers, error: null });
+  } catch (error) {
+    console.error('Kilo MCP list error:', error.message);
+    res.json({ servers: [], error: 'Kilo is not available or MCP command failed' });
+  }
+});
+
 
 
 // ============================================
