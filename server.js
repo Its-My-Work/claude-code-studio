@@ -4434,29 +4434,30 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
 });
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
-  const _cleanSid = sanitizeSessionId(session?.claude_session_id);
-  if (!_cleanSid) return res.status(400).json({ error: 'No Claude session ID' });
-  const safeSid = _cleanSid.replace(/[^a-zA-Z0-9-]/g, '');
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+  const claudeSessionId = session.claude_session_id;
+  if (!claudeSessionId) return res.status(400).json({ error: 'No Claude session ID' });
+  const safeSid = claudeSessionId.replace(/[^a-zA-Z0-9_-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
   const workdir = session.workdir || WORKDIR;
   const platform = process.platform;
   let fullCmd, ok = false;
   try {
     if (platform === 'win32') {
-      fullCmd = `cd /d "${workdir}" && set CLAUDECODE= && kilo`;
+      fullCmd = `cd /d "${workdir}" && set CLAUDECODE= && kilo -s ${safeSid}`;
       // Empty title "" required: without it cmd.exe treats first quoted arg as window title
       execSync(`start "" cmd /k "${fullCmd.replace(/"/g, '\\"')}"`, { shell: true });
       ok = true;
     } else if (platform === 'darwin') {
       const safeWorkdir = workdir.replace(/'/g, "'\\''");
-      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; kilo`;
+      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; kilo -s ${safeSid}`;
       execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "${fullCmd.replace(/"/g, '\\"')}"'`);
       ok = true;
     } else {
       // Linux: try common terminal emulators using spawn+detach (non-blocking)
       // execSync would kill xterm after the timeout; spawnProc+unref lets it live.
       const safeWorkdir = workdir.replace(/'/g, "'\\''");
-      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; kilo`;
+      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; kilo -s ${safeSid}`;
       if (!process.env.DISPLAY) {
         // Headless mode (e.g., Docker): run directly without terminal
         try {
