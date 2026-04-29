@@ -3465,6 +3465,8 @@ async function detectCliVersion() {
     // Fall back to Claude mode on error
     cliType = 'claude';
     availableModes = ['auto', 'planning', 'task'];
+    renderModeButtons();
+    renderMobModeChips();
     updateAgentModeVisibility();
   }
 }
@@ -3610,14 +3612,14 @@ const modeLabels = {
 };
 
 function renderModeButtons() {
-  const container = document.querySelector('.tb-group:has(>span[data-i18n="tb.mode"])');
-  if (!container) return;
-  
+  const container = document.querySelector('.tb-group');
+  if (!container || !container.querySelector('span[data-i18n="tb.mode"]')) return;
+
   // Remove old mode buttons (keep the label and separator)
   const label = container.querySelector('span[data-i18n="tb.mode"]');
   const buttons = container.querySelectorAll('.tb-btn');
   buttons.forEach(btn => btn.remove());
-  
+
   // Add new mode buttons
   for (const mode of availableModes) {
     const btn = document.createElement('button');
@@ -3630,8 +3632,8 @@ function renderModeButtons() {
 }
 
 function renderMobModeChips() {
-  const container = document.querySelector('.mob-sheet-chips:has(button[data-v="auto"][data-mob="mode"])');
-  if (!container) {
+  const container = document.querySelector('.mob-sheet-chips');
+  if (!container || !container.querySelector('button[data-v="auto"][data-mob="mode"]')) {
     // Container doesn't exist yet, will be rendered on first sheet open
     return;
   }
@@ -7370,9 +7372,7 @@ function setOpt(el, group) {
     // From programmatic call (e.g., selectModelFromDropdown)
     v = el.dataset.v;
   } else {
-    // button
-    el.closest('.tb-group').querySelectorAll('.tb-btn').forEach(b => b.classList.remove('on'));
-    el.classList.add('on');
+    // button - get value, syncBtn will update classes
     v = el.dataset.v;
   }
   if (group === 'mode') curMode = v;
@@ -7382,6 +7382,7 @@ function setOpt(el, group) {
     localStorage.setItem('selectedModel', v);
     updateModelDisplay();
   }
+  syncBtn(group, v);
   updInd();
   // Sync mobile UI
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
@@ -7434,13 +7435,18 @@ function toggleThinking() {
 }
 
 function syncBtn(group, val) {
-  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: availableModels };
-  if (!groups[group]?.includes(val)) return;
+  const groups = { mode: availableModes, agent: ['single','multi','dispatch'], model: availableModels };
+  if (!groups[group]?.includes(val)) {
+    console.warn('syncBtn: val not in group', group, val, groups[group]);
+    return;
+  }
+  console.log('syncBtn:', group, val);
   // Sync desktop toolbar
   document.querySelectorAll('.tb-group .tb-btn').forEach(b => {
     if (b.dataset.v === val) {
       b.closest('.tb-group').querySelectorAll('.tb-btn').forEach(x => x.classList.remove('on'));
       b.classList.add('on');
+      console.log('Set on class for button:', b.dataset.v);
     }
   });
   // Sync mobile bottom sheet chips
