@@ -997,10 +997,10 @@ async function startTask(task) {
 
     // Build MCP config for task execution — user MCPs from config + internal task-manager
     const taskMcpServers = {};
-    // Include user-configured MCPs from config.json (all enabled servers)
+    // Include user-configured MCPs from .kilo/kilo.jsonc (all enabled servers)
     try {
-      const cfg = loadConfig();
-      for (const [mid, m] of Object.entries(cfg.mcpServers || {})) {
+      const mcpServers = loadMcpServersFromKilo();
+      for (const [mid, m] of Object.entries(mcpServers)) {
         if (!m || m.enabled === false) continue;
         if (m.type === 'http' || m.type === 'sse' || m.url) {
           taskMcpServers[mid] = { type: m.type || 'http', url: m.url, ...(m.headers ? { headers: m.headers } : {}), ...(m.env ? { env: expandTildeInObj(m.env) } : {}) };
@@ -1698,7 +1698,7 @@ const DEFAULT_SLASH_COMMANDS = [
 function loadConfig() {
   let c;
   try { c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { c = {}; }
-  if (!c.mcpServers)      c.mcpServers      = {};
+  // Remove mcpServers initialization - now stored in .kilo/kilo.jsonc
   if (!c.skills)          c.skills          = {};
   if (!c.slashCommands)   c.slashCommands   = [];
   if (!c.externalAgents)  c.externalAgents  = {};
@@ -1884,6 +1884,132 @@ function saveConfig(c) {
   _systemPromptCache.clear(); // prompts may have changed
 }
 
+// ─── Kilo config (.kilo/kilo.jsonc) management ───────────────────────────────────
+
+const KILO_CONFIG_PATH = path.join(APP_DIR, '.kilo', 'kilo.jsonc');
+
+/**
+ * Load Kilo project config from .kilo/kilo.jsonc
+ * @returns {Object} Kilo config object
+ */
+function loadKiloConfig() {
+  let config = { $schema: 'https://app.kilo.ai/config.json' };
+  try {
+    config = JSON.parse(fs.readFileSync(KILO_CONFIG_PATH, 'utf-8'));
+  } catch {
+    // File doesn't exist or invalid JSON, return default structure
+  }
+  if (!config.mcp) config.mcp = {};
+  return config;
+}
+
+/**
+ * Save Kilo project config to .kilo/kilo.jsonc
+ * @param {Object} config - Kilo config object
+ */
+function saveKiloConfig(config) {
+  // Ensure .kilo directory exists
+  const kiloDir = path.dirname(KILO_CONFIG_PATH);
+  if (!fs.existsSync(kiloDir)) {
+    fs.mkdirSync(kiloDir, { recursive: true });
+  }
+
+  // Ensure $schema is present
+  if (!config.$schema) {
+    config.$schema = 'https://app.kilo.ai/config.json';
+  }
+
+  atomicWriteJSON(KILO_CONFIG_PATH, config);
+}
+
+/**
+ * Load MCP servers from Kilo config format
+ * @returns {Object} MCP servers in Claude format for compatibility
+ */
+function loadMcpServersFromKilo() {
+  const kiloConfig = loadKiloConfig();
+  const mcpServers = {};
+
+  if (kiloConfig.mcp) {
+    for (const [id, server] of Object.entries(kiloConfig.mcp)) {
+      mcpServers[id] = {
+        label: id,
+        description: '',
+        enabled: server.enabled !== false,
+        custom: true,
+      };
+
+      if (server.type === 'remote') {
+        mcpServers[id].type = 'http'; // Convert back to Claude format
+        mcpServers[id].url = server.url;
+        if (server.headers) mcpServers[id].headers = server.headers;
+        if (server.environment) mcpServers[id].env = server.environment;
+      } else if (server.type === 'local' && server.command) {
+        // Convert array command back to Claude format
+        if (Array.isArray(server.command) && server.command.length > 0) {
+          mcpServers[id].command = server.command[0];
+          mcpServers[id].args = server.command.slice(1);
+        }
+        if (server.environment) mcpServers[id].env = server.environment;
+      }
+    }
+  }
+
+  return mcpServers;
+}
+
+/**
+ * Save MCP server to Kilo config format
+ * @param {string} id - Server ID
+ * @param {Object} serverData - Server data in Claude format
+ */
+function saveMcpServerToKilo(id, serverData) {
+  const kiloConfig = loadKiloConfig();
+
+  if (!kiloConfig.mcp) {
+    kiloConfig.mcp = {};
+  }
+
+  // Convert from Claude format to Kilo format
+  const kiloServer = {
+    enabled: serverData.enabled !== false,
+  };
+
+  if (serverData.type === 'http' || serverData.type === 'sse' || serverData.url) {
+    // Remote server
+    kiloServer.type = 'remote';
+    kiloServer.url = serverData.url;
+    if (serverData.headers) kiloServer.headers = serverData.headers;
+    if (serverData.env) kiloServer.environment = serverData.env;
+    if (serverData.timeout) kiloServer.timeout = serverData.timeout;
+  } else if (serverData.command) {
+    // Local server - convert to array format
+    kiloServer.type = 'local';
+    const command = [serverData.command];
+    if (serverData.args && Array.isArray(serverData.args)) {
+      command.push(...serverData.args);
+    }
+    kiloServer.command = command;
+    if (serverData.env) kiloServer.environment = serverData.env;
+    if (serverData.timeout) kiloServer.timeout = serverData.timeout;
+  }
+
+  kiloConfig.mcp[id] = kiloServer;
+  saveKiloConfig(kiloConfig);
+}
+
+/**
+ * Delete MCP server from Kilo config
+ * @param {string} id - Server ID
+ */
+function deleteMcpServerFromKilo(id) {
+  const kiloConfig = loadKiloConfig();
+  if (kiloConfig.mcp && kiloConfig.mcp[id]) {
+    delete kiloConfig.mcp[id];
+    saveKiloConfig(kiloConfig);
+  }
+}
+
 // In-memory cache for the merged (global + local) config.
 // Hot path: processChat calls loadMergedConfig() on every request — caching
 // eliminates 2× readFileSync per chat turn.
@@ -1899,7 +2025,7 @@ function loadMergedConfig() {
   try { g = JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')); } catch {}
   try { l = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
   _mergedConfigCache = {
-    mcpServers:    { ...(g.mcpServers||{}), ...(l.mcpServers||{}) },
+    mcpServers:    { ...(g.mcpServers||{}), ...loadMcpServersFromKilo() },
     slashCommands: [...(l.slashCommands||[])],
     lang:          l.lang || g.lang || 'en',
   };
@@ -4518,46 +4644,78 @@ app.get('/api/config', (_,res) => {
   res.json(c);
 });
 app.post('/api/mcp/add', (req,res) => {
-  const{id,label,description,type,command,args,env,url,headers}=req.body;
-  const c=loadConfig();
+  const{id,label,description,type,command,args,env,url,headers,timeout}=req.body;
   const entry={label:label||id,description:description||'',enabled:true,custom:true};
   if(type==='sse'||type==='http'){
-    entry.type=type; entry.url=url||''; entry.headers=headers||{}; entry.env=env||{};
+    entry.type=type; entry.url=url||''; entry.headers=headers||{}; entry.env=env||{}; entry.timeout=timeout;
   } else {
-    entry.command=command; entry.args=args||[]; entry.env=env||{};
+    entry.command=command; entry.args=args||[]; entry.env=env||{}; entry.timeout=timeout;
   }
-  c.mcpServers[id]=entry; saveConfig(c); res.json({ok:true});
+  saveMcpServerToKilo(id, entry);
+  res.json({ok:true});
 });
 app.put('/api/mcp/:id', (req,res) => {
-  const c=loadConfig(); const id=req.params.id;
-  const{env,headers,url,args,label,description,type,command}=req.body;
-  if(!c.mcpServers[id]){
-    const merged=loadMergedConfig();
-    if(!merged.mcpServers[id]) return res.status(404).json({error:'Not found'});
-    c.mcpServers[id]={...merged.mcpServers[id]};
+  const id=req.params.id;
+  const{env,headers,url,args,label,description,type,command,timeout}=req.body;
+
+  // Load current server data from Kilo config
+  const kiloConfig = loadKiloConfig();
+  if (!kiloConfig.mcp || !kiloConfig.mcp[id]) {
+    return res.status(404).json({error:'Not found'});
   }
-  if(label!==undefined) c.mcpServers[id].label=label;
-  if(description!==undefined) c.mcpServers[id].description=description;
-  if(type!==undefined) c.mcpServers[id].type=type;
-  if(command!==undefined) c.mcpServers[id].command=command;
-  if(env !== undefined) c.mcpServers[id].env=env;
-  if(headers!==undefined) c.mcpServers[id].headers=headers;
-  if(url!==undefined) c.mcpServers[id].url=url;
-  if(args!==undefined) c.mcpServers[id].args=args;
-  saveConfig(c); res.json({ok:true});
+
+  // Convert current Kilo format back to Claude format for updating
+  const currentServer = kiloConfig.mcp[id];
+  let claudeFormat = { enabled: currentServer.enabled !== false, custom: true };
+
+  if (currentServer.type === 'remote') {
+    claudeFormat.type = 'http';
+    claudeFormat.url = currentServer.url;
+    if (currentServer.headers) claudeFormat.headers = currentServer.headers;
+    if (currentServer.environment) claudeFormat.env = currentServer.environment;
+    if (currentServer.timeout) claudeFormat.timeout = currentServer.timeout;
+  } else if (currentServer.type === 'local' && currentServer.command) {
+    if (Array.isArray(currentServer.command) && currentServer.command.length > 0) {
+      claudeFormat.command = currentServer.command[0];
+      claudeFormat.args = currentServer.command.slice(1);
+    }
+    if (currentServer.environment) claudeFormat.env = currentServer.environment;
+    if (currentServer.timeout) claudeFormat.timeout = currentServer.timeout;
+  }
+
+  // Apply updates
+  if(label!==undefined) claudeFormat.label=label;
+  if(description!==undefined) claudeFormat.description=description;
+  if(type!==undefined) claudeFormat.type=type;
+  if(command!==undefined) claudeFormat.command=command;
+  if(env !== undefined) claudeFormat.env=env;
+  if(headers!==undefined) claudeFormat.headers=headers;
+  if(url!==undefined) claudeFormat.url=url;
+  if(args!==undefined) claudeFormat.args=args;
+  if(timeout!==undefined) claudeFormat.timeout=timeout;
+
+  saveMcpServerToKilo(id, claudeFormat);
+  res.json({ok:true});
 });
-app.delete('/api/mcp/:id', (req,res) => { const c=loadConfig(); if(c.mcpServers[req.params.id]?.custom){delete c.mcpServers[req.params.id]; saveConfig(c)} res.json({ok:true}); });
+app.delete('/api/mcp/:id', (req,res) => {
+  deleteMcpServerFromKilo(req.params.id);
+  res.json({ok:true});
+});
 
 app.post('/api/mcp/import', (req, res) => {
   const { servers, replace } = req.body;
   if (!servers || typeof servers !== 'object') return res.status(400).json({ error: 'Invalid servers object' });
-  const c = loadConfig();
-  if (!c.mcpServers) c.mcpServers = {};
+
+  const kiloConfig = loadKiloConfig();
+  if (!kiloConfig.mcp) kiloConfig.mcp = {};
+
   if (replace) {
-    for (const id of Object.keys(c.mcpServers)) {
-      if (c.mcpServers[id]?.custom) delete c.mcpServers[id];
+    // Clear existing custom servers
+    for (const id of Object.keys(kiloConfig.mcp)) {
+      delete kiloConfig.mcp[id];
     }
   }
+
   const ID_VALID = /^[a-zA-Z0-9_-]{1,64}$/;
   let imported = 0;
   for (const [id, m] of Object.entries(servers)) {
@@ -4568,17 +4726,17 @@ app.post('/api/mcp/import', (req, res) => {
     } else {
       entry.command = m.command || ''; entry.args = m.args || []; entry.env = m.env || {};
     }
-    c.mcpServers[id] = entry;
+    saveMcpServerToKilo(id, entry);
     imported++;
   }
-  saveConfig(c);
+
   res.json({ ok: true, imported });
 });
 
 app.get('/api/mcp/export', (req, res) => {
-  const c = loadMergedConfig();
-  const mcpServers = {};
-  for (const [id, m] of Object.entries(c.mcpServers || {})) {
+  const mcpServers = loadMcpServersFromKilo();
+  const exportData = {};
+  for (const [id, m] of Object.entries(mcpServers)) {
     const entry = {};
     if (m.label && m.label !== id) entry.label = m.label;
     if (m.description) entry.description = m.description;
@@ -4590,11 +4748,11 @@ app.get('/api/mcp/export', (req, res) => {
       entry.command = m.command || ''; entry.args = m.args || [];
       if (m.env && Object.keys(m.env).length) entry.env = m.env;
     }
-    mcpServers[id] = entry;
+    exportData[id] = entry;
   }
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', 'attachment; filename="mcp-config.json"');
-  res.json({ mcpServers });
+  res.json({ mcpServers: exportData });
 });
 
 // Parse kilo mcp list output and return structured data

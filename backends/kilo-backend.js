@@ -207,7 +207,7 @@ class KiloBackend extends AgentBackend {
    */
   mapMode(mode) {
     const modeMap = {
-      planning: 'architect',
+      planning: 'plan',
       task: 'code',
       auto: 'orchestrator',
     };

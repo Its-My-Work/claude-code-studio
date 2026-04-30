@@ -3445,7 +3445,7 @@ let curModel;
 let curThinking = localStorage.getItem('thinkingEnabled') === 'true';
 let availableModels = ['haiku', 'sonnet', 'opus']; // default, will be loaded
 let cliType = 'claude'; // 'claude' or 'kilocode'
-let availableModes = ['auto', 'planning', 'task']; // default Claude modes
+let availableModes = ['auto', 'planning', 'task']; // default Claude modes, will be updated by detectCliVersion
 
 async function detectCliVersion() {
   try {
@@ -3453,9 +3453,9 @@ async function detectCliVersion() {
     if (res.ok) {
       const data = await res.json();
       cliType = data.type || 'claude';
-      availableModes = data.agents && data.agents.length > 0 
-        ? data.agents 
-        : ['auto', 'planning', 'task'];
+      availableModes = data.agents && data.agents.length > 0
+        ? data.agents
+        : (cliType === 'kilocode' ? ['code', 'ask', 'plan', 'debug', 'orchestrator'] : ['auto', 'planning', 'task']);
       // Reset mode to first available if current is not available
       if (!availableModes.includes(curMode)) {
         curMode = availableModes[0];
@@ -3470,6 +3470,11 @@ async function detectCliVersion() {
     // Fall back to Claude mode on error
     cliType = 'claude';
     availableModes = ['auto', 'planning', 'task'];
+    // Reset mode to first available if current is not available
+    if (!availableModes.includes(curMode)) {
+      curMode = availableModes[0];
+      localStorage.setItem('selectedMode', curMode);
+    }
     renderModeButtons();
     renderMobModeChips();
     updateAgentModeVisibility();

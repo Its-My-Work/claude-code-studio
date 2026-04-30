@@ -116,20 +116,32 @@ class KiloConfig {
     const mcp = {};
 
     for (const [name, config] of Object.entries(mcpServers)) {
+      // Определить тип сервера для Kilo
+      let serverType = 'local';
+      if (config.type === 'http' || config.type === 'sse' || config.url) {
+        serverType = 'remote';
+      }
+
       mcp[name] = {
-        type: config.type || 'local',
+        type: serverType,
         enabled: config.enabled !== false,
       };
 
-      if (config.type === 'local' && config.command) {
+      if (serverType === 'local' && config.command) {
         mcp[name].command = config.command;
-        if (config.environment) {
-          mcp[name].environment = config.environment;
+        if (config.args && config.args.length > 0) {
+          mcp[name].args = config.args;
         }
-      } else if (config.type === 'remote' && config.url) {
+        if (config.env) {
+          mcp[name].env = config.env;
+        }
+      } else if (serverType === 'remote' && config.url) {
         mcp[name].url = config.url;
         if (config.headers) {
           mcp[name].headers = config.headers;
+        }
+        if (config.env) {
+          mcp[name].env = config.env;
         }
       }
     }
