@@ -15,17 +15,17 @@ class KiloRunner {
   }
 
   /**
-   * Запустить Kilo с сообщением
-   * @param {Object} options
-   * @returns {Object} объект с методами .onText(), .onTool(), .onError(), .onDone(), .onReasoning()
-   */
+    * Запустить Kilo с сообщением
+    * @param {Object} options
+    * @returns {Object} объект с методами .onText(), .onTool(), .onError(), .onDone(), .onReasoning()
+    */
   run(options) {
     const {
       prompt,
       model,
       sessionId,
       format = 'json',
-      auto = true,
+      mode = 'orchestrator',
       abortController,
       thinking = false,
     } = options;
@@ -41,10 +41,8 @@ class KiloRunner {
     // Формат вывода
     args.push('--format', format);
 
-    // Автоматическое одобрение разрешений
-    if (auto) {
-      args.push('--auto');
-    }
+    // Режим работы
+    args.push('--mode', mode);
 
     // Включить thinking блоки
     if (thinking) {
@@ -73,6 +71,7 @@ class KiloRunner {
       command: this.kiloBin,
       args,
       cwd: this.cwd,
+      mode: mode,
       thinking: thinking,
     });
 
