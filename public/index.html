@@ -3456,9 +3456,15 @@ async function detectCliVersion() {
       availableModes = data.agents && data.agents.length > 0
         ? data.agents
         : (cliType === 'kilocode' ? ['code', 'ask', 'plan', 'debug', 'orchestrator'] : ['auto', 'planning', 'task']);
-      // Reset mode to first available if current is not available
+      // Map or reset mode if current is not available
       if (!availableModes.includes(curMode)) {
-        curMode = availableModes[0];
+        if (cliType === 'kilocode') {
+          // Map Claude modes to Kilo modes
+          const modeMap = { auto: 'orchestrator', planning: 'plan', task: 'code' };
+          curMode = modeMap[curMode] || availableModes[0];
+        } else {
+          curMode = availableModes[0];
+        }
         localStorage.setItem('selectedMode', curMode);
       }
       renderModeButtons();
