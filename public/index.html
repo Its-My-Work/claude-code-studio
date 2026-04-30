@@ -3438,7 +3438,11 @@ let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
-let curMode = 'auto', curAgent = 'single', curModel, curThinking = false;
+// Load saved preferences from localStorage
+let curMode = localStorage.getItem('selectedMode') || 'auto';
+let curAgent = 'single';
+let curModel;
+let curThinking = localStorage.getItem('thinkingEnabled') === 'true';
 let availableModels = ['haiku', 'sonnet', 'opus']; // default, will be loaded
 let cliType = 'claude'; // 'claude' or 'kilocode'
 let availableModes = ['auto', 'planning', 'task']; // default Claude modes
@@ -3455,6 +3459,7 @@ async function detectCliVersion() {
       // Reset mode to first available if current is not available
       if (!availableModes.includes(curMode)) {
         curMode = availableModes[0];
+        localStorage.setItem('selectedMode', curMode);
       }
       renderModeButtons();
       renderMobModeChips();
@@ -4251,6 +4256,16 @@ function setLang(lang) {
 
 // Load models after everything is initialized
 loadModels();
+
+// Initialize thinking toggle state
+(function initThinkingToggle() {
+  const chk = $i('thinkingChk');
+  const toggle = $i('thinkingToggle');
+  if (chk && toggle) {
+    chk.checked = curThinking;
+    toggle.classList.toggle('on', curThinking);
+  }
+})();
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
 (async () => {
@@ -7375,7 +7390,10 @@ function setOpt(el, group) {
     // button - get value, syncBtn will update classes
     v = el.dataset.v;
   }
-  if (group === 'mode') curMode = v;
+  if (group === 'mode') {
+    curMode = v;
+    localStorage.setItem('selectedMode', v);
+  }
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') {
     curModel = v;
@@ -7430,6 +7448,7 @@ function updateSessBarSkills() {
 function toggleThinking() {
   const chk = $i('thinkingChk');
   curThinking = chk ? chk.checked : false;
+  localStorage.setItem('thinkingEnabled', curThinking.toString());
   const toggle = $i('thinkingToggle');
   if (toggle) toggle.classList.toggle('on', curThinking);
 }
@@ -9986,14 +10005,14 @@ function _selectSlashCmd(cmd) {
 // ─── Config Editor ────────────────────────────────────────────────────────
 const CFG_TABS_BASE = [
   { id: 'config.json', label: 'config.json' },
-  { id: '.claude/settings.json', label: 'settings.json' },
+  { id: '.config/kilo/kilo.jsonc', label: 'kilo.jsonc' },
   { id: '.env', label: '.env' },
   { id: 'global-claude-md', label: '🌐 Global CLAUDE.md' },
 ];
 
 async function openCfgEditor() {
   const mdUrl = curWorkdir ? `/api/claude-md?dir=${encodeURIComponent(curWorkdir)}` : '/api/claude-md';
-  const [r1, r2] = await Promise.all([fetch('/api/config-files'), fetch(mdUrl)]);
+  const [r1, r2] = await Promise.all([fetch('/api/config-files', { credentials: 'include' }), fetch(mdUrl, { credentials: 'include' })]);
   cfgFiles = await r1.json();
   const cm = await r2.json();
   cfgFiles['global-claude-md'] = cm.global || '';
@@ -10053,13 +10072,13 @@ async function saveCfg() {
     let r;
     if (activeCfgTab === 'global-claude-md') {
       r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'global', content: cfgFiles[activeCfgTab] }) });
+        body: JSON.stringify({ type: 'global', content: cfgFiles[activeCfgTab] }), credentials: 'include' });
     } else if (activeCfgTab === 'local-claude-md') {
       r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'local', content: cfgFiles[activeCfgTab], dir: curWorkdir }) });
+        body: JSON.stringify({ type: 'local', content: cfgFiles[activeCfgTab], dir: curWorkdir }), credentials: 'include' });
     } else {
       r = await fetch('/api/config-files', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: activeCfgTab, content: cfgFiles[activeCfgTab] }) });
+        body: JSON.stringify({ filename: activeCfgTab, content: cfgFiles[activeCfgTab] }), credentials: 'include' });
     }
     const d = await r.json();
     if (d.ok) {

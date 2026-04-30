@@ -4762,13 +4762,13 @@ app.get('/api/config-files', (_,res) => {
   const files={};
   try{files['config.json']=fs.readFileSync(CONFIG_PATH,'utf-8')}catch{files['config.json']='{}'}
   try{files['CLAUDE.md']=fs.readFileSync(path.join(WORKDIR,'CLAUDE.md'),'utf-8')}catch{files['CLAUDE.md']=''}
-  try{files['.claude/settings.json']=fs.readFileSync(path.join(os.homedir(),'.claude','settings.json'),'utf-8')}catch{files['.claude/settings.json']='{}'}
+  try{files['.config/kilo/kilo.jsonc']=fs.readFileSync(path.join(os.homedir(),'.config','kilo','kilo.jsonc'),'utf-8')}catch{files['.config/kilo/kilo.jsonc']='{}'}
   try{files['.env']=fs.readFileSync(path.join(APP_DIR,'.env'),'utf-8')}catch{files['.env']=''}
   res.json(files);
 });
 app.put('/api/config-files', (req,res) => {
   const{filename,content}=req.body;
-  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.claude/settings.json':path.join(os.homedir(),'.claude','settings.json'),'.env':path.join(APP_DIR,'.env')};
+  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.config/kilo/kilo.jsonc':path.join(os.homedir(),'.config','kilo','kilo.jsonc'),'.env':path.join(APP_DIR,'.env')};
   const target=allowed[filename]; if(!target) return res.status(400).json({error:'Unknown'});
   try{const dir=path.dirname(target); if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(target,content,'utf-8'); res.json({ok:true})}
   catch(e){res.status(500).json({error:e.message})}
