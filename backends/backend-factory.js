@@ -1,39 +1,29 @@
 /**
  * BackendFactory - фабрика для создания backend'ов
- * Позволяет выбирать между Claude и Kilo через конфиг
+ * Всегда создает Kilo backend
  */
 
-const ClaudeCLI = require('../claude-cli');
+const KiloCLI = require('../kilo-cli');
 const KiloBackend = require('./kilo-backend');
 
 class BackendFactory {
   /**
    * Создать backend на основе конфигурации
-   * @param {string} engine - тип engine ('claude' или 'kilo')
+   * @param {string} engine - тип engine
    * @param {Object} options - опции для backend
    * @returns {Object} экземпляр backend
    */
   static createBackend(engine, options = {}) {
-    const engineType = (engine || process.env.AGENT_ENGINE || 'claude').toLowerCase();
-
-    switch (engineType) {
-      case 'claude':
-        return new ClaudeCLI(options);
-
-      case 'kilo':
-        return new KiloBackend(options);
-
-      default:
-        throw new Error(`Unknown agent engine: ${engineType}. Use 'claude' or 'kilo'.`);
-    }
+    // Always use Kilo backend
+    return new KiloBackend(options);
   }
 
   /**
-   * Получить текущий engine из конфигурации
-   * @returns {string} текущий engine
+   * Получить текущий engine
+   * @returns {string} всегда 'kilo'
    */
   static getCurrentEngine() {
-    return process.env.AGENT_ENGINE || 'claude';
+    return 'kilo';
   }
 
   /**
@@ -43,11 +33,6 @@ class BackendFactory {
    */
   static isEngineAvailable(engine) {
     const engineType = (engine || '').toLowerCase();
-
-    if (engineType === 'claude') {
-      // Claude всегда доступен (встроен)
-      return true;
-    }
 
     if (engineType === 'kilo') {
       // Проверить, установлен ли Kilo
@@ -69,10 +54,6 @@ class BackendFactory {
    */
   static getAvailableEngines() {
     const available = [];
-
-    if (BackendFactory.isEngineAvailable('claude')) {
-      available.push('claude');
-    }
 
     if (BackendFactory.isEngineAvailable('kilo')) {
       available.push('kilo');

@@ -16,51 +16,51 @@ function killProc(proc) {
   }
 }
 
-// Resolve claude binary — cross-platform (macOS, Linux, Windows)
-function findClaudeBin() {
+// Resolve kilo binary — cross-platform (macOS, Linux, Windows)
+function findKiloBin() {
   const isWin = process.platform === 'win32';
 
   // Unix-only candidate paths (macOS / Linux)
   if (!isWin) {
     const unixCandidates = [
-      path.join(os.homedir(), '.local', 'bin', 'claude'),
-      '/opt/homebrew/bin/claude',
-      '/usr/local/bin/claude',
-      '/usr/bin/claude',
+      path.join(os.homedir(), '.local', 'bin', 'kilo'),
+      '/opt/homebrew/bin/kilo',
+      '/usr/local/bin/kilo',
+      '/usr/bin/kilo',
     ];
     for (const c of unixCandidates) {
       if (fs.existsSync(c)) return c;
     }
   }
 
-  // Windows: look for claude.cmd or claude.exe in common locations
+  // Windows: look for kilo.cmd or kilo.exe in common locations
   if (isWin) {
     const appData  = process.env.APPDATA  || '';
     const localApp = process.env.LOCALAPPDATA || '';
     const winCandidates = [
-      path.join(appData,  'npm', 'claude.cmd'),
-      path.join(localApp, 'npm', 'claude.cmd'),
-      path.join(appData,  'npm', 'claude.exe'),
-      path.join(localApp, 'Programs', 'claude', 'claude.exe'),
+      path.join(appData,  'npm', 'kilo.cmd'),
+      path.join(localApp, 'npm', 'kilo.cmd'),
+      path.join(appData,  'npm', 'kilo.exe'),
+      path.join(localApp, 'Programs', 'kilo', 'kilo.exe'),
     ];
     for (const c of winCandidates) {
       if (fs.existsSync(c)) return c;
     }
     try {
-      const resolved = execSync('where.exe claude', { stdio: ['ignore', 'pipe', 'ignore'] })
+      const resolved = execSync('where.exe kilo', { stdio: ['ignore', 'pipe', 'ignore'] })
         .toString()
         .split(/\r?\n/)
         .map(s => s.trim())
         .find(Boolean);
       if (resolved) return resolved;
     } catch {}
-    return 'claude'; // fallback via PATH / запасний варіант через PATH
+    return 'kilo'; // fallback via PATH / запасний варіант через PATH
   }
 
-  return 'claude'; // fallback to PATH (Unix)
+  return 'kilo'; // fallback to PATH (Unix)
 }
 
-const CLAUDE_BIN = findClaudeBin();
+const KILO_BIN = findKiloBin();
 
 // Global subprocess timeout — process is killed if it does not exit within this window.
 // Configurable via CLAUDE_TIMEOUT_MS env var; default 10 minutes.
@@ -71,18 +71,18 @@ const MAX_SUBPROCESS_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS || '1800000', 1
 // but defensive cap prevents OOM if something goes wrong).
 const MAX_LINE_BUFFER = 10 * 1024 * 1024; // 10 MB
 
-// CLI uses short aliases — claude binary resolves them internally
+// CLI uses short aliases — kilo binary resolves them internally
 const MODEL_MAP = {
-  // 'opus':   'claude-opus-4-6',
-  // 'sonnet': 'claude-sonnet-4-6',
-  // 'haiku':  'claude-haiku-4-5',
+  // 'opus':   'kilo-opus-4-6',
+  // 'sonnet': 'kilo-sonnet-4-6',
+  // 'haiku':  'kilo-haiku-4-5',
   'opus':   'opus',
   'sonnet': 'sonnet',
   'haiku':  'haiku',
 };
 
-// ─── CLI Engine Detection: KiloCode vs Claude ───────────────────────────────
-// Uses AGENT_ENGINE env var instead of runtime detection
+// ─── CLI Engine Detection: KiloCode ──────────────────────────────────────────
+// Always uses Kilo CLI
 
 // ─── MCP config file cache ──────────────────────────────────────────────────
 // Reuses temp files by content hash instead of creating/deleting per request.
@@ -122,10 +122,10 @@ process.on('exit', () => {
   }
 });
 
-class ClaudeCLI {
+class KiloCLI {
   constructor(options = {}) {
     this.cwd = options.cwd || process.cwd();
-    this.claudeBin = options.claudeBin || CLAUDE_BIN;
+    this.kiloBin = options.kiloBin || KILO_BIN;
   }
 
   send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, mode }) {
@@ -143,20 +143,16 @@ class ClaudeCLI {
     if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) {
       args.push('--resume', sessionId);
     } else if (sessionId) {
-      console.warn('[claude-cli] rejected non-UUID sessionId for --resume:', typeof sessionId, String(sessionId).substring(0, 60));
+      console.warn('[kilo-cli] rejected non-UUID sessionId for --resume:', typeof sessionId, String(sessionId).substring(0, 60));
     }
 
     if (model) args.push('--model', MODEL_MAP[model] || model);
 
     // --agent: only for KiloCode CLI, passes mode as agent name
-    // AGENT_ENGINE determines CLI type instead of runtime detection
-    const engine = process.env.AGENT_ENGINE || 'claude';
-    if (engine === 'kilo' && mode) {
-      // Valid KiloCode agents: code, ask, plan, debug, orchestrator
-      const validAgents = ['code', 'ask', 'plan', 'debug', 'orchestrator'];
-      if (validAgents.includes(mode)) {
-        args.push('--agent', mode);
-      }
+    // Valid KiloCode agents: code, ask, plan, debug, orchestrator
+    const validAgents = ['code', 'ask', 'plan', 'debug', 'orchestrator'];
+    if (mode && validAgents.includes(mode)) {
+      args.push('--agent', mode);
     }
     
     if (maxTurns) args.push('--max-turns', String(maxTurns));
@@ -217,7 +213,7 @@ class ClaudeCLI {
       for (const block of contentBlocks) {
         if ((block.type === 'image' || block.type === 'file') && block.source?.data) {
           if (!_tempDir) {
-            _tempDir = path.join(os.tmpdir(), `claude-att-${Date.now()}`);
+            _tempDir = path.join(os.tmpdir(), `kilo-att-${Date.now()}`);
             fs.mkdirSync(_tempDir, { recursive: true });
           }
           let ext = '';
@@ -259,8 +255,8 @@ class ClaudeCLI {
     // On Windows .cmd/.bat files require cmd.exe (shell:true) to execute.
     // On Unix, binaries execute directly (shell:false is safer).
     const needsShell = process.platform === 'win32' &&
-      /\.(cmd|bat)$/i.test(this.claudeBin);
-    const proc = spawn(this.claudeBin, args, {
+/\.(cmd|bat)$/i.test(this.kiloBin);
+      const proc = spawn(this.kiloBin, args, {
       cwd: this.cwd,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -296,7 +292,7 @@ class ClaudeCLI {
           const completeLines = buffer.slice(0, lastNl).split(/\r?\n/);
           for (const cl of completeLines) { if (cl.trim()) { try { this._handle(JSON.parse(cl), h); } catch {} } }
         }
-        console.warn(`[claude-cli] Buffer overflow (${(buffer.length / 1024 / 1024).toFixed(1)} MB), dropping incomplete line`);
+        console.warn(`[kilo-cli] Buffer overflow (${(buffer.length / 1024 / 1024).toFixed(1)} MB), dropping incomplete line`);
         buffer = '';
         return;
       }
@@ -353,7 +349,7 @@ class ClaudeCLI {
           const tail = buffer.trim();
           const looksLikeStructuredTail = /^[{\[]/.test(tail) || /"type"\s*:/.test(tail);
           if (looksLikeStructuredTail) {
-            console.warn('[claude-cli] Dropping unparseable trailing stream-json chunk');
+            console.warn('[kilo-cli] Dropping unparseable trailing stream-json chunk');
           } else {
             try { if (h.onText) h.onText(buffer); } catch {}
           }
@@ -393,7 +389,7 @@ class ClaudeCLI {
       if (attDir) { try { fs.rmSync(attDir, { recursive: true, force: true }); } catch {} attDir = null; }
       attFiles = [];
       // Wrapped in try-catch for the same reason as in 'close': onDone must always fire.
-      try { if (h.onError) h.onError(`Failed to start claude: ${err.message}. Binary: ${this.claudeBin}`); } catch {}
+      try { if (h.onError) h.onError(`Failed to start kilo: ${err.message}. Binary: ${this.kiloBin}`); } catch {}
       if (h.onDone) h.onDone(detectedSid || h._detectedSid);
     });
 
@@ -509,4 +505,4 @@ class ClaudeCLI {
   }
 }
 
-module.exports = ClaudeCLI;
+module.exports = KiloCLI;

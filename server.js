@@ -13,9 +13,9 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
-const ClaudeCLI = require('./claude-cli');
-const ClaudeSSH = require('./claude-ssh');
-const { testSshConnection } = require('./claude-ssh');
+const KiloCLI = require('./kilo-cli');
+const KiloSSH = require('./kilo-ssh');
+const { testSshConnection } = require('./kilo-ssh');
 const TelegramBot = require('./telegram-bot');
 const BackendFactory = require('./backends/backend-factory');
 
@@ -123,14 +123,14 @@ function i18nSession() { return SERVER_I18N[getUserLang()]?.newSession || SERVER
 function i18nTask()    { return SERVER_I18N[getUserLang()]?.newTask    || SERVER_I18N.en.newTask; }
 
 // ─── Global Claude Code directory (priority: global → local) ─────────────────
-const GLOBAL_CLAUDE_DIR  = path.join(os.homedir(), '.claude');
+const GLOBAL_KILO_DIR  = path.join(os.homedir(), '.kilo');
 
-const GLOBAL_PLUGINS_DIR = path.join(GLOBAL_CLAUDE_DIR, 'plugins');
+const GLOBAL_PLUGINS_DIR = path.join(GLOBAL_KILO_DIR, 'plugins');
 const GLOBAL_PLUGIN_CACHE_DIR = path.join(GLOBAL_PLUGINS_DIR, 'cache');
 const GLOBAL_PLUGIN_MARKETPLACES_DIR = path.join(GLOBAL_PLUGINS_DIR, 'marketplaces');
-const GLOBAL_CONFIG_PATH = path.join(GLOBAL_CLAUDE_DIR, 'config.json');
+const GLOBAL_CONFIG_PATH = path.join(GLOBAL_KILO_DIR, 'config.json');
 
-const claudeCli = new ClaudeCLI({ cwd: WORKDIR });
+const kiloCli = new KiloCLI({ cwd: WORKDIR });
 
 // Expand leading ~ to os.homedir() — works on macOS, Linux and Windows
 function expandTilde(v) {
@@ -242,7 +242,7 @@ function runDatabaseMaintenance() {
 // ============================================
 // SESSION ID SANITIZATION
 // ============================================
-// Extracts a clean UUID string from potentially corrupted claude_session_id values.
+// Extracts a clean UUID string from potentially corrupted kilo_session_id values.
 // Bug: runMultiAgent fallback could store { cid, completed } objects or nested JSON
 // like {"cid":"{\"cid\":\"uuid\",\"completed\":true}","completed":false}
 // This helper recursively unwraps to find the actual UUID.
@@ -284,7 +284,7 @@ db.exec(`
     title TEXT NOT NULL DEFAULT 'New session',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    claude_session_id TEXT,
+    kilo_session_id TEXT,
     active_mcp TEXT DEFAULT '[]',
     mode TEXT DEFAULT 'auto',
     agent_mode TEXT DEFAULT 'single',
@@ -460,19 +460,19 @@ function wrapStmt(stmt, label) {
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,mode,agent_mode,model,workdir) VALUES (?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
-  updateClaudeId: (() => {
-    const _stmt = db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`);
+  updateKiloId: (() => {
+    const _stmt = db.prepare(`UPDATE sessions SET kilo_session_id=?,updated_at=datetime('now') WHERE id=?`);
     const _origRun = _stmt.run.bind(_stmt);
     _stmt.run = (cid, sessionId) => {
       const clean = sanitizeSessionId(cid);
-      if (cid && !clean) log.warn('updateClaudeId: rejected non-UUID session_id', { raw: String(cid).substring(0, 80), sessionId });
+      if (cid && !clean) log.warn('updateKiloId: rejected non-UUID session_id', { raw: String(cid).substring(0, 80), sessionId });
       return _origRun(clean, sessionId);
     };
     return _stmt;
   })(),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
-  getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
-  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
+  getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,kilo_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
+  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,kilo_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
@@ -490,7 +490,7 @@ const stmts = {
   incrementRetry: db.prepare(`UPDATE sessions SET retry_count = COALESCE(retry_count, 0) + 1 WHERE id=?`),
   // Tasks (Kanban)
   getTasks: db.prepare(`
-    SELECT t.*, s.title as sess_title, s.claude_session_id, s.model as sess_model,
+    SELECT t.*, s.title as sess_title, s.kilo_session_id, s.model as sess_model,
            s.updated_at as sess_updated_at, COALESCE(s.retry_count, 0) as retry_count
     FROM tasks t LEFT JOIN sessions s ON t.session_id = s.id
     WHERE (@w IS NULL OR t.workdir = @w)
@@ -811,7 +811,7 @@ let _interruptIdCounter = 0;
 function saveInterruptAttachments(rawAttachments, sessionId, interruptId, { enrichSsh = false } = {}) {
   if (!Array.isArray(rawAttachments) || rawAttachments.length === 0) return [];
   const saved = [];
-  const tmpDir = path.join(os.tmpdir(), `claude-int-${sessionId}-${interruptId}`);
+  const tmpDir = path.join(os.tmpdir(), `kilo-int-${sessionId}-${interruptId}`);
   try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
   for (const att of rawAttachments) {
     const normalized = normalizeStoredAttachment(att);
@@ -972,13 +972,13 @@ async function startTask(task) {
       // Restart after crash with same prompt — increment retry counter, don't duplicate
       try { stmts.incrementRetry.run(sessionId); } catch (e) { log.error('startTask incrementRetry failed', { err: e.message }); }
     }
-    // Resume existing claude session if any
+    // Resume existing kilo session if any
     const session = stmts.getSession.get(sessionId);
-    const claudeSessionId = sanitizeSessionId(session?.claude_session_id) || null;
-    const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
+    const kiloSessionId = sanitizeSessionId(session?.kilo_session_id) || null;
+    const cli = new KiloCLI({ cwd: task.workdir || WORKDIR });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
-    let fullText = '', newCid = claudeSessionId, hasError = false;
+    let fullText = '', newKiloId = kiloSessionId, hasError = false;
     taskBuffers.set(task.id, '');
     // Notify watchers — use task_retrying for restarts, task_started for first run
     // Include prompt so client can show user message bubble during live streaming
@@ -991,7 +991,7 @@ async function startTask(task) {
     // Auto-continue loop: keep resuming until agent completes or budget exhausted
     let taskContinueCount = 0;
     let currentTaskPrompt = prompt;
-    let currentTaskCid = claudeSessionId;
+    let currentTaskKiloId = kiloSessionId;
     let lastTaskResult = null;
     const effectiveTaskMaxTurns = task.max_turns || 30;
 
@@ -1042,7 +1042,7 @@ async function startTask(task) {
               broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
             }
           })
-          .onSessionId(sid => { newCid = sid; currentTaskCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
+          .onSessionId(sid => { newKiloId = sid; currentTaskKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
           .onResult(r => { lastTaskResult = r; })
           .onError(err => {
             hasError = true;
@@ -1051,7 +1051,7 @@ async function startTask(task) {
             broadcastToSession(sessionId, { type: 'error', error: err.substring(0, 500), tabId: sessionId });
           })
           .onDone(sid => {
-            if (sid) { newCid = sid; currentTaskCid = sid; }
+            if (sid) { newKiloId = sid; currentTaskCid = sid; }
             resolve();
           });
       });
@@ -1080,7 +1080,7 @@ async function startTask(task) {
 
     // After loop: persist text and determine task status
     try {
-      if (newCid) { try { stmts.updateClaudeId.run(newCid, sessionId); } catch (e) { log.error('taskWorker updateClaudeId failed', { cid: String(newCid).substring(0,50), sessionId, err: e.message, stack: e.stack }); } }
+      if (newKiloId) { try { stmts.updateKiloId.run(newKiloId, sessionId); } catch (e) { log.error('taskWorker updateKiloId failed', { cid: String(newKiloId).substring(0,50), sessionId, err: e.message, stack: e.stack }); } }
       if (fullText) { try { stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch (e) { log.error('taskWorker addMsg(assistant) failed', { sessionId, textLen: fullText.length, err: e.message, stack: e.stack }); } }
       const wasStopped = stoppingTasks.has(task.id);
       stoppingTasks.delete(task.id);
@@ -1382,7 +1382,7 @@ setTimeout(() => {
   const stuck = db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`).all();
   for (const task of stuck) {
     // Step 1: Kill orphaned subprocess to prevent double-execution.
-    // When Node restarts, spawned 'claude' processes become OS orphans and keep running.
+    // When Node restarts, spawned 'kilo' processes become OS orphans and keep running.
     // We kill them before deciding what to do with the task.
     if (task.worker_pid) {
       killByPid(task.worker_pid);
@@ -1394,7 +1394,7 @@ setTimeout(() => {
     if (task.chain_id) {
       // Chain task: ALWAYS retry. Shared session has messages from other tasks in the
       // chain, so the "has assistant message" heuristic gives false positives.
-      // --resume will recover full context from the shared Claude session.
+      // --resume will recover full context from the shared Kilo session.
       newStatus = 'todo';
     } else if (task.session_id) {
       const assistantMsg = db.prepare(
@@ -1585,7 +1585,7 @@ function buildAttachmentContentBlocks(attachments = []) {
       continue;
     }
     if (isTextAttachment(att)) {
-      // Pass text files as 'file' blocks (same as images/binaries) so claude-cli.js
+      // Pass text files as 'file' blocks (same as images/binaries) so kilo-cli.js
       // saves them to temp and passes paths — Claude CLI reads them via its Read tool.
       // This keeps the prompt small and avoids Windows command-line length limits.
       blocks.push({
@@ -1636,7 +1636,7 @@ function buildSessionReplayContent(sessionId) {
   const msgMap = new Map(rawMsgs.map(m => [m.id, m]));
   const blocks = [{
     type: 'text',
-    text: '[Session recovery]\nThe previous Claude session was unavailable. Treat the following replay as the full prior conversation history for this chat. The latest user turn appears last and should be answered next.',
+    text: '[Session recovery]\nThe previous Kilo session was unavailable. Treat the following replay as the full prior conversation history for this chat. The latest user turn appears last and should be answered next.',
   }];
 
   let userTurn = 0;
@@ -1786,7 +1786,7 @@ function addDiscoveredSkill(target, id, entry) {
 
 function discoverPluginSkillsFromRoot(pluginRoot, source) {
   const out = {};
-  const manifestPath = path.join(pluginRoot, '.claude-plugin', 'plugin.json');
+  const manifestPath = path.join(pluginRoot, '.kilo-plugin', 'plugin.json');
   if (!fs.existsSync(manifestPath)) return out;
   const skillsDir = path.join(pluginRoot, 'skills');
   if (!fs.existsSync(skillsDir)) return out;
@@ -2019,7 +2019,7 @@ function deleteMcpServerFromKilo(id) {
 // read so the config UI always reflects the current state on disk).
 let _mergedConfigCache = null;
 
-/** Merge global (~/.claude/config.json) + local config.json for read/display/execution.
+/** Merge global (~/.kilo/config.json) + local config.json for read/display/execution.
  *  Local entries override global entries with the same key. */
 function loadMergedConfig() {
   if (_mergedConfigCache !== null) return _mergedConfigCache;
@@ -2241,7 +2241,7 @@ function decryptPassword(stored) {
   } catch { return ''; }
 }
 
-// testSshConnection is now exported from claude-ssh.js (uses ssh2 library, supports password auth)
+// testSshConnection is now exported from kilo-ssh.js (uses ssh2 library, supports password auth)
 
 // ============================================
 // EXECUTION ENGINES
@@ -2270,52 +2270,32 @@ function isResettableClaudeSessionError(errorText = '') {
 
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
-  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId, thinking } = p;
+  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, kiloSessionId, forkSession, mode, workdir, tabId, thinking } = p;
   console.log('[server] runCliSingle: thinking =', thinking);
 
-  // Build mode prompt: only for Claude CLI modes (planning, task)
   // KiloCode agents handle their own prompts internally
-  const engine = process.env.AGENT_ENGINE || 'claude';
-  let mp = '';
-  if (engine === 'claude') {
-    // Original Claude mode prompts (unchanged)
-    if (mode === 'planning') {
-      mp = 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n';
-    } else if (mode === 'task') {
-      mp = 'MODE: EXECUTION.\n\n';
-    }
-    // For 'auto' and other modes: no special prompt
-  }
-  // For KiloCode: mode is passed via --agent flag, prompts are handled by KiloCode internally
+  // Mode is passed via --agent flag, prompts are handled by KiloCode internally
 
-  const sp = (mp + (systemPrompt||'')).trim() || undefined;
+  const sp = (systemPrompt||'').trim() || undefined;
 
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
   const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
 
-  // Tool availability depends on mode (only for Claude)
+  // Tool availability: KiloCode handles restrictions internally
   const readOnlyTools = ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools];
   const executionTools = ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', ...mcpTools];
 
-  let tools;
-  if (engine === 'claude') {
-    // Original Claude logic (unchanged)
-    tools = mode === 'planning'
-      ? readOnlyTools
-      : executionTools;
-  } else {
-    // For KiloCode: all agents get full tools (KiloCode handles restrictions internally)
-    tools = executionTools;
-  }
+  // For KiloCode: all agents get full tools (KiloCode handles restrictions internally)
+  const tools = executionTools;
   const effectiveMaxTurns = maxTurns || 30;
-  let fullText = '', fullThinking = '', newCid = claudeSessionId, chunkCount = 0;
+  let fullText = '', fullThinking = '', newKiloId = kiloSessionId, chunkCount = 0;
   let currentPrompt = prompt;
   let continueCount = 0;
   let rateLimitWaitCount = 0;
   // First invocation carries attachments; subsequent auto-continues do not
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
-    const cli = BackendFactory.createBackend(process.env.AGENT_ENGINE, { cwd: workdir || WORKDIR, logger: log });
+    const cli = BackendFactory.createBackend(null, { cwd: workdir || WORKDIR, logger: log });
   let pendingFork = !!forkSession; // only fork on first CLI call
 
   // Run a single CLI invocation and return { resultData, sid, errorText, rateLimitInfo }
@@ -2365,7 +2345,7 @@ async function runCliSingle(p) {
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
-      .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
+      .onSessionId(sid => { newKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
       .onRateLimit(info => {
         try { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); } catch {}
         if (info && info.status === 'rejected') rateLimitInfo = info;
@@ -2385,12 +2365,12 @@ async function runCliSingle(p) {
         try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
       })
       .onDone(sid => {
-        if (sid) newCid = sid;
+        if (sid) newKiloId = sid;
         // If onResult wasn't called, assume success (for backends that don't emit onResult)
         if (!resultData) {
           resultData = { subtype: 'success', sessionId: sid };
         }
-        _finish(newCid);
+        _finish(newKiloId);
       });
   });
 
@@ -2399,7 +2379,7 @@ async function runCliSingle(p) {
   let totalCostUsd = 0;
   while (true) {
     const fullTextBefore = fullText.length;
-    const { resultData, errorText, rateLimitInfo } = await runOnce(currentPrompt, currentContentBlocks, newCid);
+    const { resultData, errorText, rateLimitInfo } = await runOnce(currentPrompt, currentContentBlocks, newKiloId);
     const hadOutputBeforeRateLimit = fullText.length > fullTextBefore;
     lastResult = resultData;
     totalCostUsd += resultData?.total_cost_usd || 0;
@@ -2466,20 +2446,20 @@ async function runCliSingle(p) {
     }
 
     // 🔑 Resume/session state is broken — start fresh
-    // Covers both signature expiry and missing/invalid remote Claude session state.
+    // Covers both signature expiry and missing/invalid remote Kilo session state.
     if (errorText && isResettableClaudeSessionError(errorText)) {
       const isThinkingSig = /Invalid signature in thinking block/i.test(errorText);
-      log.warn('claude-session-reset', { sessionId, oldCid: newCid, reason: isThinkingSig ? 'thinking-signature' : 'missing-or-invalid-session' });
+      log.warn('kilo-session-reset', { sessionId, oldCid: newKiloId, reason: isThinkingSig ? 'thinking-signature' : 'missing-or-invalid-session' });
       const notice = isThinkingSig
         ? '\n\n⚠️ **Session reset** — thinking block signature expired, starting fresh session...\n\n'
-        : '\n\n⚠️ **Session reset** — previous Claude session was missing or invalid, starting fresh session...\n\n';
+        : '\n\n⚠️ **Session reset** — previous Kilo session was missing or invalid, starting fresh session...\n\n';
       fullText += notice;
       { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
       try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
-      // Clear session ID — next iteration will start a fresh Claude session
-      newCid = null;
+      // Clear session ID — next iteration will start a fresh Kilo session
+      newKiloId = null;
       fullThinking = ''; // Reset thinking for fresh session — old thinking belongs to the discarded session
-      try { stmts.updateClaudeId.run(null, sessionId); } catch {}
+      try { stmts.updateKiloId.run(null, sessionId); } catch {}
       const replayContent = buildSessionReplayContent(sessionId);
       currentPrompt = replayContent
         ? 'Continue this chat from the replayed history above. The latest user turn is included last. Respond to that latest user request.'
@@ -2536,13 +2516,13 @@ async function runCliSingle(p) {
 
   // If stream didn't deliver thinking, extract from JSONL file (CLI always writes thinking there)
   let thinkingFromJsonl = false;
-  if (!fullThinking && newCid) {
+  if (!fullThinking && newKiloId) {
     try {
-      const extracted = extractThinkingFromJsonl(newCid, workdir || WORKDIR);
+      const extracted = extractThinkingFromJsonl(newKiloId, workdir || WORKDIR);
       if (extracted) {
         fullThinking = extracted;
         thinkingFromJsonl = true;
-        log.info('[THINKING-JSONL] extracted thinking from JSONL', { sessionId, claudeSessionId: newCid, len: extracted.length });
+        log.info('[THINKING-JSONL] extracted thinking from JSONL', { sessionId, kiloSessionId: newKiloId, len: extracted.length });
       }
     } catch (e) { log.warn('[THINKING-JSONL] extraction failed', { sessionId, error: e.message }); }
   }
@@ -2563,27 +2543,17 @@ async function runCliSingle(p) {
     durationMs: lastResult.duration_ms,
     contextWindow: _modelInfo?.contextWindow || 0,
   } : null;
-  return { cid: newCid, completed: lastResult?.subtype === 'success', resultMeta };
+  return { cid: newKiloId, completed: lastResult?.subtype === 'success', resultMeta };
 }
 
 // --- SSH Remote Agent ---
 async function runSshSingle(p) {
-  const { prompt, userContent, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
+  const { prompt, userContent, systemPrompt, model, maxTurns, ws, sessionId, abortController, kiloSessionId, forkSession, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
 
-  // Build mode prompt: same as CLI (only for Claude, KiloCode handles internally)
-  const engine = process.env.AGENT_ENGINE || 'claude';
-  let mp = '';
-  if (engine === 'claude') {
-    // Original Claude mode prompts (unchanged)
-    if (mode === 'planning') {
-      mp = 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n';
-    } else if (mode === 'task') {
-      mp = 'MODE: EXECUTION.\n\n';
-    }
-  }
-  // For KiloCode: mode is passed via --agent flag, prompts are handled by KiloCode internally
+  // KiloCode handles prompts internally
+  // Mode is passed via --agent flag, prompts are handled by KiloCode internally
 
-  const sp = (mp + (systemPrompt||'')).trim() || undefined;
+  const sp = (systemPrompt||'').trim() || undefined;
 
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
   const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
@@ -2591,24 +2561,16 @@ async function runSshSingle(p) {
   const readOnlyTools = ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools];
   const executionTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...mcpTools];
 
-  let tools;
-  if (engine === 'claude') {
-    // Original Claude logic (unchanged)
-    tools = mode === 'planning'
-      ? readOnlyTools
-      : executionTools;
-  } else {
-    // For KiloCode: all agents get full tools (KiloCode handles restrictions internally)
-    tools = executionTools;
-  }
+  // For KiloCode: all agents get full tools (KiloCode handles restrictions internally)
+  const tools = executionTools;
   const effectiveMaxTurns = maxTurns || 30;
-  let fullText = '', fullThinking = '', newCid = claudeSessionId, chunkCount = 0;
+  let fullText = '', fullThinking = '', newKiloId = kiloSessionId, chunkCount = 0;
   let currentPrompt = prompt;
   let continueCount = 0;
   let rateLimitWaitCount = 0;
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
-  const ssh = new ClaudeSSH({ host: remoteHost, workdir: remoteWorkdir, sshKeyPath, password, port });
+  const ssh = new KiloSSH({ host: remoteHost, workdir: remoteWorkdir, sshKeyPath, password, port });
   let pendingFork = !!forkSession; // only fork on first SSH call
 
   const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
@@ -2637,7 +2599,7 @@ async function runSshSingle(p) {
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
-      .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
+      .onSessionId(sid => { newKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
       .onRateLimit(info => {
         try { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); } catch {}
         if (info && info.status === 'rejected') rateLimitInfo = info;
@@ -2648,8 +2610,8 @@ async function runSshSingle(p) {
         try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
       })
       .onDone(sid => {
-        if (sid) newCid = sid;
-        _finish(newCid);
+        if (sid) newKiloId = sid;
+        _finish(newKiloId);
       });
   });
 
@@ -2657,7 +2619,7 @@ async function runSshSingle(p) {
   let totalCostUsd = 0;
   while (true) {
     const fullTextBefore = fullText.length;
-    const { resultData, errorText, rateLimitInfo } = await runOnce(currentPrompt, currentContentBlocks, newCid);
+    const { resultData, errorText, rateLimitInfo } = await runOnce(currentPrompt, currentContentBlocks, newKiloId);
     const hadOutputBeforeRateLimit = fullText.length > fullTextBefore;
     lastResult = resultData;
     totalCostUsd += resultData?.total_cost_usd || 0;
@@ -2710,16 +2672,16 @@ async function runSshSingle(p) {
 
     if (errorText && isResettableClaudeSessionError(errorText)) {
       const isThinkingSig = /Invalid signature in thinking block/i.test(errorText);
-      log.warn('ssh-claude-session-reset', { sessionId, oldCid: newCid, reason: isThinkingSig ? 'thinking-signature' : 'missing-or-invalid-session' });
+      log.warn('ssh-kilo-session-reset', { sessionId, oldCid: newKiloId, reason: isThinkingSig ? 'thinking-signature' : 'missing-or-invalid-session' });
       const notice = isThinkingSig
         ? '\n\n⚠️ **Session reset** — remote thinking block signature expired, starting a fresh session...\n\n'
-        : '\n\n⚠️ **Session reset** — previous remote Claude session was missing or invalid, starting a fresh session...\n\n';
+        : '\n\n⚠️ **Session reset** — previous remote Kilo session was missing or invalid, starting a fresh session...\n\n';
       fullText += notice;
       { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
       try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
-      newCid = null;
+      newKiloId = null;
       fullThinking = ''; // Reset thinking for fresh session
-      try { stmts.updateClaudeId.run(null, sessionId); } catch {}
+      try { stmts.updateKiloId.run(null, sessionId); } catch {}
       const replayContent = buildSessionReplayContent(sessionId);
       currentPrompt = replayContent
         ? 'Continue this chat from the replayed history above. The latest user turn is included last. Respond to that latest user request.'
@@ -2767,20 +2729,20 @@ async function runSshSingle(p) {
     durationMs: lastResult.duration_ms,
     contextWindow: _modelInfo?.contextWindow || 0,
   } : null;
-  return { cid: newCid, completed: lastResult?.subtype === 'success', resultMeta };
+  return { cid: newKiloId, completed: lastResult?.subtype === 'success', resultMeta };
 }
 
 // --- Multi-Agent (CLI only) ---
 async function runMultiAgent(p) {
-  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId } = p;
+  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, kiloSessionId, workdir, tabId } = p;
   ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Planning...', statusKey:'agent.planning', ...(tabId ? { tabId } : {}) }));
 
   const effectiveWorkdir = workdir || WORKDIR;
-  const cli = new ClaudeCLI({ cwd: effectiveWorkdir });
+  const cli = new KiloCLI({ cwd: effectiveWorkdir });
   let planText = '';
   // Orchestrator gets existing session context via --resume if available
   const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
-  let currentSessionId = claudeSessionId || null;
+  let currentSessionId = kiloSessionId || null;
 
   await new Promise(res => {
     let _settled = false;
@@ -2863,7 +2825,7 @@ Provide a clear summary of what was accomplished. Be concise.`;
     const _res = () => { if (!_settled) { _settled = true; res(); } };
     cli.send({ prompt:summaryPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController })
       .onText(t => { summaryText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:'summarizer', ...(tabId ? { tabId } : {}) })); } catch {} })
-      .onSessionId(sid => { currentSessionId = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
+      .onSessionId(sid => { currentSessionId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
       .onError(() => _res())
       .onDone(() => _res());
   });
@@ -3436,13 +3398,13 @@ app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
   if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text required' });
   const langName = LANG_NAMES[targetLang] || 'English';
 
-  const bin = claudeCli.claudeBin;
+  const bin = kiloCli.kiloBin;
   const env = { ...process.env };
   delete env.CLAUDECODE;
   if (!env.ANTHROPIC_BASE_URL) delete env.ANTHROPIC_API_KEY;
 
   // Write source text to temp file — avoids CLI argument length limits
-  const tmpId = `claude-translate-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+  const tmpId = `kilo-translate-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
   const tmpDir = path.join(os.tmpdir(), tmpId);
   fs.mkdirSync(tmpDir, { recursive: true });
   const srcFile = path.join(tmpDir, 'source.txt');
@@ -3481,7 +3443,7 @@ app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
     responded = true;
     try {
       if (code !== 0) {
-        console.error('[translate] claude exit code', code, stderr.substring(0, 500));
+        console.error('[translate] kilo exit code', code, stderr.substring(0, 500));
         return res.status(502).json({ error: 'Translation failed' });
       }
       // Primary: read from output file; fallback: use stdout if file was not created
@@ -3538,53 +3500,36 @@ app.get('/api/health', (_, res) => {
   res.status(dbOk ? 200 : 503).json(payload);
 });
 
-// Models list based on AGENT_ENGINE
+// Models list from Kilo
 app.get('/api/models', (req, res) => {
-  const engine = process.env.AGENT_ENGINE || 'claude';
-
-  if (engine === 'claude') {
-    // Static list for Claude
-    res.json(['haiku', 'sonnet', 'opus']);
-  } else if (engine === 'kilo') {
-    // Dynamic list from Kilo
-    try {
-      const { execSync } = require('child_process');
-      const output = execSync('kilo models', { encoding: 'utf-8' });
-      // Parse output - assume one model per line
-      const models = output.trim().split('\n').filter(line => line.trim());
-      // Ensure kilo/kilo-auto/free is first if available, or add it
-      const preferredModel = 'kilo/kilo-auto/free';
-      if (!models.includes(preferredModel)) {
-        models.unshift(preferredModel);
-      } else {
-        // Move to front
-        const index = models.indexOf(preferredModel);
-        models.splice(index, 1);
-        models.unshift(preferredModel);
-      }
-      res.json(models);
-    } catch (error) {
-      console.error('Error getting Kilo models:', error);
-      // Fallback to some default models
-      res.json(['kilo/kilo-auto/free', 'x-ai/grok-code-fast-1:optimized:free', 'anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-4', 'openai/gpt-4-turbo-preview']);
+  // Dynamic list from Kilo
+  try {
+    const { execSync } = require('child_process');
+    const output = execSync('kilo models', { encoding: 'utf-8' });
+    // Parse output - assume one model per line
+    const models = output.trim().split('\n').filter(line => line.trim());
+    // Ensure kilo/kilo-auto/free is first if available, or add it
+    const preferredModel = 'kilo/kilo-auto/free';
+    if (!models.includes(preferredModel)) {
+      models.unshift(preferredModel);
+    } else {
+      // Move to front
+      const index = models.indexOf(preferredModel);
+      models.splice(index, 1);
+      models.unshift(preferredModel);
     }
-  } else {
-    res.status(400).json({ error: 'Unknown agent engine' });
+    res.json(models);
+  } catch (error) {
+    console.error('Error getting Kilo models:', error);
+    // Fallback to some default models
+    res.json(['kilo/kilo-auto/free', 'x-ai/grok-code-fast-1:optimized:free', 'anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-4', 'openai/gpt-4-turbo-preview']);
   }
 });
 
-// Detect CLI version (Claude vs KiloCode)
+// CLI version info
 app.get('/api/cli-version', (req, res) => {
-  const engine = process.env.AGENT_ENGINE || 'claude';
-
-  if (engine === 'claude') {
-    res.json({ type: 'claude', agents: ['auto', 'planning', 'task'] });
-  } else if (engine === 'kilo') {
-    // KiloCode agents as documented
-    res.json({ type: 'kilocode', agents: ['code', 'ask', 'plan', 'debug', 'orchestrator'] });
-  } else {
-    res.status(400).json({ error: 'Unknown agent engine' });
-  }
+  // Always use KiloCode
+  res.json({ type: 'kilocode', agents: ['code', 'ask', 'plan', 'debug', 'orchestrator'] });
 });
 
 // Test endpoint to simulate Ask tool (for UI testing)
@@ -3998,7 +3943,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
     workdir,
     model = 'sonnet',
     source_session_id,
-    claude_session_id,
+    kilo_session_id,
   } = req.body;
 
   if (!planTasks?.length) return res.status(400).json({ error: 'No tasks provided' });
@@ -4045,7 +3990,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
     sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
     chainSessionId, null, null, null, source_session_id || null, 0);
 
-  // Chain gets its OWN Claude session — first task starts fresh,
+  // Chain gets its OWN Kilo session — first task starts fresh,
   // subsequent tasks --resume from the chain's session (NOT the source chat's).
 
   // First pass: assign real IDs to all tasks (handles forward references in depends_on)
@@ -4100,13 +4045,13 @@ app.post('/api/sessions', (req, res) => {
 app.post('/api/sessions/:id/fork', (req, res) => {
   const source = stmts.getSession.get(req.params.id);
   if (!source) return res.status(404).json({ error: 'session not found' });
-  if (!source.claude_session_id) return res.status(400).json({ error: 'session has no Claude session to fork from' });
+  if (!source.kilo_session_id) return res.status(400).json({ error: 'session has no Kilo session to fork from' });
   const id = genId();
   const title = `Fork: ${(source.title || '').substring(0, 80)}`;
   stmts.createSession.run(id, title, source.active_mcp || '[]',
     source.mode || 'auto', source.agent_mode || 'single', source.model || 'sonnet', source.workdir || null);
-  // Set claude_session_id to source's so --resume picks it up, and fork_from_cid to trigger --fork-session
-  db.prepare(`UPDATE sessions SET claude_session_id=?, fork_from_cid=? WHERE id=?`).run(source.claude_session_id, source.claude_session_id, id);
+  // Set kilo_session_id to source's so --resume picks it up, and fork_from_cid to trigger --fork-session
+  db.prepare(`UPDATE sessions SET kilo_session_id=?, fork_from_cid=? WHERE id=?`).run(source.kilo_session_id, source.kilo_session_id, id);
   res.json(stmts.getSession.get(id));
 });
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
@@ -4126,11 +4071,11 @@ function cwdToCliProjectName(cwd) {
 // Extract thinking blocks from the last assistant turn in a Claude CLI JSONL session file.
 // Reads only the tail of the file (last 200KB) for efficiency on large session files.
 // Returns concatenated thinking text or null if none found.
-function extractThinkingFromJsonl(claudeSessionId, workdir) {
-  if (!claudeSessionId || !/^[a-f0-9-]+$/i.test(claudeSessionId)) return null;
+function extractThinkingFromJsonl(kiloSessionId, workdir) {
+  if (!kiloSessionId || !/^[a-f0-9-]+$/i.test(kiloSessionId)) return null;
   const homeDir = os.homedir();
-  const projectDir = path.resolve(path.join(homeDir, '.claude', 'projects', cwdToCliProjectName(workdir)));
-  const jsonlPath = path.resolve(path.join(projectDir, claudeSessionId + '.jsonl'));
+  const projectDir = path.resolve(path.join(homeDir, '.kilo', 'projects', cwdToCliProjectName(workdir)));
+  const jsonlPath = path.resolve(path.join(projectDir, kiloSessionId + '.jsonl'));
   if (!jsonlPath.startsWith(projectDir)) return null;
   if (!fs.existsSync(jsonlPath)) return null;
 
@@ -4174,7 +4119,7 @@ function extractThinkingFromJsonl(claudeSessionId, workdir) {
 app.get('/api/sessions/cli-list', (req, res) => {
   const workdir = String(req.query.workdir || WORKDIR || '');
   const homeDir = os.homedir();
-  const safeBase = path.resolve(path.join(homeDir, '.claude', 'projects'));
+  const safeBase = path.resolve(path.join(homeDir, '.kilo', 'projects'));
   const projectPath = path.resolve(path.join(safeBase, cwdToCliProjectName(workdir)));
   if (!projectPath.startsWith(safeBase)) return res.status(400).json({ error: 'invalid workdir' });
   if (!fs.existsSync(projectPath)) return res.json({ sessions: [], projectPath });
@@ -4184,8 +4129,8 @@ app.get('/api/sessions/cli-list', (req, res) => {
   catch (e) { return res.status(500).json({ error: e.message }); }
 
   const importedIds = new Set(
-    db.prepare(`SELECT claude_session_id FROM sessions WHERE claude_session_id IS NOT NULL`).all()
-      .map(r => r.claude_session_id)
+    db.prepare(`SELECT kilo_session_id FROM sessions WHERE kilo_session_id IS NOT NULL`).all()
+      .map(r => r.kilo_session_id)
   );
 
   const sessions = [];
@@ -4225,19 +4170,19 @@ app.post('/api/sessions/cli-import', (req, res) => {
   if (!Array.isArray(sessionIds) || sessionIds.length === 0) return res.status(400).json({ error: 'no sessionIds' });
   const targetWorkdir = String(workdir || WORKDIR || '');
   const homeDir = os.homedir();
-  const safeBase = path.resolve(path.join(homeDir, '.claude', 'projects'));
+  const safeBase = path.resolve(path.join(homeDir, '.kilo', 'projects'));
   const projectPath = path.resolve(path.join(safeBase, cwdToCliProjectName(targetWorkdir)));
   if (!projectPath.startsWith(safeBase)) return res.status(400).json({ error: 'invalid workdir' });
 
   const imported = [], skipped = [], errors = [];
-  const updateClaudeId = db.prepare(`UPDATE sessions SET claude_session_id=? WHERE id=?`);
+  const updateKiloId = db.prepare(`UPDATE sessions SET kilo_session_id=? WHERE id=?`);
   const updateTimestamps = db.prepare(`UPDATE sessions SET created_at=?, updated_at=? WHERE id=?`);
   const insertMsg = db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,created_at) VALUES (?,?,?,?,?,?,?)`);
 
   const tx = db.transaction(() => {
     for (const sessionId of sessionIds) {
       if (!/^[a-f0-9-]{8,}$/i.test(sessionId)) { errors.push({ sessionId, error: 'invalid id' }); continue; }
-      const existing = db.prepare(`SELECT id FROM sessions WHERE claude_session_id=?`).get(sessionId);
+      const existing = db.prepare(`SELECT id FROM sessions WHERE kilo_session_id=?`).get(sessionId);
       if (existing) { skipped.push(sessionId); continue; }
 
       const filePath = path.resolve(path.join(projectPath, sessionId + '.jsonl'));
@@ -4287,7 +4232,7 @@ app.post('/api/sessions/cli-import', (req, res) => {
 
         const newId = genId();
         stmts.createSession.run(newId, title.substring(0, 200), '[]', 'auto', 'single', 'sonnet', cwd || null);
-        updateClaudeId.run(sessionId, newId);
+        updateKiloId.run(sessionId, newId);
         if (sessionTs) updateTimestamps.run(sessionTs, sessionTs, newId);
         for (const m of msgs) insertMsg.run(newId, m.role, m.type, m.content, m.tool_name, null, m.ts || sessionTs);
         imported.push({ sessionId, newId, title, messageCount: msgs.length });
@@ -4300,17 +4245,17 @@ app.post('/api/sessions/cli-import', (req, res) => {
 });
 
 // Enrich existing sessions with thinking blocks from JSONL files.
-// Finds sessions that have a claude_session_id but no thinking messages,
+// Finds sessions that have a kilo_session_id but no thinking messages,
 // reads thinking from the corresponding JSONL, and inserts them.
 app.post('/api/sessions/enrich-thinking', (req, res) => {
   const workdir = String(req.body?.workdir || WORKDIR || '');
   const homeDir = os.homedir();
-  const safeBase = path.resolve(path.join(homeDir, '.claude', 'projects'));
+  const safeBase = path.resolve(path.join(homeDir, '.kilo', 'projects'));
   const projectPath = path.resolve(path.join(safeBase, cwdToCliProjectName(workdir)));
   if (!projectPath.startsWith(safeBase)) return res.status(400).json({ error: 'invalid workdir' });
 
-  // Find sessions with a claude_session_id matching the target workdir (or null workdir)
-  const sessions = db.prepare(`SELECT id, claude_session_id FROM sessions WHERE claude_session_id IS NOT NULL AND (workdir = ? OR workdir IS NULL)`).all(workdir);
+  // Find sessions with a kilo_session_id matching the target workdir (or null workdir)
+  const sessions = db.prepare(`SELECT id, kilo_session_id FROM sessions WHERE kilo_session_id IS NOT NULL AND (workdir = ? OR workdir IS NULL)`).all(workdir);
   // Find which sessions already have thinking messages
   const sessionsWithThinking = new Set(
     db.prepare(`SELECT DISTINCT session_id FROM messages WHERE type='thinking'`).all().map(r => r.session_id)
@@ -4323,7 +4268,7 @@ app.post('/api/sessions/enrich-thinking', (req, res) => {
     for (const sess of sessions) {
       if (sessionsWithThinking.has(sess.id)) { skipped++; continue; }
 
-      const jsonlPath = path.resolve(path.join(projectPath, sess.claude_session_id + '.jsonl'));
+      const jsonlPath = path.resolve(path.join(projectPath, sess.kilo_session_id + '.jsonl'));
       if (!jsonlPath.startsWith(projectPath)) { skipped++; continue; }
       if (!fs.existsSync(jsonlPath)) { skipped++; continue; }
 
@@ -4484,7 +4429,7 @@ CONVERSATION TRANSCRIPT:
 ${transcript}`;
 
   // Use CLI (Haiku) for fast summarization — no tools needed
-  const cli = new ClaudeCLI({ cwd: sess.workdir || WORKDIR });
+  const cli = new KiloCLI({ cwd: sess.workdir || WORKDIR });
   let summaryText = '';
 
   try {
@@ -4582,9 +4527,9 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
-  const claudeSessionId = session.claude_session_id;
-  if (!claudeSessionId) return res.status(400).json({ error: 'No Claude session ID' });
-  const safeSid = claudeSessionId.replace(/[^a-zA-Z0-9_-]/g, '');
+  const kiloSessionId = session.kilo_session_id;
+  if (!kiloSessionId) return res.status(400).json({ error: 'No Kilo session ID' });
+  const safeSid = kiloSessionId.replace(/[^a-zA-Z0-9_-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
   const workdir = session.workdir || WORKDIR;
   const platform = process.platform;
@@ -4687,35 +4632,35 @@ app.put('/api/mcp/:id', (req,res) => {
 
   // Convert current Kilo format back to Claude format for updating
   const currentServer = kiloConfig.mcp[id];
-  let claudeFormat = { enabled: currentServer.enabled !== false, custom: true };
+  let kiloFormat = { enabled: currentServer.enabled !== false, custom: true };
 
   if (currentServer.type === 'remote') {
-    claudeFormat.type = 'http';
-    claudeFormat.url = currentServer.url;
-    if (currentServer.headers) claudeFormat.headers = currentServer.headers;
-    if (currentServer.environment) claudeFormat.env = currentServer.environment;
-    if (currentServer.timeout) claudeFormat.timeout = currentServer.timeout;
+    kiloFormat.type = 'http';
+    kiloFormat.url = currentServer.url;
+    if (currentServer.headers) kiloFormat.headers = currentServer.headers;
+    if (currentServer.environment) kiloFormat.env = currentServer.environment;
+    if (currentServer.timeout) kiloFormat.timeout = currentServer.timeout;
   } else if (currentServer.type === 'local' && currentServer.command) {
     if (Array.isArray(currentServer.command) && currentServer.command.length > 0) {
-      claudeFormat.command = currentServer.command[0];
-      claudeFormat.args = currentServer.command.slice(1);
+      kiloFormat.command = currentServer.command[0];
+      kiloFormat.args = currentServer.command.slice(1);
     }
-    if (currentServer.environment) claudeFormat.env = currentServer.environment;
-    if (currentServer.timeout) claudeFormat.timeout = currentServer.timeout;
+    if (currentServer.environment) kiloFormat.env = currentServer.environment;
+    if (currentServer.timeout) kiloFormat.timeout = currentServer.timeout;
   }
 
   // Apply updates
-  if(label!==undefined) claudeFormat.label=label;
-  if(description!==undefined) claudeFormat.description=description;
-  if(type!==undefined) claudeFormat.type=type;
-  if(command!==undefined) claudeFormat.command=command;
-  if(env !== undefined) claudeFormat.env=env;
-  if(headers!==undefined) claudeFormat.headers=headers;
-  if(url!==undefined) claudeFormat.url=url;
-  if(args!==undefined) claudeFormat.args=args;
-  if(timeout!==undefined) claudeFormat.timeout=timeout;
+  if(label!==undefined) kiloFormat.label=label;
+  if(description!==undefined) kiloFormat.description=description;
+  if(type!==undefined) kiloFormat.type=type;
+  if(command!==undefined) kiloFormat.command=command;
+  if(env !== undefined) kiloFormat.env=env;
+  if(headers!==undefined) kiloFormat.headers=headers;
+  if(url!==undefined) kiloFormat.url=url;
+  if(args!==undefined) kiloFormat.args=args;
+  if(timeout!==undefined) kiloFormat.timeout=timeout;
 
-  saveMcpServerToKilo(id, claudeFormat);
+  saveMcpServerToKilo(id, kiloFormat);
   res.json({ok:true});
 });
 app.delete('/api/mcp/:id', (req,res) => {
@@ -5527,7 +5472,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       ws: proxy,
       sessionId,
       abortController,
-      claudeSessionId: sanitizeSessionId(session.claude_session_id) || undefined,
+      kiloSessionId: sanitizeSessionId(session.kilo_session_id) || undefined,
       mode,
       workdir,
       tabId: sessionId,
@@ -6067,7 +6012,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
   fs.writeFileSync(path.join(delegationDir, 'CONTEXT.md'), contextMd);
 
   // 3. Initialize DIALOG.md with delegation message
-  appendDialog(delegationDir, 'claude-code-studio', `Delegated task to ${agentConfig.label}.\nTask: ${task}\nMode: ${delegationMode}\nFull context in CONTEXT.md.`);
+  appendDialog(delegationDir, 'kilo-code-studio', `Delegated task to ${agentConfig.label}.\nTask: ${task}\nMode: ${delegationMode}\nFull context in CONTEXT.md.`);
 
   // 4. Build prompt for the external agent
   let agentPrompt;
@@ -6145,7 +6090,7 @@ app.post('/api/delegate/:id/message', express.json(), (req, res) => {
   if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: 'message required' });
-  appendDialog(delegation.delegationDir, 'claude-code-studio', message);
+  appendDialog(delegation.delegationDir, 'kilo-code-studio', message);
   delegation.lastUpdate = Date.now();
   res.json({ ok: true });
 });
@@ -6247,7 +6192,7 @@ wss.on('connection', (ws) => {
       // Resolve session: use sessionId from message, or legacy, or create new
       localSessionId = msg.sessionId || (tabId ? null : legacySessionId);
 
-      // Single DB lookup — reused for workdir check, existence check, claude_session_id, and auto-title
+      // Single DB lookup — reused for workdir check, existence check, kilo_session_id, and auto-title
       let existSess = localSessionId ? stmts.getSession.get(localSessionId) : null;
 
       // Validate workdir: if the session belongs to a different project, don't reuse it.
@@ -6263,7 +6208,7 @@ wss.on('connection', (ws) => {
         stmts.createSession.run(localSessionId,i18nSession(),'[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
-        localClaudeId = sanitizeSessionId(existSess.claude_session_id) || undefined;
+        localClaudeId = sanitizeSessionId(existSess.kilo_session_id) || undefined;
       }
 
       // For legacy (no tabId) mode, keep WS-level state in sync
@@ -6364,7 +6309,7 @@ wss.on('connection', (ws) => {
       }
 
       // Build system prompt — cached by skill combination, skill files cached in memory.
-      // Skipped on resumed sessions (localClaudeId set): claude-cli.js blocks --system-prompt
+      // Skipped on resumed sessions (localClaudeId set): kilo-cli.js blocks --system-prompt
       // when --resume is used (cryptographic signatures on thinking blocks), so building
       // it would be pure waste. System prompt was already set on the first turn of this session.
       const systemPrompt = localClaudeId ? undefined : buildSystemPrompt(effectiveSkills, config);
@@ -6447,7 +6392,7 @@ wss.on('connection', (ws) => {
         ws: proxy,
         sessionId: localSessionId,
         abortController,
-        claudeSessionId: localClaudeId,
+        kiloSessionId: localClaudeId,
         forkSession: !!_forkCid,
         mode,
         workdir: workdir || WORKDIR,
@@ -6456,12 +6401,12 @@ wss.on('connection', (ws) => {
       };
       console.log('[server] params.thinking =', params.thinking);
 
-      let newCid;
+      let newKiloId;
       let resultMeta = null;
       // Check if the active project is a remote SSH project
       const _activeProj = loadProjects().find(p => p.workdir === (workdir || WORKDIR) && p.isRemote);
       if (_activeProj) {
-        // Route to SSH engine — runs claude on remote server
+        // Route to SSH engine — runs kilo on remote server
         const sshResult = await runSshSingle({
           ...params,
           remoteHost:   _activeProj.remoteHost,
@@ -6470,19 +6415,19 @@ wss.on('connection', (ws) => {
           password:     decryptPassword(_activeProj.password) || '',
           port:         _activeProj.port || 22,
         });
-        newCid = sshResult.cid;
+        newKiloId = sshResult.cid;
         resultMeta = sshResult.resultMeta;
         // Track remote host on session for UI indicators
         try { db.prepare(`UPDATE sessions SET remote_host=? WHERE id=?`).run(_activeProj.remoteHost, localSessionId); } catch {}
       } else if (agentMode==='multi') {
-        newCid = await runMultiAgent(params);
+        newKiloId = await runMultiAgent(params);
       } else {
         const result = await runCliSingle(params);
-        newCid = result.cid;
+        newKiloId = result.cid;
         resultMeta = result.resultMeta;
       }
-      if (newCid) { try { stmts.updateClaudeId.run(newCid, localSessionId); } catch (e) { log.error('updateClaudeId failed', { cid: String(newCid).substring(0,50), sessionId: localSessionId, err: e.message, stack: e.stack }); } }
-      // Clear fork flag after first successful CLI call — session now has its own claude_session_id
+      if (newKiloId) { try { stmts.updateKiloId.run(newKiloId, localSessionId); } catch (e) { log.error('updateKiloId failed', { cid: String(newKiloId).substring(0,50), sessionId: localSessionId, err: e.message, stack: e.stack }); } }
+      // Clear fork flag after first successful CLI call — session now has its own kilo_session_id
       if (_forkCid) { try { db.prepare(`UPDATE sessions SET fork_from_cid=NULL WHERE id=?`).run(localSessionId); } catch {} }
 
       const _dic = proxy._deliveredInterruptCount || 0;
@@ -6626,7 +6571,7 @@ wss.on('connection', (ws) => {
       legacySessionId = msg.sessionId || genId();
       const existing = stmts.getSession.get(legacySessionId);
       if (existing) {
-        legacyClaudeId = sanitizeSessionId(existing.claude_session_id) || undefined;
+        legacyClaudeId = sanitizeSessionId(existing.kilo_session_id) || undefined;
         // Don't send session_started for existing sessions — the client's session_started
         // handler resets streaming.el which destroys the just-restored _bgTxt bubble on tab switch.
         // session_started is only needed for NEW sessions (to map temp tab ID → real session ID).
@@ -6846,13 +6791,13 @@ wss.on('connection', (ws) => {
       // Get user messages from the session to transfer context
       const userMessages = stmts.getMsgsLite.all(sessionId).filter(m => m.role === 'user');
 
-      // Clear broken Claude session state so the next user turn starts truly fresh.
-      try { stmts.updateClaudeId.run(null, sessionId); } catch {}
+      // Clear broken Kilo session state so the next user turn starts truly fresh.
+      try { stmts.updateKiloId.run(null, sessionId); } catch {}
       try { stmts.clearLastUserMsg.run(sessionId); } catch {}
       try { stmts.setPartialText.run(null, sessionId); } catch {}
 
-      // Notify client that session was successfully reset and ready for a fresh Claude session
-      log.info('session restart cleared claude_session_id', { sessionId, userMessages: userMessages.length });
+      // Notify client that session was successfully reset and ready for a fresh Kilo session
+      log.info('session restart cleared kilo_session_id', { sessionId, userMessages: userMessages.length });
       ws.send(JSON.stringify({
         type: 'session_restart_done',
         sessionId,
@@ -7022,7 +6967,7 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'agent_status', agent: 'orchestrator', status: 'Planning...', statusKey: 'agent.planning', ...(tabId ? { tabId } : {}) }));
 
             const effectiveWorkdir = workdir || WORKDIR;
-            const cli = new ClaudeCLI({ cwd: effectiveWorkdir });
+            const cli = new KiloCLI({ cwd: effectiveWorkdir });
             const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${text}`;
 
             const session = sessionId ? stmts.getSession.get(sessionId) : null;
@@ -7030,7 +6975,7 @@ wss.on('connection', (ws) => {
 
             await new Promise(resolve => {
               let done = false;
-              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.claude_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
+              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.kilo_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
                 .onText(t => { planText += t; })
                 .onError(() => { if (!done) { done = true; resolve(); } })
                 .onDone(() => { if (!done) { done = true; resolve(); } });
@@ -7094,9 +7039,9 @@ wss.on('connection', (ws) => {
           stmts.createChain.run(chainId, (finalPlan || 'Task chain').substring(0, 200),
             sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
             chainSessionId, null, null, null, sessionId || null, 0);
-          // Chain gets its OWN Claude session — first task starts fresh,
+          // Chain gets its OWN Kilo session — first task starts fresh,
           // subsequent tasks --resume from the chain's session (NOT the source chat's).
-          // Sharing claude_session_id with source chat causes context mixing chaos.
+          // Sharing kilo_session_id with source chat causes context mixing chaos.
 
           // First pass: assign real IDs (handles forward references in depends_on)
           const idMap = {};

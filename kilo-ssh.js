@@ -34,7 +34,7 @@ function parseHost(hostStr) {
   return { username: os.userInfo().username, hostname: hostStr };
 }
 
-class ClaudeSSH {
+class KiloSSH {
   constructor(options = {}) {
     const { username, hostname } = parseHost(options.host || '');
     this.hostname   = hostname;
@@ -161,7 +161,7 @@ class ClaudeSSH {
         const remoteFilePaths = [];
         try {
           if (attachmentSpecs.length) {
-            remoteTempDir = await this._execText(conn, 'mktemp -d /tmp/claude-att-XXXXXX');
+            remoteTempDir = await this._execText(conn, 'mktemp -d /tmp/kilo-att-XXXXXX');
             const sftp = await this._openSftp(conn);
             for (let i = 0; i < attachmentSpecs.length; i++) {
               const spec = attachmentSpecs[i];
@@ -204,7 +204,7 @@ class ClaudeSSH {
             `cd ${shellEscape(this.workdir)}`,
           ];
           if (remoteTempDir) innerCmdParts.push(`trap 'rm -rf ${shellEscape(remoteTempDir)}' EXIT`);
-          innerCmdParts.push(`claude ${args.map(shellEscape).join(' ')}`);
+          innerCmdParts.push(`kilo ${args.map(shellEscape).join(' ')}`);
           const remoteCmd = `bash -lc ${shellEscape(innerCmdParts.join(' && '))}`;
 
           conn.exec(remoteCmd, { pty: false }, (err, stream) => {
@@ -390,5 +390,5 @@ function testSshConnection({ host, port = 22, sshKeyPath = '', password = '' }) 
   });
 }
 
-module.exports = ClaudeSSH;
+module.exports = KiloSSH;
 module.exports.testSshConnection = testSshConnection;
