@@ -132,7 +132,7 @@ class ClaudeCLI {
     const args = ['--print'];
 
     // --setting-sources: control which setting sources to load (user, project, local)
-    // Use settingSources='' to skip all, or 'user' to skip project CLAUDE.md for service calls
+    // Use settingSources='' to skip all, or 'user' to skip project config for service calls
     if (settingSources != null) args.push('--setting-sources', settingSources);
 
     // --fork-session: branch from an existing session (requires --resume)

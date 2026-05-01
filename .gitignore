@@ -47,7 +47,6 @@ Thumbs.db
 
 # Claude Code local config & scripts (machine-specific)
 .claude/
-CLAUDE.md
 agent-orchestrator.yaml
 
 # Config with API keys (use config.example.json as template)

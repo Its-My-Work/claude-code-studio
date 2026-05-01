@@ -10127,8 +10127,7 @@ async function openCfgEditor() {
   const gr = await r3.json();
   const lk = await r4.json();
   const pr = await r5.json();
-  cfgFiles['global-claude-md'] = cm.global || '';
-  cfgFiles['__globalPath']     = cm.globalPath || '~/.claude/CLAUDE.md';
+
   cfgFiles['global-rules-md']  = gr.content || '';
   cfgFiles['__globalRulesPath'] = gr.path || '~/.config/kilo/GLOBAL_RULES.md';
   cfgFiles['local-kilo-jsonc'] = lk.content || '';
@@ -10157,12 +10156,6 @@ async function openCfgEditor() {
   }
 
   const tabs = [...CFG_TABS_BASE];
-  if (curWorkdir) {
-    cfgFiles['local-claude-md'] = cm.local || '';
-    cfgFiles['__localPath']     = cm.localPath || curWorkdir + '/CLAUDE.md';
-    const projName = projects.find(p => p.workdir === curWorkdir)?.name || curWorkdir.split('/').pop();
-    tabs.push({ id: 'local-claude-md', label: `📁 ${projName}` });
-  }
 
   const t = $i('cfgTabs');
   t.innerHTML = '';
@@ -10226,9 +10219,7 @@ function updateCfgPathInfo(id) {
   const el = $i('cfgPathInfo');
   if (!el) return;
   let path = '';
-  if (id === 'global-claude-md') path = cfgFiles['__globalPath'] || '~/.claude/CLAUDE.md';
-  else if (id === 'local-claude-md') path = cfgFiles['__localPath'] || 'WORKDIR/CLAUDE.md';
-  else if (id === 'global-rules-md') path = cfgFiles['__globalRulesPath'] || '~/.config/kilo/GLOBAL_RULES.md';
+  if (id === 'global-rules-md') path = cfgFiles['__globalRulesPath'] || '~/.config/kilo/GLOBAL_RULES.md';
   else if (id === 'project-rules-md') path = cfgFiles['__projectRulesPath'] || 'PROJECT_RULES.md';
   else if (id === 'local-kilo-jsonc') path = cfgFiles['__localKiloPath'] || '.kilo/kilo.jsonc';
   if (path) { el.textContent = path; el.classList.remove('hidden'); }
@@ -10281,13 +10272,7 @@ async function saveCfg() {
   cfgFiles[activeCfgTab] = $i('cfgEditor').value;
   try {
     let r;
-    if (activeCfgTab === 'global-claude-md') {
-      r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'global', content: cfgFiles[activeCfgTab] }), credentials: 'include' });
-    } else if (activeCfgTab === 'local-claude-md') {
-      r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'local', content: cfgFiles[activeCfgTab], dir: curWorkdir }), credentials: 'include' });
-    } else if (activeCfgTab === 'global-rules-md') {
+    if (activeCfgTab === 'global-rules-md') {
       r = await fetch('/api/global-rules-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: cfgFiles[activeCfgTab] }), credentials: 'include' });
     } else if (activeCfgTab === 'local-kilo-jsonc') {

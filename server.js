@@ -1689,7 +1689,7 @@ const DEFAULT_SLASH_COMMANDS = [
   { id: 'sc7', name: '/docs',     text: 'Write clear documentation: purpose, parameters, return values, usage examples, and any gotchas.' },
   { id: 'sc8', name: '/optimize', text: 'Analyze performance and optimize. Identify bottlenecks, propose improvements, quantify the expected gains.' },
   { id: 'sc9', name: '/compact',  text: 'Summarize our conversation so far into a concise recap: key decisions made, what was built or changed, current state, and what still needs to be done. Be brief and structured.' },
-  { id: 'sc10', name: '/init',    text: 'Analyze this project and create a CLAUDE.md file in the project root. Include: project overview, tech stack, architecture, key conventions, common commands (build, test, lint), and any gotchas a developer should know. Be thorough but concise.' },
+  { id: 'sc10', name: '/init',    text: 'Analyze this project and document key information. Include: project overview, tech stack, architecture, key conventions, common commands (build, test, lint), and any gotchas a developer should know. Be thorough but concise.' },
 ];
 
 /** Load LOCAL config only — used by write operations (add/delete MCP, upload/delete skill).
@@ -4940,50 +4940,27 @@ app.use((err, _req, res, next) => {
 app.get('/api/config-files', (_,res) => {
   const files={};
   try{files['config.json']=fs.readFileSync(CONFIG_PATH,'utf-8')}catch{files['config.json']='{}'}
-  try{files['CLAUDE.md']=fs.readFileSync(path.join(WORKDIR,'CLAUDE.md'),'utf-8')}catch{files['CLAUDE.md']=''}
+
   try{files['.config/kilo/kilo.jsonc']=fs.readFileSync(path.join(os.homedir(),'.config','kilo','kilo.jsonc'),'utf-8')}catch{files['.config/kilo/kilo.jsonc']='{}'}
   try{files['.env']=fs.readFileSync(path.join(APP_DIR,'.env'),'utf-8')}catch{files['.env']=''}
   res.json(files);
 });
 app.put('/api/config-files', (req,res) => {
   const{filename,content}=req.body;
-  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.config/kilo/kilo.jsonc':path.join(os.homedir(),'.config','kilo','kilo.jsonc'),'.env':path.join(APP_DIR,'.env')};
+  const allowed={'config.json':CONFIG_PATH,'.config/kilo/kilo.jsonc':path.join(os.homedir(),'.config','kilo','kilo.jsonc'),'.env':path.join(APP_DIR,'.env')};
   const target=allowed[filename]; if(!target) return res.status(400).json({error:'Unknown'});
   try{const dir=path.dirname(target); if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(target,content,'utf-8'); res.json({ok:true})}
   catch(e){res.status(500).json({error:e.message})}
 });
 
-// CLAUDE.md editor — global (~/.claude/CLAUDE.md) + local (WORKDIR/CLAUDE.md)
-const GLOBAL_CLAUDE_MD = path.join(os.homedir(), '.claude', 'CLAUDE.md');
-const LOCAL_CLAUDE_MD  = path.join(WORKDIR, 'CLAUDE.md');
+
 
 // GLOBAL_RULES.md editor — global rules for Kilo (~/.config/kilo/GLOBAL_RULES.md)
 const GLOBAL_RULES_MD = path.join(os.homedir(), '.config', 'kilo', 'GLOBAL_RULES.md');
 
-app.get('/api/claude-md', (req,res) => {
-  const localDir = req.query.dir ? path.resolve(req.query.dir) : null;
-  const localMd  = localDir ? path.join(localDir, 'CLAUDE.md') : LOCAL_CLAUDE_MD;
-  const result = { global: '', local: '', globalPath: GLOBAL_CLAUDE_MD, localPath: localMd };
-  try { result.global = fs.readFileSync(GLOBAL_CLAUDE_MD, 'utf-8'); } catch {}
-  try { result.local  = fs.readFileSync(localMd, 'utf-8'); } catch {}
-  res.json(result);
-});
 
-app.post('/api/claude-md', (req,res) => {
-  const { type, content, dir } = req.body;
-  if (!['global','local'].includes(type))
-    return res.status(400).json({ error: 'type must be "global" or "local"' });
-  const localMd = dir ? path.join(path.resolve(dir), 'CLAUDE.md') : LOCAL_CLAUDE_MD;
-  const target  = type === 'global' ? GLOBAL_CLAUDE_MD : localMd;
-  try {
-    const d = path.dirname(target);
-    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-    fs.writeFileSync(target, content ?? '', 'utf-8');
-    res.json({ ok: true, path: target });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+
+
 
 // GLOBAL_RULES.md editor — global rules for Kilo
 app.get('/api/global-rules-md', (req,res) => {
