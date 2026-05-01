@@ -1900,6 +1900,8 @@ function loadKiloConfig() {
     // File doesn't exist or invalid JSON, return default structure
   }
   if (!config.mcp) config.mcp = {};
+  if (!config.instructions) config.instructions = [];
+  if (config.globalRulesEnabled === undefined) config.globalRulesEnabled = false;
   return config;
 }
 
@@ -2131,6 +2133,25 @@ function buildSystemPrompt(skillIds, config) {
   // Language instruction: reasoning in English, user-facing in UI language
   const langName = LANG_NAMES[uiLang] || 'English';
   prompt += `\n\nLANGUAGE: All internal reasoning, thinking, and inter-agent communication MUST be in English (token-efficient). All user-facing text (responses, explanations, questions) MUST be in ${langName}.`;
+
+  // Load Kilo config and include instructions
+  const kiloConfig = loadKiloConfig();
+  if (kiloConfig.instructions && kiloConfig.instructions.length > 0) {
+    for (const instructionPath of kiloConfig.instructions) {
+      try {
+        // Resolve ~ to home directory
+        const resolvedPath = instructionPath.startsWith('~/')
+          ? path.join(os.homedir(), instructionPath.slice(2))
+          : instructionPath;
+        const content = fs.readFileSync(resolvedPath, 'utf-8');
+        if (content.trim()) {
+          prompt += `\n\n# Global Rules\n${content}`;
+        }
+      } catch (e) {
+        console.warn(`Failed to load instruction file ${instructionPath}:`, e.message);
+      }
+    }
+  }
 
   // Skills removed
 
@@ -4936,6 +4957,9 @@ app.put('/api/config-files', (req,res) => {
 const GLOBAL_CLAUDE_MD = path.join(os.homedir(), '.claude', 'CLAUDE.md');
 const LOCAL_CLAUDE_MD  = path.join(WORKDIR, 'CLAUDE.md');
 
+// GLOBAL_RULES.md editor — global rules for Kilo (~/.config/kilo/GLOBAL_RULES.md)
+const GLOBAL_RULES_MD = path.join(os.homedir(), '.config', 'kilo', 'GLOBAL_RULES.md');
+
 app.get('/api/claude-md', (req,res) => {
   const localDir = req.query.dir ? path.resolve(req.query.dir) : null;
   const localMd  = localDir ? path.join(localDir, 'CLAUDE.md') : LOCAL_CLAUDE_MD;
@@ -4956,6 +4980,48 @@ app.post('/api/claude-md', (req,res) => {
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(target, content ?? '', 'utf-8');
     res.json({ ok: true, path: target });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GLOBAL_RULES.md editor — global rules for Kilo
+app.get('/api/global-rules-md', (req,res) => {
+  const result = { content: '', path: GLOBAL_RULES_MD };
+  try { result.content = fs.readFileSync(GLOBAL_RULES_MD, 'utf-8'); } catch {}
+  res.json(result);
+});
+
+app.post('/api/global-rules-md', (req,res) => {
+  const { content } = req.body;
+  try {
+    const d = path.dirname(GLOBAL_RULES_MD);
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(GLOBAL_RULES_MD, content ?? '', 'utf-8');
+    res.json({ ok: true, path: GLOBAL_RULES_MD });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Local kilo.jsonc editor — project-specific Kilo config
+app.get('/api/local-kilo-config', (req,res) => {
+  const projectDir = req.query.dir ? path.resolve(req.query.dir) : WORKDIR;
+  const localKiloPath = path.join(projectDir, '.kilo', 'kilo.jsonc');
+  const result = { content: '', path: localKiloPath };
+  try { result.content = fs.readFileSync(localKiloPath, 'utf-8'); } catch {}
+  res.json(result);
+});
+
+app.post('/api/local-kilo-config', (req,res) => {
+  const { content, dir } = req.body;
+  const projectDir = dir ? path.resolve(dir) : WORKDIR;
+  const localKiloPath = path.join(projectDir, '.kilo', 'kilo.jsonc');
+  try {
+    const d = path.dirname(localKiloPath);
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(localKiloPath, content ?? '', 'utf-8');
+    res.json({ ok: true, path: localKiloPath });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }

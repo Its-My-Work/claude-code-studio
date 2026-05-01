@@ -25,7 +25,7 @@ class KiloRunner {
       model,
       sessionId,
       format = 'json',
-      mode = 'orchestrator',
+      agent = 'orchestrator',
       abortController,
       thinking = false,
     } = options;
@@ -42,7 +42,7 @@ class KiloRunner {
     args.push('--format', format);
 
     // Режим работы
-    args.push('--mode', mode);
+    args.push('--agent', agent);
 
     // Включить thinking блоки
     if (thinking) {
@@ -71,7 +71,7 @@ class KiloRunner {
       command: this.kiloBin,
       args,
       cwd: this.cwd,
-      mode: mode,
+      agent: agent,
       thinking: thinking,
     });
 

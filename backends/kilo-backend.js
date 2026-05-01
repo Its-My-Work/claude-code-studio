@@ -56,11 +56,11 @@ class KiloBackend extends AgentBackend {
       model: kiloModel,
       sessionId,
       format: 'json',
-      mode: kiloMode,
+      agent: kiloMode,
       abortController,
       thinking,
     });
-    console.log('[kilo-backend] DEBUG: sending to runner.run, mode =', kiloMode, ', thinking =', thinking);
+    console.log('[kilo-backend] DEBUG: sending to runner.run, agent =', kiloMode, ', thinking =', thinking);
 
     // Обработчики
     let fullText = '';

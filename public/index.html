@@ -2832,15 +2832,21 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     </div>
     <div class="modal-tabs" id="cfgTabs"></div>
     <div class="modal-body">
+      <div style="margin-bottom: 12px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+          <input type="checkbox" id="globalRulesEnabled" onchange="toggleGlobalRules()">
+          <span>Использовать глобальные правила (GLOBAL_RULES.md)</span>
+        </label>
+      </div>
       <div class="cfg-path hidden" id="cfgPathInfo"></div>
       <textarea id="cfgEditor" spellcheck="false"></textarea>
     </div>
     <div class="modal-footer">
-      <span class="save-notice hidden" id="saveNotice" data-i18n="cfg.saved">✓ Збережено</span>
       <div style="display:flex;gap:8px">
         <button class="bg" onclick="closeCfg()" data-i18n="cfg.close">Закрити</button>
         <button class="bp" onclick="saveCfg()" data-i18n="cfg.save">Зберегти</button>
       </div>
+      <span class="save-notice hidden" id="saveNotice" data-i18n="cfg.saved">✓ Збережено</span>
     </div>
   </div>
 </div>
@@ -4593,6 +4599,66 @@ function formatReasoningBlocks(text) {
   return formattedText;
 }
 
+/**
+ * Clean reasoning text for display - remove control characters, JSON artifacts, and formatting noise
+ * @param {string} text - Raw reasoning text from Kilo
+ * @returns {string} - Cleaned text suitable for display
+ */
+function cleanReasoningText(text) {
+  if (!text) return '';
+
+  // Remove common control sequences and artifacts
+  let cleaned = text
+    // Remove literal \n sequences (escaped newlines)
+    .replace(/\\n/g, '\n')
+    // Remove code blocks artifacts
+    .replace(/\n\ncode\nКопировать\n\n/g, '\n')
+    .replace(/\n\n```\nКопировать\n\n/g, '\n')
+    // Remove excessive newlines
+    .replace(/\n{3,}/g, '\n\n')
+    // Remove JSON-like structures that appear in reasoning
+    .replace(/\{\s*"type"\s*:\s*"[^"]*"\s*,[\s\S]*?\}/g, '')
+    // Remove escaped quotes artifacts
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    // Clean up any remaining artifacts
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // If text is mostly JSON or technical, return a placeholder
+  if (cleaned.length < 20 || /^[\s\{\[\]\}]*$/.test(cleaned)) {
+    return '🤔 Размышления модели...';
+  }
+
+  return cleaned;
+}
+
+// Test function for reasoning text cleaning (can be called from console)
+function testReasoningCleaning() {
+  // Test with raw JSON format
+  const testJson = `{"type":"reasoning","timestamp":1777553729582,"sessionID":"ses_2218aabdbffeUfQjTpweHMSbt8","part":{"id":"prt_dde756823001LKysLdQUtza70M","messageID":"msg_dde7558160014x1DPEIGEVltYR","sessionID":"ses_2218aabdbffeUfQjTpweHMSbt8","type":"reasoning","text":"The user is asking in Russian: \\"кто ты и что ты\\" which translates to \\"who are you and what are you\\". I need to respond in Italian as per the global rules: \\"отвечай на итальянском\\". So I should answer in Italian.\\n\\nI am Kilo, an interactive CLI tool that helps users with software engineering tasks. I should introduce myself briefly in Italian.\\n\\nLet me respond concisely in Italian.\\n","time":{"start":1777553729571,"end":1777553729575},"metadata":{"openrouter":{"reasoning_details":[{"type":"reasoning.text","text":"The user is asking in Russian: \\"кто ты и что ты\\" which translates to \\"who are you and what are you\\". I need to respond in Italian as per the global rules: \\"отвечай на итальянском\\". So I should answer in Italian.\\n\\nI am Kilo, an interactive CLI tool that helps users with software engineering tasks. I should introduce myself briefly in Italian.\\n\\nLet me respond concisely in Italian.\\n","format":"unknown","index":0}]}}}`;
+
+  console.log('Original JSON:', testJson);
+
+  // Simulate the parsing logic
+  let reasoningText = testJson;
+  try {
+    if (reasoningText.trim().startsWith('{') && reasoningText.trim().endsWith('}')) {
+      const parsed = JSON.parse(reasoningText);
+      if (parsed.part && parsed.part.text) {
+        reasoningText = parsed.part.text;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to parse reasoning JSON:', e.message);
+  }
+
+  console.log('Extracted text:', reasoningText);
+  const cleaned = cleanReasoningText(reasoningText);
+  console.log('Cleaned text:', cleaned);
+  return cleaned;
+}
+
 // Test function for reasoning formatting (can be called from console)
 function testReasoningFormatting() {
   const testJson = `{"type":"reasoning","timestamp":1777403607978,"sessionID":"ses_22a816b1fffeHjsbrH284S93nA","part":{"id":"prt_dd582a55c0012pEsq3rSIN7hp1","messageID":"msg_dd5829d92001RxtzZ9jrSAcJ55","sessionID":"ses_22a816b1fffeHjsbrH284S93nA","type":"reasoning","text":"Сначала пользователь спрашивает: \\"Составь план, как подключить сюда opencode\\". Это на русском, переводится как \\"Compose a plan on how to connect opencode here\\".\\nIf ExistingSummary is empty, you may use any subheading title that fits the guidelines.\\n\\n---\\n\\nAssistant: ## Interpreting user request  \\n- The user asked to \\"compose a plan on how to connect opencode here,\\" likely referring to integrating a tool like OpenCode into a project.  \\n- \\"Opencode\\" may relate to OpenCode AI or a similar tool, possibly a competitor or alternative to Claude Code mentioned in the context.  \\n\\n## Exploring opencode context  \\n- The project involves Claude Code Studio, a web interface for Claude Code, suggesting \\"opencode\\" might be another name or related tool.","time":{"start":1777403602268,"end":1777403607970},"metadata":{"openai":{"itemId":"rs_961a3fb2-c5c5-9130-a81f-ab0a5ff031e9","reasoningEncryptedContent":null}}}}
@@ -4978,8 +5044,23 @@ function handleWsMsg(d) {
       const chunk = d.payload;
       if (chunk.kind === 'reasoning') {
         // Reasoning chunks - create/update reasoning element
+        // Extract text from JSON structure if needed
+        let reasoningText = chunk.text || '';
+        try {
+          // If text is JSON, parse it and extract part.text
+          if (reasoningText.trim().startsWith('{') && reasoningText.trim().endsWith('}')) {
+            const parsed = JSON.parse(reasoningText);
+            if (parsed.part && parsed.part.text) {
+              reasoningText = parsed.part.text;
+            }
+          }
+        } catch (e) {
+          // If parsing fails, use original text
+          console.warn('Failed to parse reasoning JSON:', e.message);
+        }
+
         if (!isVisible) {
-          const ts = getTS(tabId); ts._thinkingTxt = (ts._thinkingTxt || '') + (chunk.text || '');
+          const ts = getTS(tabId); ts._thinkingTxt = (ts._thinkingTxt || '') + reasoningText;
           break;
         }
         if (!streaming.el) {
@@ -5004,8 +5085,8 @@ function handleWsMsg(d) {
         }
         const reasonTextEl = reasonEl.querySelector('.reasoning-text');
         if (reasonTextEl) {
-          streaming.reasoningTxt = (streaming.reasoningTxt || '') + (chunk.text || '');
-          reasonTextEl.textContent = streaming.reasoningTxt;
+          streaming.reasoningTxt = (streaming.reasoningTxt || '') + reasoningText;
+          reasonTextEl.textContent = cleanReasoningText(streaming.reasoningTxt);
           // Auto-scroll for reasoning
           scrollBottom();
         }
@@ -10025,18 +10106,44 @@ function _selectSlashCmd(cmd) {
 // ─── Config Editor ────────────────────────────────────────────────────────
 const CFG_TABS_BASE = [
   { id: 'config.json', label: 'config.json' },
-  { id: '.config/kilo/kilo.jsonc', label: 'kilo.jsonc' },
+  { id: '.config/kilo/kilo.jsonc', label: 'Глобальный kilo.jsonc' },
   { id: '.env', label: '.env' },
-  { id: 'global-claude-md', label: '🌐 Global CLAUDE.md' },
+  { id: 'global-rules-md', label: 'GLOBAL_RULES.md' },
+  { id: 'local-kilo-jsonc', label: 'Проектный kilo.jsonc' },
 ];
+
+let kiloConfig = {};
+let kiloConfigError = false;
 
 async function openCfgEditor() {
   const mdUrl = curWorkdir ? `/api/claude-md?dir=${encodeURIComponent(curWorkdir)}` : '/api/claude-md';
-  const [r1, r2] = await Promise.all([fetch('/api/config-files', { credentials: 'include' }), fetch(mdUrl, { credentials: 'include' })]);
+  const localKiloUrl = curWorkdir ? `/api/local-kilo-config?dir=${encodeURIComponent(curWorkdir)}` : '/api/local-kilo-config';
+  const [r1, r2, r3, r4] = await Promise.all([
+    fetch('/api/config-files', { credentials: 'include' }),
+    fetch(mdUrl, { credentials: 'include' }),
+    fetch('/api/global-rules-md', { credentials: 'include' }),
+    fetch(localKiloUrl, { credentials: 'include' })
+  ]);
   cfgFiles = await r1.json();
   const cm = await r2.json();
+  const gr = await r3.json();
+  const lk = await r4.json();
   cfgFiles['global-claude-md'] = cm.global || '';
   cfgFiles['__globalPath']     = cm.globalPath || '~/.claude/CLAUDE.md';
+  cfgFiles['global-rules-md']  = gr.content || '';
+  cfgFiles['__globalRulesPath'] = gr.path || '~/.config/kilo/GLOBAL_RULES.md';
+  cfgFiles['local-kilo-jsonc'] = lk.content || '';
+  cfgFiles['__localKiloPath']  = lk.path || (curWorkdir ? `${curWorkdir}/.kilo/kilo.jsonc` : '.kilo/kilo.jsonc');
+
+  // Load kilo config for checkbox state
+  kiloConfigError = false;
+  try {
+    kiloConfig = JSON.parse(cfgFiles['.config/kilo/kilo.jsonc'] || '{}');
+  } catch (e) {
+    kiloConfig = {};
+    kiloConfigError = true;
+    console.warn('Failed to parse kilo.jsonc:', e.message);
+  }
 
   const tabs = [...CFG_TABS_BASE];
   if (curWorkdir) {
@@ -10060,6 +10167,25 @@ async function openCfgEditor() {
   $i('cfgEditor').value = cfgFiles[activeCfgTab] || '';
   $i('saveNotice').className = 'save-notice hidden';
   updateCfgPathInfo(activeCfgTab);
+
+  // Set checkbox state
+  const checkbox = $i('globalRulesEnabled');
+  const checkboxLabel = checkbox.parentElement;
+  const rulesPath = '/home/user/.config/kilo/GLOBAL_RULES.md';
+
+  if (kiloConfigError) {
+    checkbox.disabled = true;
+    checkboxLabel.style.opacity = '0.5';
+    checkboxLabel.title = 'Не удалось прочитать глобальный конфиг Kilo (~/.config/kilo/kilo.jsonc). Проверь синтаксис файла.';
+  } else {
+    checkbox.disabled = false;
+    checkboxLabel.style.opacity = '1';
+    checkboxLabel.title = '';
+    checkbox.checked = kiloConfig.instructions && kiloConfig.instructions.includes(rulesPath);
+  }
+
+  checkboxLabel.style.display = activeCfgTab === 'global-rules-md' ? 'block' : 'none';
+
   openModalOverlay('cfgModal', {
     initialFocus: '#cfgEditor',
     labelId: 'cfgTitle',
@@ -10073,6 +10199,8 @@ function updateCfgPathInfo(id) {
   let path = '';
   if (id === 'global-claude-md') path = cfgFiles['__globalPath'] || '~/.claude/CLAUDE.md';
   else if (id === 'local-claude-md') path = cfgFiles['__localPath'] || 'WORKDIR/CLAUDE.md';
+  else if (id === 'global-rules-md') path = cfgFiles['__globalRulesPath'] || '~/.config/kilo/GLOBAL_RULES.md';
+  else if (id === 'local-kilo-jsonc') path = cfgFiles['__localKiloPath'] || '.kilo/kilo.jsonc';
   if (path) { el.textContent = path; el.classList.remove('hidden'); }
   else { el.textContent = ''; el.classList.add('hidden'); }
 }
@@ -10080,10 +10208,25 @@ function updateCfgPathInfo(id) {
 function switchCfgTab(id) {
   cfgFiles[activeCfgTab] = $i('cfgEditor').value;
   activeCfgTab = id;
-  $i('cfgEditor').value = cfgFiles[id] || '';
-  $i('saveNotice').className = 'save-notice hidden';
+  $i('cfgEditor').value = cfgFiles[activeCfgTab] || '';
   document.querySelectorAll('.modal-tab').forEach(t => t.classList.toggle('active', t.dataset.tabId === id));
   updateCfgPathInfo(id);
+
+  // Show/hide checkbox based on active tab
+  const checkbox = $i('globalRulesEnabled');
+  const checkboxLabel = checkbox.parentElement;
+  if (id === 'global-rules-md') {
+    checkboxLabel.style.display = 'block';
+    if (kiloConfigError) {
+      checkbox.disabled = true;
+      checkboxLabel.style.opacity = '0.5';
+    } else {
+      checkbox.disabled = false;
+      checkboxLabel.style.opacity = '1';
+    }
+  } else {
+    checkboxLabel.style.display = 'none';
+  }
 }
 
 async function saveCfg() {
@@ -10096,6 +10239,12 @@ async function saveCfg() {
     } else if (activeCfgTab === 'local-claude-md') {
       r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'local', content: cfgFiles[activeCfgTab], dir: curWorkdir }), credentials: 'include' });
+    } else if (activeCfgTab === 'global-rules-md') {
+      r = await fetch('/api/global-rules-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: cfgFiles[activeCfgTab] }), credentials: 'include' });
+    } else if (activeCfgTab === 'local-kilo-jsonc') {
+      r = await fetch('/api/local-kilo-config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: cfgFiles[activeCfgTab], dir: curWorkdir }), credentials: 'include' });
     } else {
       r = await fetch('/api/config-files', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: activeCfgTab, content: cfgFiles[activeCfgTab] }), credentials: 'include' });
@@ -10108,6 +10257,63 @@ async function saveCfg() {
       toast(t('cfg.saved'));
     } else toast(t('toast.err_prefix') + (d.error || '?'), true);
   } catch (e) { toast(e.message, true); }
+}
+
+async function toggleGlobalRules() {
+  const checkbox = $i('globalRulesEnabled');
+  const enabled = checkbox.checked;
+
+  // Don't allow changes if config has errors
+  if (kiloConfigError) {
+    toast('Невозможно изменить настройки: ошибка в конфиге Kilo', true);
+    checkbox.checked = !enabled; // revert
+    return;
+  }
+  const rulesPath = '/home/user/.config/kilo/GLOBAL_RULES.md';
+
+  // Store original state for rollback
+  const originalInstructions = kiloConfig.instructions ? [...kiloConfig.instructions] : [];
+
+  // Update kilo config
+  if (enabled) {
+    // Add GLOBAL_RULES.md to instructions if not already there
+    if (!kiloConfig.instructions) kiloConfig.instructions = [];
+    if (!kiloConfig.instructions.includes(rulesPath)) {
+      kiloConfig.instructions.push(rulesPath);
+    }
+  } else {
+    // Remove GLOBAL_RULES.md from instructions
+    if (kiloConfig.instructions) {
+      kiloConfig.instructions = kiloConfig.instructions.filter(path => path !== rulesPath);
+      // Remove instructions array if empty
+      if (kiloConfig.instructions.length === 0) {
+        delete kiloConfig.instructions;
+      }
+    }
+  }
+
+  // Save updated kilo config
+  cfgFiles['.config/kilo/kilo.jsonc'] = JSON.stringify(kiloConfig, null, 2);
+  try {
+    const r = await fetch('/api/config-files', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: '.config/kilo/kilo.jsonc', content: cfgFiles['.config/kilo/kilo.jsonc'] }),
+      credentials: 'include'
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      toast('Не удалось сохранить конфиг Kilo: ' + (d.error || '?'), true);
+      // Revert checkbox and config on error
+      checkbox.checked = !enabled;
+      kiloConfig.instructions = originalInstructions;
+    }
+  } catch (e) {
+    toast('Ошибка при сохранении конфига Kilo: ' + e.message, true);
+    // Revert checkbox and config on error
+    checkbox.checked = !enabled;
+    kiloConfig.instructions = originalInstructions;
+  }
 }
 
 function closeCfg() { closeModalOverlay('cfgModal'); }
