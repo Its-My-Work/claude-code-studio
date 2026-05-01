@@ -5004,6 +5004,27 @@ app.post('/api/global-rules-md', (req,res) => {
   }
 });
 
+// PROJECT_RULES.md editor — project-specific rules
+app.get('/api/project-rules-md', (req,res) => {
+  const projectDir = req.query.dir ? path.resolve(req.query.dir) : WORKDIR;
+  const projectRulesPath = path.join(projectDir, 'PROJECT_RULES.md');
+  const result = { content: '', path: projectRulesPath };
+  try { result.content = fs.readFileSync(projectRulesPath, 'utf-8'); } catch {}
+  res.json(result);
+});
+
+app.post('/api/project-rules-md', (req,res) => {
+  const { content, dir } = req.body;
+  const projectDir = dir ? path.resolve(dir) : WORKDIR;
+  const projectRulesPath = path.join(projectDir, 'PROJECT_RULES.md');
+  try {
+    fs.writeFileSync(projectRulesPath, content ?? '', 'utf-8');
+    res.json({ ok: true, path: projectRulesPath });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Local kilo.jsonc editor — project-specific Kilo config
 app.get('/api/local-kilo-config', (req,res) => {
   const projectDir = req.query.dir ? path.resolve(req.query.dir) : WORKDIR;

@@ -1,1 +1,6 @@
-{"$schema": "https://app.kilo.ai/config.json", "instructions": ["./test.md"]}
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "instructions": [
+    "./test.md"
+  ]
+}
