@@ -6391,12 +6391,13 @@ function _maybeAttachExecPlanBtn(el, text) {
   execBtn.className = 'execute-plan-btn';
   execBtn.innerHTML = '▶️ Execute Plan';
   execBtn.title = 'Switch to Auto mode and execute this plan';
-  execBtn.onclick = () => {
-    curMode = 'auto';
-    syncBtn('mode', 'auto');
-    const execPrompt = 'Execute the plan above. Start with step 1.';
-    sendChat(execPrompt);
-    execBtn.remove();
+   execBtn.onclick = () => {
+     const targetMode = cliType === 'kilocode' ? 'orchestrator' : 'auto';
+     curMode = targetMode;
+     syncBtn('mode', targetMode);
+     const execPrompt = 'Execute the plan above. Start with step 1.';
+     sendChat(execPrompt);
+     execBtn.remove();
   };
   el.appendChild(execBtn);
 }
@@ -7309,12 +7310,13 @@ function newTab() {
   inEl.style.height = 'auto';
   _clearAttachments();
   clearReply();
-  // Reset skills and mode settings for new tab — new chat = clean slate
-  activeSkills = new Set();
-  curAgent = 'single';
-  curMode = 'auto';
-  syncBtn('agent', 'single');
-  syncBtn('mode', 'auto');
+   // Reset skills and mode settings for new tab — new chat = clean slate
+   activeSkills = new Set();
+   curAgent = 'single';
+   const defaultMode = cliType === 'kilocode' ? 'orchestrator' : 'auto';
+   curMode = defaultMode;
+   syncBtn('agent', 'single');
+   syncBtn('mode', defaultMode);
   // New tab is never generating — reset interrupt bar and stop button
   isGen = false; generatingTabId = null; setSendStop(false);
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
@@ -10098,12 +10100,12 @@ function _selectSlashCmd(cmd) {
 
 // ─── Config Editor ────────────────────────────────────────────────────────
 const CFG_TABS_BASE = [
+  { id: '.env', label: '.env' },
   { id: 'config.json', label: 'config.json' },
   { id: '.config/kilo/kilo.jsonc', label: 'Глобальный kilo.jsonc' },
-  { id: '.env', label: '.env' },
   { id: 'global-rules-md', label: 'GLOBAL_RULES.md' },
-  { id: 'project-rules-md', label: 'PROJECT_RULES.md' },
   { id: 'local-kilo-jsonc', label: 'Проектный kilo.jsonc' },
+  { id: 'project-rules-md', label: 'PROJECT_RULES.md' },
 ];
 
 let kiloConfig = {};
@@ -10112,18 +10114,15 @@ let projectKiloConfig = {};
 let projectKiloConfigError = false;
 
 async function openCfgEditor() {
-  const mdUrl = curWorkdir ? `/api/claude-md?dir=${encodeURIComponent(curWorkdir)}` : '/api/claude-md';
   const localKiloUrl = curWorkdir ? `/api/local-kilo-config?dir=${encodeURIComponent(curWorkdir)}` : '/api/local-kilo-config';
   const projectRulesUrl = curWorkdir ? `/api/project-rules-md?dir=${encodeURIComponent(curWorkdir)}` : '/api/project-rules-md';
-  const [r1, r2, r3, r4, r5] = await Promise.all([
+  const [r1, r3, r4, r5] = await Promise.all([
     fetch('/api/config-files', { credentials: 'include' }),
-    fetch(mdUrl, { credentials: 'include' }),
     fetch('/api/global-rules-md', { credentials: 'include' }),
     fetch(localKiloUrl, { credentials: 'include' }),
     fetch(projectRulesUrl, { credentials: 'include' })
   ]);
   cfgFiles = await r1.json();
-  const cm = await r2.json();
   const gr = await r3.json();
   const lk = await r4.json();
   const pr = await r5.json();
@@ -10219,9 +10218,12 @@ function updateCfgPathInfo(id) {
   const el = $i('cfgPathInfo');
   if (!el) return;
   let path = '';
-  if (id === 'global-rules-md') path = cfgFiles['__globalRulesPath'] || '~/.config/kilo/GLOBAL_RULES.md';
-  else if (id === 'project-rules-md') path = cfgFiles['__projectRulesPath'] || 'PROJECT_RULES.md';
-  else if (id === 'local-kilo-jsonc') path = cfgFiles['__localKiloPath'] || '.kilo/kilo.jsonc';
+  if (id === '.env') path = '.env';
+  else if (id === 'config.json') path = 'data/config.json';
+  else if (id === '.config/kilo/kilo.jsonc') path = '~/.config/kilo/kilo.jsonc';
+  else if (id === 'global-rules-md') path = cfgFiles['__globalRulesPath'] || '~/.config/kilo/GLOBAL_RULES.md';
+  else if (id === 'local-kilo-jsonc') path = cfgFiles['__localKiloPath'] || (curWorkdir ? `${curWorkdir}/.kilo/kilo.jsonc` : '.kilo/kilo.jsonc');
+  else if (id === 'project-rules-md') path = cfgFiles['__projectRulesPath'] || (curWorkdir ? `${curWorkdir}/PROJECT_RULES.md` : 'PROJECT_RULES.md');
   if (path) { el.textContent = path; el.classList.remove('hidden'); }
   else { el.textContent = ''; el.classList.add('hidden'); }
 }

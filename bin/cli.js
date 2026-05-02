@@ -38,7 +38,7 @@ if (!process.env.WORKDIR) {
 }
 
 const pkg = require('../package.json');
-console.log(`\n🚀 Claude Code Chat v${pkg.version}`);
+console.log(`\n🚀 KiloCode Studio v${pkg.version}`);
 console.log(`   Data dir : ${process.env.APP_DIR}`);
 console.log(`   Workspace: ${process.env.WORKDIR}`);
 console.log(`   Port     : ${process.env.PORT || 3000}\n`);

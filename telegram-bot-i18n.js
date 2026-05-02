@@ -10,7 +10,7 @@ const BOT_I18N = {
     'notif_off': '🔕 Сповіщення вимкнено',
     'blocked': '🔒 Забагато невдалих спроб. Спробуйте через 15 хвилин.',
     'new_conn_disabled': '🔒 Нові підключення зараз вимкнено.\n\nЗверніться до адміністратора для активації режиму підключення.',
-    'start_pairing': '👋 <b>Claude Code Studio</b>\n\nДля підключення введіть 6-символьний код з панелі налаштувань вашого Studio.\n\n💡 Код має вигляд: <code>XXX·XXX</code>',
+    'start_pairing': '👋 <b>KiloCode Studio</b>\n\nДля підключення введіть 6-символьний код з панелі налаштувань вашого Studio.\n\n💡 Код має вигляд: <code>XXX·XXX</code>',
     'new_conn_off': '🔒 Нові підключення вимкнено.',
     'already_paired': '✅ Цей пристрій вже підключено!',
     'paired_ok': '✅ <b>Пристрій підключено!</b>\n\n📱 {name}\n\nТепер ви будете отримувати сповіщення та зможете керувати Studio віддалено.\n\nВведіть /help для списку команд.',
@@ -30,7 +30,7 @@ const BOT_I18N = {
     'cmd_status_desc': 'Статус системи',
 
     // Main menu
-    'main_title': '🤖 <b>Claude Code Studio</b>',
+    'main_title': '🤖 <b>KiloCode Studio</b>',
     'main_project': '📁 Проект: <code>{name}</code>',
     'main_chat': '💬 Чат: {title}',
     'main_choose': '\nОберіть дію:',
@@ -177,7 +177,7 @@ const BOT_I18N = {
     'time_ago_long': 'давно',
 
     // Help
-    'help_text': '📖 <b>Команди Claude Code Studio</b>\n\n<b>Навігація:</b>\n/projects — список проектів\n/project <code>&lt;n&gt;</code> — вибрати проект\n/chats — чати поточного проекту\n/chat <code>&lt;n&gt;</code> — відкрити чат\n/back — повернутися назад\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень (5)\n/full — повна остання відповідь\n/tasks — завдання (Kanban)\n/files <code>[path]</code> — файли в workspace\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff в workspace\n/log <code>[n]</code> — останні git коміти\n\n<b>Дії:</b>\n/new <code>[title]</code> — нова сесія\n/stop — зупинити поточне завдання\n\n<b>Remote Access:</b>\n/tunnel — керування доступом\n/url — показати публічний URL\n\n<b>Forum Mode:</b>\n/forum — налаштування Forum Mode\n\n<b>Налаштування:</b>\n/status — стан Studio\n/notify <code>on/off</code> — сповіщення\n/unlink — відключити цей пристрій',
+    'help_text': '📖 <b>Команди KiloCode Studio</b>\n\n<b>Навігація:</b>\n/projects — список проектів\n/project <code>&lt;n&gt;</code> — вибрати проект\n/chats — чати поточного проекту\n/chat <code>&lt;n&gt;</code> — відкрити чат\n/back — повернутися назад\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень (5)\n/full — повна остання відповідь\n/tasks — завдання (Kanban)\n/files <code>[path]</code> — файли в workspace\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff в workspace\n/log <code>[n]</code> — останні git коміти\n\n<b>Дії:</b>\n/new <code>[title]</code> — нова сесія\n/stop — зупинити поточне завдання\n\n<b>Remote Access:</b>\n/tunnel — керування доступом\n/url — показати публічний URL\n\n<b>Forum Mode:</b>\n/forum — налаштування Forum Mode\n\n<b>Налаштування:</b>\n/status — стан Studio\n/notify <code>on/off</code> — сповіщення\n/unlink — відключити цей пристрій',
 
     // Back navigation
     'back_to_chats': '↩️ Повернулися до списку чатів. Введіть /chats',
@@ -328,7 +328,7 @@ const BOT_I18N = {
     'notif_off': '🔕 Notifications disabled',
     'blocked': '🔒 Too many failed attempts. Try again in 15 minutes.',
     'new_conn_disabled': '🔒 New connections are currently disabled.\n\nContact the administrator to enable connection mode.',
-    'start_pairing': '👋 <b>Claude Code Studio</b>\n\nEnter the 6-character code from your Studio settings panel to connect.\n\n💡 Code format: <code>XXX·XXX</code>',
+    'start_pairing': '👋 <b>KiloCode Studio</b>\n\nEnter the 6-character code from your Studio settings panel to connect.\n\n💡 Code format: <code>XXX·XXX</code>',
     'new_conn_off': '🔒 New connections disabled.',
     'already_paired': '✅ This device is already connected!',
     'paired_ok': '✅ <b>Device connected!</b>\n\n📱 {name}\n\nYou will now receive notifications and can control Studio remotely.\n\nType /help for a list of commands.',
@@ -345,7 +345,7 @@ const BOT_I18N = {
     'cmd_cancel_desc': 'Cancel current action',
     'cmd_status_desc': 'System status',
 
-    'main_title': '🤖 <b>Claude Code Studio</b>',
+    'main_title': '🤖 <b>KiloCode Studio</b>',
     'main_project': '📁 Project: <code>{name}</code>',
     'main_chat': '💬 Chat: {title}',
     'main_choose': '\nChoose an action:',
@@ -480,7 +480,7 @@ const BOT_I18N = {
     'time_ago_day': '{n}d ago',
     'time_ago_long': 'long ago',
 
-    'help_text': '📖 <b>Claude Code Studio Commands</b>\n\n<b>Navigation:</b>\n/projects — list projects\n/project <code>&lt;n&gt;</code> — select project\n/chats — chats of current project\n/chat <code>&lt;n&gt;</code> — open chat\n/back — go back\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages (5)\n/full — full last response\n/tasks — tasks (Kanban)\n/files <code>[path]</code> — files in workspace\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff in workspace\n/log <code>[n]</code> — recent git commits\n\n<b>Actions:</b>\n/new <code>[title]</code> — new session\n/stop — stop current task\n\n<b>Remote Access:</b>\n/tunnel — manage remote access\n/url — show public URL\n\n<b>Forum Mode:</b>\n/forum — set up Forum Mode\n\n<b>Settings:</b>\n/status — Studio status\n/notify <code>on/off</code> — notifications\n/unlink — unlink this device',
+    'help_text': '📖 <b>KiloCode Studio Commands</b>\n\n<b>Navigation:</b>\n/projects — list projects\n/project <code>&lt;n&gt;</code> — select project\n/chats — chats of current project\n/chat <code>&lt;n&gt;</code> — open chat\n/back — go back\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages (5)\n/full — full last response\n/tasks — tasks (Kanban)\n/files <code>[path]</code> — files in workspace\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff in workspace\n/log <code>[n]</code> — recent git commits\n\n<b>Actions:</b>\n/new <code>[title]</code> — new session\n/stop — stop current task\n\n<b>Remote Access:</b>\n/tunnel — manage remote access\n/url — show public URL\n\n<b>Forum Mode:</b>\n/forum — set up Forum Mode\n\n<b>Settings:</b>\n/status — Studio status\n/notify <code>on/off</code> — notifications\n/unlink — unlink this device',
 
     'back_to_chats': '↩️ Back to chat list. Type /chats',
     'back_to_projects': '↩️ Back to project list. Type /projects',
@@ -626,7 +626,7 @@ const BOT_I18N = {
     'notif_off': '🔕 Уведомления отключены',
     'blocked': '🔒 Слишком много неудачных попыток. Попробуйте через 15 минут.',
     'new_conn_disabled': '🔒 Новые подключения сейчас отключены.\n\nОбратитесь к администратору для активации режима подключения.',
-    'start_pairing': '👋 <b>Claude Code Studio</b>\n\nДля подключения введите 6-символьный код из панели настроек вашего Studio.\n\n💡 Код имеет вид: <code>XXX·XXX</code>',
+    'start_pairing': '👋 <b>KiloCode Studio</b>\n\nДля подключения введите 6-символьный код из панели настроек вашего Studio.\n\n💡 Код имеет вид: <code>XXX·XXX</code>',
     'new_conn_off': '🔒 Новые подключения отключены.',
     'already_paired': '✅ Это устройство уже подключено!',
     'paired_ok': '✅ <b>Устройство подключено!</b>\n\n📱 {name}\n\nТеперь вы будете получать уведомления и сможете управлять Studio удалённо.\n\nВведите /help для списка команд.',
@@ -643,7 +643,7 @@ const BOT_I18N = {
     'cmd_cancel_desc': 'Отменить текущее действие',
     'cmd_status_desc': 'Статус системы',
 
-    'main_title': '🤖 <b>Claude Code Studio</b>',
+    'main_title': '🤖 <b>KiloCode Studio</b>',
     'main_project': '📁 Проект: <code>{name}</code>',
     'main_chat': '💬 Чат: {title}',
     'main_choose': '\nВыберите действие:',
@@ -778,7 +778,7 @@ const BOT_I18N = {
     'time_ago_day': '{n} д назад',
     'time_ago_long': 'давно',
 
-    'help_text': '📖 <b>Команды Claude Code Studio</b>\n\n<b>Навигация:</b>\n/projects — список проектов\n/project <code>&lt;n&gt;</code> — выбрать проект\n/chats — чаты текущего проекта\n/chat <code>&lt;n&gt;</code> — открыть чат\n/back — вернуться назад\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений (5)\n/full — полный последний ответ\n/tasks — задачи (Kanban)\n/files <code>[path]</code> — файлы в workspace\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff в workspace\n/log <code>[n]</code> — последние git коммиты\n\n<b>Действия:</b>\n/new <code>[title]</code> — новая сессия\n/stop — остановить текущую задачу\n\n<b>Remote Access:</b>\n/tunnel — управление доступом\n/url — показать публичный URL\n\n<b>Forum Mode:</b>\n/forum — настройка Forum Mode\n\n<b>Настройки:</b>\n/status — состояние Studio\n/notify <code>on/off</code> — уведомления\n/unlink — отключить это устройство',
+    'help_text': '📖 <b>Команды KiloCode Studio</b>\n\n<b>Навигация:</b>\n/projects — список проектов\n/project <code>&lt;n&gt;</code> — выбрать проект\n/chats — чаты текущего проекта\n/chat <code>&lt;n&gt;</code> — открыть чат\n/back — вернуться назад\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений (5)\n/full — полный последний ответ\n/tasks — задачи (Kanban)\n/files <code>[path]</code> — файлы в workspace\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff в workspace\n/log <code>[n]</code> — последние git коммиты\n\n<b>Действия:</b>\n/new <code>[title]</code> — новая сессия\n/stop — остановить текущую задачу\n\n<b>Remote Access:</b>\n/tunnel — управление доступом\n/url — показать публичный URL\n\n<b>Forum Mode:</b>\n/forum — настройка Forum Mode\n\n<b>Настройки:</b>\n/status — состояние Studio\n/notify <code>on/off</code> — уведомления\n/unlink — отключить это устройство',
 
     'back_to_chats': '↩️ Вернулись к списку чатов. Введите /chats',
     'back_to_projects': '↩️ Вернулись к списку проектов. Введите /projects',

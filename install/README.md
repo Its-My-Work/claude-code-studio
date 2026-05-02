@@ -1,6 +1,6 @@
-# Claude Code Remote Setup Scripts
+# KiloCode Remote Setup Scripts
 
-Run these scripts on **remote servers** to install and configure Claude Code CLI for use with Claude Code Studio's Remote SSH Projects feature.
+Run these scripts on **remote servers** to install and configure Claude Code CLI for use with KiloCode Studio's Remote SSH Projects feature.
 
 ## Quick Start
 
@@ -58,7 +58,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ## After running the script
 
-1. Open **Claude Code Studio** in your browser
+1. Open **KiloCode Studio** in your browser
 2. Sidebar → **SSH Хости** → **＋ Додати SSH хост**
 3. Enter: Host IP, SSH user, key path
 4. Click **🔌 Тест з'єднання** to verify

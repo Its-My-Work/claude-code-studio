@@ -1,4 +1,4 @@
-// ─── Telegram Bot Module for Claude Code Studio ─────────────────────────────
+// ─── Telegram Bot Module for KiloCode Studio ─────────────────────────────
 // Long-polling bot that runs alongside the main server.
 // No external dependencies — uses Node 20 built-in fetch.
 // Security: Telegram User ID whitelist via pairing codes, content sanitization.

@@ -1,6 +1,6 @@
-![Claude Code Studio](public/screenshots/cover.png)
+![KiloCode Studio](public/screenshots/cover.png)
 
-# Claude Code Studio
+# KiloCode Studio
 
 **The browser interface for Claude Code CLI.** Chat with AI, run tasks on autopilot, and manage your projects — all from one tab.
 
@@ -12,11 +12,11 @@
 
 ---
 
-## Why Claude Code Studio?
+## Why KiloCode Studio?
 
 Claude Code CLI is powerful — it writes code, runs tests, edits files, and ships features. But it lives in the terminal, and the terminal has limits: context gets lost between sessions, parallel work means juggling tabs, and there's no way to queue tasks and walk away.
 
-Claude Code Studio fixes this:
+KiloCode Studio fixes this:
 
 - **Queue work and walk away** — Kanban board + Scheduler. Claude works while you sleep. Come back to everything done.
 - **Control from anywhere** — Telegram bot + Remote Access. Check results from your phone at the gym.

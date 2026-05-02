@@ -75,6 +75,10 @@ const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
 const CONFIG_PATH = path.join(APP_DIR, 'data', 'config.json');
 
+// ─── Kilo HTTP Server Configuration ──────────────────────────────────────────
+const KILO_SERVER_URL = process.env.KILO_SERVER_URL || 'http://127.0.0.1:4097';
+const KILO_REQUEST_TIMEOUT = parseInt(process.env.KILO_REQUEST_TIMEOUT || '30000', 10);
+
 // ─── Security config ──────────────────────────────────────────────────────────
 // Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting)
 if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
@@ -257,6 +261,8 @@ function sanitizeSessionId(val) {
   if (typeof val === 'string' && UUID_RE.test(val)) return val;
   // Anthropic API session_id format (ses_*)
   if (typeof val === 'string' && ANTHROPIC_SESSION_RE.test(val)) return val;
+  // Kilo session_id format (alphanumeric with underscore/dash)
+  if (typeof val === 'string' && KILO_SESSION_RE.test(val)) return val;
   // Object with .cid field (from runCliSingle return value)
   if (typeof val === 'object' && val !== null && val.cid) return sanitizeSessionId(val.cid);
   // JSON string — try to parse and extract
@@ -268,8 +274,8 @@ function sanitizeSessionId(val) {
     // Maybe a UUID is embedded somewhere in the string
     const m = val.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
     if (m) return m[1];
-    // Try Anthropic session_id format
-    if (ANTHROPIC_SESSION_RE.test(val)) return val;
+    // Try Kilo session_id format as fallback
+    if (KILO_SESSION_RE.test(val)) return val;
   }
   return null;
 }
@@ -288,7 +294,7 @@ db.exec(`
     active_mcp TEXT DEFAULT '[]',
     mode TEXT DEFAULT 'auto',
     agent_mode TEXT DEFAULT 'single',
-    model TEXT DEFAULT 'sonnet',
+    model TEXT DEFAULT 'kilo/kilo-auto/free',
     workdir TEXT
   );
   CREATE TABLE IF NOT EXISTS messages (
@@ -321,7 +327,7 @@ try { db.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES me
 try { db.exec(`ALTER TABLE sessions ADD COLUMN last_user_msg TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN notes TEXT DEFAULT ''`); } catch {}
-try { db.exec(`ALTER TABLE tasks ADD COLUMN model TEXT DEFAULT 'sonnet'`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN model TEXT DEFAULT 'kilo/kilo-auto/free'`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN mode TEXT DEFAULT 'auto'`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN agent_mode TEXT DEFAULT 'single'`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN max_turns INTEGER DEFAULT 30`); } catch {}
@@ -387,7 +393,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL DEFAULT 'Task Group',
     workdir TEXT,
-    model TEXT DEFAULT 'sonnet',
+    model TEXT DEFAULT 'kilo/kilo-auto/free',
     mode TEXT DEFAULT 'auto',
     agent_mode TEXT DEFAULT 'single',
     max_turns INTEGER DEFAULT 30,
@@ -907,7 +913,7 @@ async function startTask(task) {
     db.transaction(() => {
       if (!sessionId) {
         sessionId = genId();
-        stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', task.workdir || null);
+        stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'kilo/kilo-auto/free', task.workdir || null);
         stmts.setTaskSession.run(sessionId, task.id);
       }
       stmts.setTaskInProgress.run(task.id);
@@ -1024,7 +1030,7 @@ async function startTask(task) {
     while (true) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
-      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort });
+      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'kilo/kilo-auto/free', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort });
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -1263,7 +1269,7 @@ function scheduleNextChainRun(chain, oldTasks) {
   db.transaction(() => {
     // Fresh shared session for next chain run
     stmts.createSession.run(newSessionId, chain.title, '[]',
-      chain.mode || 'auto', chain.agent_mode || 'single', chain.model || 'sonnet',
+      chain.mode || 'auto', chain.agent_mode || 'single', chain.model || 'kilo/kilo-auto/free',
       chain.workdir || null);
     // Re-arm chain with next scheduled_at + new session
     db.prepare(`UPDATE task_chains SET scheduled_at=?, session_id=?, updated_at=datetime('now') WHERE id=?`)
@@ -1613,11 +1619,17 @@ function buildAttachmentContentBlocks(attachments = []) {
 }
 
 // Build Claude content blocks from text + file attachments.
-// Returns plain string when no attachments, or ContentBlock[] when attachments present.
+// Always returns ContentBlock[] array (never plain string).
 function buildUserContent(text, attachments = []) {
-  if (!attachments || attachments.length === 0) return text;
-  const blocks = buildAttachmentContentBlocks(attachments);
-  if (text) blocks.push({ type: 'text', text });
+  log.debug('buildUserContent called', { textLen: text?.length || 0, attachmentsCount: attachments?.length || 0 });
+  const blocks = [];
+  // First add attachments
+  if (attachments && attachments.length > 0) {
+    blocks.push(...buildAttachmentContentBlocks(attachments));
+  }
+  // Always add text as the last block (even if empty)
+  blocks.push({ type: 'text', text: text || '' });
+  log.debug('buildUserContent result', { blocksCount: blocks.length, hasTextBlock: blocks.some(b => b.type === 'text' && b.text) });
   return blocks;
 }
 
@@ -2271,7 +2283,7 @@ function isResettableClaudeSessionError(errorText = '') {
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, kiloSessionId, forkSession, mode, workdir, tabId, thinking } = p;
-  console.log('[server] runCliSingle: thinking =', thinking);
+  console.log('[server] runCliSingle: thinking =', thinking, 'mode =', mode);
 
   // KiloCode agents handle their own prompts internally
   // Mode is passed via --agent flag, prompts are handled by KiloCode internally
@@ -2294,8 +2306,14 @@ async function runCliSingle(p) {
   let rateLimitWaitCount = 0;
   // First invocation carries attachments; subsequent auto-continues do not
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
+  log.debug('runCliSingle currentContentBlocks', { isArray: Array.isArray(userContent), currentContentBlocksLen: currentContentBlocks?.length || 0, userContentType: typeof userContent });
 
-    const cli = BackendFactory.createBackend(null, { cwd: workdir || WORKDIR, logger: log });
+    const cli = BackendFactory.createBackend(null, {
+      cwd: workdir || WORKDIR,
+      serverUrl: KILO_SERVER_URL,
+      timeout: KILO_REQUEST_TIMEOUT,
+      logger: log
+    });
   let pendingFork = !!forkSession; // only fork on first CLI call
 
   // Run a single CLI invocation and return { resultData, sid, errorText, rateLimitInfo }
@@ -2318,7 +2336,23 @@ async function runCliSingle(p) {
       CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
     };
 
-    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
+    console.log('[SERVER KILO CALL]', {
+      prompt: runPrompt?.substring(0, 200) + '...',
+      sessionId: resumeId,
+      model,
+      maxTurns: effectiveMaxTurns,
+      mode,
+      thinking,
+      forkSession: useFork,
+      contentBlocksCount: contentBlocks?.length || 0,
+      contentBlocksType: typeof contentBlocks,
+      allowedToolsCount: tools?.length || 0,
+      hasMcpServers: !!mcpServers,
+      hasSystemPrompt: !!sp,
+      hasExtraSettings: !!interruptHookSettings
+    });
+
+cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -2360,9 +2394,30 @@ async function runCliSingle(p) {
       .onError(err => {
         // Capture error text for the main loop to inspect (e.g. thinking block signature errors)
         errorText += err;
+
+        // Special handling for network/server errors
+        const isNetworkError = err.includes('ECONNREFUSED') || err.includes('ENOTFOUND') ||
+                              err.includes('timeout') || err.includes('Request timeout') ||
+                              err.includes('SSE connection failed') || err.includes('Failed to create session') ||
+                              err.includes('Failed to start') || err.includes('Chat failed');
+
+        if (isNetworkError) {
+          log.error('[runCliSingle] Network/Server error:', { error: err, sessionId });
+          // Send user-friendly error message
+          try {
+            ws.send(JSON.stringify({
+              type:'error',
+              error: 'Connection to Kilo server failed. Please check that Kilo is running and accessible.',
+              ...(tabId ? { tabId } : {})
+            }));
+          } catch {}
+        } else {
+          // Regular error handling
+          try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
+        }
+
         // Don't resolve here — let onDone be the sole resolver (matches taskWorker pattern).
         // This ensures resultData is fully populated before the loop checks it.
-        try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
       })
       .onDone(sid => {
         if (sid) newKiloId = sid;
@@ -3066,7 +3121,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           0,  // sort_order
           (chain_id ? callerTask?.session_id : null) || null, // session_id — only inherit for chain tasks
           workdir,
-          model || callerTask?.model || 'sonnet',
+          model || callerTask?.model || 'kilo/kilo-auto/free',
           mode || callerTask?.mode || 'auto',
           agent_mode || callerTask?.agent_mode || 'single',
           max_turns || callerTask?.max_turns || 30,
@@ -3133,7 +3188,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         // Create chain + shared session
         const chainId = genId();
         const chainSessionId = genId();
-        const effectiveModel = chainModel || callerTask?.model || 'sonnet';
+        const effectiveModel = chainModel || callerTask?.model || 'kilo/kilo-auto/free';
 
         stmts.createSession.run(chainSessionId, String(title).substring(0, 200), '[]',
           'auto', 'single', effectiveModel, workdir);
@@ -3708,7 +3763,7 @@ app.get('/api/tasks/running-sessions', (req, res) => {
 });
 app.post('/api/tasks', (req, res) => {
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
-          model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
+          model='kilo/kilo-auto/free', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
           scheduled_at=null, recurrence=null, recurrence_end_at=null } = req.body;
   const id = genId();
@@ -3864,7 +3919,7 @@ app.post('/api/task-chains/:id/tasks', (req, res) => {
   const taskId = genId();
   stmts.createTask.run(taskId, String(title).substring(0, 200), String(description).substring(0, 2000),
     String(notes || '').substring(0, 2000), taskStatus, sortOrder,
-    chain.session_id || null, chain.workdir || null, chain.model || 'sonnet',
+    chain.session_id || null, chain.workdir || null, chain.model || 'kilo/kilo-auto/free',
     chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || 30,
     null, dependsOn, req.params.id, chain.source_session_id || null,
     chain.scheduled_at || null, null, null);
@@ -3981,13 +4036,13 @@ app.post('/api/tasks/dispatch', (req, res) => {
     chainSessionId,
     (plan_description || 'Task chain').substring(0, 200),
     source?.active_mcp || '[]',
-    'auto', 'single', sqlVal(model) || 'sonnet',
+    'auto', 'single', sqlVal(model) || 'kilo/kilo-auto/free',
     sqlVal(workdir) || null
   );
 
   // Register chain in task_chains table (gives it a title, session, and metadata)
   stmts.createChain.run(chainId, (plan_description || 'Task chain').substring(0, 200),
-    sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
+    sqlVal(workdir) || null, sqlVal(model) || 'kilo/kilo-auto/free', 'auto', 'single', 30,
     chainSessionId, null, null, null, source_session_id || null, 0);
 
   // Chain gets its OWN Kilo session — first task starts fresh,
@@ -4013,7 +4068,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
         i,             // sort_order preserves plan ordering
         chainSessionId,
         sqlVal(workdir) || null,
-        sqlVal(model) || 'sonnet',
+        sqlVal(model) || 'kilo/kilo-auto/free',
         'auto', 'single', 30,
         null,          // attachments
         realDeps.length ? JSON.stringify(realDeps) : null,
@@ -4049,7 +4104,7 @@ app.post('/api/sessions/:id/fork', (req, res) => {
   const id = genId();
   const title = `Fork: ${(source.title || '').substring(0, 80)}`;
   stmts.createSession.run(id, title, source.active_mcp || '[]',
-    source.mode || 'auto', source.agent_mode || 'single', source.model || 'sonnet', source.workdir || null);
+    source.mode || 'auto', source.agent_mode || 'single', source.model || 'kilo/kilo-auto/free', source.workdir || null);
   // Set kilo_session_id to source's so --resume picks it up, and fork_from_cid to trigger --fork-session
   db.prepare(`UPDATE sessions SET kilo_session_id=?, fork_from_cid=? WHERE id=?`).run(source.kilo_session_id, source.kilo_session_id, id);
   res.json(stmts.getSession.get(id));
@@ -4339,7 +4394,7 @@ app.post('/api/sessions/import', (req, res) => {
       session.active_mcp || '[]',
       session.mode || 'auto',
       session.agent_mode || 'single',
-      session.model || 'sonnet',
+      session.model || 'kilo/kilo-auto/free',
       session.workdir || null
     );
     const importMsg = db.prepare('INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,COALESCE(?,CURRENT_TIMESTAMP))');
@@ -4467,7 +4522,7 @@ ${transcript}`;
     sess.active_mcp || '[]',
     sess.mode || 'auto',
     sess.agent_mode || 'single',
-    sess.model || 'sonnet',
+    sess.model || 'kilo/kilo-auto/free',
     sess.workdir || null
   );
 
@@ -5395,7 +5450,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     });
 
     // Load session config
-    const model = session.model || 'sonnet';
+    const model = session.model || 'kilo/kilo-auto/free';
     const mode = session.mode || 'auto';
     const workdir = session.workdir || WORKDIR;
 
@@ -5782,7 +5837,7 @@ function buildContextMd(session, messages, task, relPath, mode) {
 
   let md = `# Cross-Agent Context Handoff
 - Generated: ${now}
-- Source: Claude Code Studio, session "${session.title || 'Untitled'}"
+- Source: KiloCode Studio, session "${session.title || 'Untitled'}"
 - Project: ${session.workdir || 'unknown'}
 
 ## Task
@@ -5793,7 +5848,7 @@ ${conversation}`;
 
   if (mode === 'sync') {
     md += `## Communication Protocol
-You are continuing work delegated from another AI agent (Claude Code Studio).
+You are continuing work delegated from another AI agent (KiloCode Studio).
 Both agents work in parallel and communicate through a shared dialog file.
 
 1. Read this file first for full context of prior work
@@ -6205,7 +6260,7 @@ wss.on('connection', (ws) => {
       let isNewSession = false;
       if (!localSessionId || !existSess) {
         localSessionId = genId();
-        stmts.createSession.run(localSessionId,i18nSession(),'[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.workdir)||null);
+        stmts.createSession.run(localSessionId,i18nSession(),'[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'kilo/kilo-auto/free',sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
         localClaudeId = sanitizeSessionId(existSess.kilo_session_id) || undefined;
@@ -6235,7 +6290,7 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false, thinking=false } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='kilo/kilo-auto/free', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false, thinking=false } = msg;
 
       let replyQuote = '';
       if (reply_to && reply_to.content) {
@@ -6253,7 +6308,8 @@ wss.on('connection', (ws) => {
         return { ...att, sshKeyPath: rh.sshKeyPath || '', password: decryptPassword(rh.password) || '' };
       });
       let userContent = buildUserContent(engineMessage, enrichedAttachments);
-      const shouldReplaySessionHistory = !!existSess && !localClaudeId;
+      log.debug('processChat userContent built', { userContentType: Array.isArray(userContent) ? 'array' : typeof userContent, userContentLen: Array.isArray(userContent) ? userContent.length : userContent?.length || 0, engineMessageLen: engineMessage?.length || 0 });
+      const shouldReplaySessionHistory = !!existSess && !localClaudeId && !retry; // Don't replay for new messages
       let enginePrompt = engineMessage;
 
       if (!retry) {
@@ -6317,8 +6373,11 @@ wss.on('connection', (ws) => {
       if (shouldReplaySessionHistory) {
         const replayContent = buildSessionReplayContent(localSessionId);
         if (replayContent?.length) {
+          // Add the current user message to the end of the replay content
+          replayContent.push(...userContent);
           userContent = replayContent;
-          enginePrompt = 'Continue this chat from the replayed history above. The latest user turn is included last. Respond to that latest user request.';
+          // Keep the original enginePrompt (userMessage) instead of replacing with recovery text
+          // enginePrompt is already set to engineMessage above
         }
       }
 
@@ -6422,6 +6481,14 @@ wss.on('connection', (ws) => {
       } else if (agentMode==='multi') {
         newKiloId = await runMultiAgent(params);
       } else {
+        console.log('[PROCESS CHAT KILO]', {
+          sessionId: localSessionId,
+          promptLen: params.prompt?.length || 0,
+          userContentLen: params.userContent?.length || 0,
+          mode: params.mode,
+          model: params.model,
+          thinking: params.thinking
+        });
         const result = await runCliSingle(params);
         newKiloId = result.cid;
         resultMeta = result.resultMeta;
@@ -6576,7 +6643,7 @@ wss.on('connection', (ws) => {
         // handler resets streaming.el which destroys the just-restored _bgTxt bubble on tab switch.
         // session_started is only needed for NEW sessions (to map temp tab ID → real session ID).
       } else {
-        stmts.createSession.run(legacySessionId,i18nSession(),'[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',null);
+        stmts.createSession.run(legacySessionId,i18nSession(),'[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'kilo/kilo-auto/free',null);
         ws.send(JSON.stringify({ type:'session_started', sessionId:legacySessionId }));
       }
       return;
@@ -6975,7 +7042,7 @@ wss.on('connection', (ws) => {
 
             await new Promise(resolve => {
               let done = false;
-              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.kilo_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
+              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.kilo_session_id), model: model || 'kilo/kilo-auto/free', maxTurns: 1, allowedTools: [] })
                 .onText(t => { planText += t; })
                 .onError(() => { if (!done) { done = true; resolve(); } })
                 .onDone(() => { if (!done) { done = true; resolve(); } });
@@ -7032,12 +7099,12 @@ wss.on('connection', (ws) => {
             chainSessionId,
             (finalPlan || 'Task chain').substring(0, 200),
             source?.active_mcp || '[]',
-            'auto', 'single', sqlVal(model) || 'sonnet',
+    'auto', 'single', sqlVal(model) || 'kilo/kilo-auto/free',
             sqlVal(workdir) || null
           );
           // Register chain in task_chains table
           stmts.createChain.run(chainId, (finalPlan || 'Task chain').substring(0, 200),
-            sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
+    sqlVal(workdir) || null, sqlVal(model) || 'kilo/kilo-auto/free', 'auto', 'single', 30,
             chainSessionId, null, null, null, sessionId || null, 0);
           // Chain gets its OWN Kilo session — first task starts fresh,
           // subsequent tasks --resume from the chain's session (NOT the source chat's).
@@ -7058,7 +7125,7 @@ wss.on('connection', (ws) => {
                 (a.role || 'Subtask').substring(0, 200),
                 (a.task || '').substring(0, 2000),
                 '', 'todo', i, chainSessionId, sqlVal(workdir) || null,
-                sqlVal(model) || 'sonnet', 'auto', 'single', 30, null,
+                sqlVal(model) || 'kilo/kilo-auto/free', 'auto', 'single', 30, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
                 null, null, null  // scheduled_at, recurrence, recurrence_end_at

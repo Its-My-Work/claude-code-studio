@@ -1,9 +1,9 @@
 {
-  "name": "claude-code-studio",
+  "name": "kilocode-studio",
   "version": "5.49.1",
   "description": "Full-featured web workspace for Claude Code — chat, Kanban, multi-agent, MCP, skills, projects",
   "bin": {
-    "claude-code-studio": "./bin/cli.js"
+    "kilocode-studio": "./bin/cli.js"
   },
   "scripts": {
     "start": "node server.js",
@@ -26,8 +26,10 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@kilocode/sdk": "^7.2.31",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
+    "eventsource": "^2.0.2",
     "express": "^4.21.0",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",

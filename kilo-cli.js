@@ -27,6 +27,10 @@ function findKiloBin() {
       '/opt/homebrew/bin/kilo',
       '/usr/local/bin/kilo',
       '/usr/bin/kilo',
+      // Check nvm paths
+      path.join(os.homedir(), '.nvm', 'versions', 'node', process.version.split('.')[0], 'bin', 'kilo'),
+      // Check common Node.js installation paths
+      path.join(os.homedir(), '.nvm', 'versions', 'node', process.version, 'bin', 'kilo'),
     ];
     for (const c of unixCandidates) {
       if (fs.existsSync(c)) return c;
@@ -79,6 +83,7 @@ const MODEL_MAP = {
   'opus':   'opus',
   'sonnet': 'sonnet',
   'haiku':  'haiku',
+  'kilo/kilo-auto/free': 'kilo/kilo-auto/free',
 };
 
 // ─── CLI Engine Detection: KiloCode ──────────────────────────────────────────
@@ -128,118 +133,79 @@ class KiloCLI {
     this.kiloBin = options.kiloBin || KILO_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, mode }) {
-    const args = ['--print'];
+send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, mode, thinking }) {
+    console.log('[KILO SEND START]', {
+      sessionId,
+      model,
+      mode,
+      promptLength: prompt?.length || 0,
+      thinking,
+      contentBlocksType: typeof contentBlocks,
+      contentBlocksLen: contentBlocks?.length || 0,
+      contentBlocksIsArray: Array.isArray(contentBlocks)
+    });
 
-    // --setting-sources: control which setting sources to load (user, project, local)
-    // Use settingSources='' to skip all, or 'user' to skip project config for service calls
-    if (settingSources != null) args.push('--setting-sources', settingSources);
+    // Process contentBlocks to build finalPrompt and file args
+    let finalPrompt = prompt || '';
+    const filePaths = [];
 
-    // --fork-session: branch from an existing session (requires --resume)
-    if (forkSession && sessionId) args.push('--fork-session');
+    if (Array.isArray(contentBlocks) && contentBlocks.length > 0) {
+      console.log('[KILO CONTENT BLOCKS] processing', { blocksCount: contentBlocks.length });
 
-    // Session resumption: --resume <sessionId> (not --session-id + --resume separately)
-    // Guard: only pass string UUIDs — reject objects or corrupted JSON values
-    if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) {
-      args.push('--resume', sessionId);
-    } else if (sessionId) {
-      console.warn('[kilo-cli] rejected non-UUID sessionId for --resume:', typeof sessionId, String(sessionId).substring(0, 60));
+      for (const block of contentBlocks) {
+        if (block.type === 'text' && block.text) {
+          if (block.text !== prompt) {
+            finalPrompt = (finalPrompt ? finalPrompt + '\n\n' : '') + block.text;
+          }
+        } else if ((block.type === 'image' || block.type === 'file') && block.source?.data) {
+          const ext = block.type === 'image' ? (block.mimeType?.split('/')[1] || 'png') : 'txt';
+          const tmpFile = path.join(os.tmpdir(), `kilo-attachment-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+          try {
+            fs.writeFileSync(tmpFile, Buffer.from(block.source.data, 'base64'));
+            filePaths.push(tmpFile);
+            console.log('[KILO CONTENT BLOCKS] wrote temp file', { path: tmpFile, type: block.type });
+          } catch (e) {
+            console.error('[KILO CONTENT BLOCKS] failed to write temp file:', e.message);
+          }
+        }
+      }
+      console.log('[KILO FINAL PROMPT]', { finalPromptLen: finalPrompt?.length || 0, hasFiles: filePaths.length });
     }
 
+    // Use only supported kilo run arguments
+    const args = ['run'];
+
+    // Supported arguments for kilo run
     if (model) args.push('--model', MODEL_MAP[model] || model);
 
-    // --agent: only for KiloCode CLI, passes mode as agent name
-    // Valid KiloCode agents: code, ask, plan, debug, orchestrator
+    // Session handling: --session to continue, --fork to fork before continuing
+    if (sessionId) {
+      args.push('--session', sessionId);
+      if (forkSession) args.push('--fork');
+    }
+
+    // Agent mapping for CLI
     const validAgents = ['code', 'ask', 'plan', 'debug', 'orchestrator'];
     if (mode && validAgents.includes(mode)) {
       args.push('--agent', mode);
     }
-    
-    if (maxTurns) args.push('--max-turns', String(maxTurns));
-    // Don't pass --system-prompt when resuming a session — the system prompt is
-    // already baked into the session history. Changing it invalidates cryptographic
-    // signatures on thinking blocks, causing API 400 "Invalid signature in thinking block".
-    if (systemPrompt && !sessionId) args.push('--system-prompt', systemPrompt);
 
-    // --tools: control which built-in tools are available.
-    // "" disables all tools, "default" enables all, or specify names (e.g. "Bash,Edit,Read").
-    if (typeof tools === 'string') args.push('--tools', tools);
-
-    // allowedTools: pass each tool as separate arg (variadic)
-    if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
-
-    // MCP config file (cached by content hash — avoids write/delete per request)
-    // Pass mcpServers={} to explicitly disable MCP (overrides global config).
-    // Pass mcpServers={...} to use specific servers.
-    // Omit mcpServers to use global defaults.
-    let mcpConfigHash = null;
-    let mcpConfigPath = null;
-    if (mcpServers && typeof mcpServers === 'object') {
-      const mcp = getMcpConfigPath(mcpServers);
-      mcpConfigPath = mcp.path;
-      mcpConfigHash = mcp.hash;
-      args.push('--mcp-config', mcpConfigPath);
-    }
-
-    // --add-dir: give Claude access to additional directories
-    if (addDirs?.length) {
-      for (const d of addDirs) args.push('--add-dir', d);
-    }
-
-    // --settings: additional settings (e.g. hooks for mid-task interrupt delivery)
-    if (extraSettings && typeof extraSettings === 'object') {
-      args.push('--settings', JSON.stringify(extraSettings));
-    }
-
-    // CRITICAL: bypass permission prompts in non-interactive mode
+    // Format and permissions
+    args.push('--format', 'json');
+    if (thinking) args.push('--thinking');
     args.push('--dangerously-skip-permissions');
 
-    // Stream JSON for structured output parsing
-    // --verbose is required alongside --output-format stream-json since CLI ≥ 1.0.x
-    args.push('--output-format', 'stream-json', '--verbose');
-
-    // Include partial message chunks for real-time streaming
-    args.push('--include-partial-messages');
-
-    // Handle image/file attachments: save to temp dir, append file paths to prompt
-    // so Claude CLI can read them via its Read tool (CLI has no native content block API).
-    // Text blocks (SSH info, file content) are prepended directly to the prompt string.
-    const _tempFiles = [];
-    let _tempDir = null;
-    let finalPrompt = prompt;
-    if (contentBlocks && contentBlocks.length) {
-      const filePaths = [];
-      const textParts = [];
-      for (const block of contentBlocks) {
-        if ((block.type === 'image' || block.type === 'file') && block.source?.data) {
-          if (!_tempDir) {
-            _tempDir = path.join(os.tmpdir(), `kilo-att-${Date.now()}`);
-            fs.mkdirSync(_tempDir, { recursive: true });
-          }
-          let ext = '';
-          const srcName = String(block.source.name || '').trim();
-          if (srcName) ext = path.extname(srcName).replace(/^\./, '');
-          if (!ext) ext = (block.source.media_type || (block.type === 'image' ? 'image/png' : 'application/octet-stream')).split('/')[1] || (block.type === 'image' ? 'png' : 'bin');
-          const safeBase = srcName
-            ? path.basename(srcName).replace(/[^a-zA-Z0-9._-]/g, '_')
-            : `attachment-${_tempFiles.length + 1}.${ext}`;
-          const fname = path.extname(safeBase) ? safeBase : `${safeBase}.${ext}`;
-          const fpath = path.join(_tempDir, fname);
-          fs.writeFileSync(fpath, Buffer.from(block.source.data, 'base64'));
-          _tempFiles.push(fpath);
-          filePaths.push(fpath);
-        } else if (block.type === 'text' && block.text && block.text !== prompt) {
-          // Collect SSH context, file contents, and other text blocks that are NOT
-          // the user message itself (buildUserContent appends the message as last block)
-          textParts.push(block.text);
-        }
-      }
-      const prefixParts = [];
-      if (textParts.length) prefixParts.push(textParts.join('\n\n'));
-      if (filePaths.length) prefixParts.push(`[Attached files — read these files to see the content the user shared:\n${filePaths.map(f => `- ${f}`).join('\n')}\n]`);
-      if (prefixParts.length) finalPrompt = prefixParts.join('\n\n') + '\n\n' + prompt;
+    // Add file attachments
+    for (const fp of filePaths) {
+      args.push('--file', fp);
     }
-    args.push('-p', finalPrompt);
+
+    // Add the message as positional arguments (Kilo expects: kilo run "message")
+    // Split by spaces but preserve as separate args - Kilo handles this
+    if (finalPrompt) {
+      // Pass as single argument to preserve the full message
+      args.push(finalPrompt);
+    }
 
     // Unset CLAUDECODE to allow nested invocation from dev environment.
     const env = { ...process.env, ...(extraEnv || {}) };
@@ -253,71 +219,45 @@ class KiloCLI {
     }
 
     // On Windows .cmd/.bat files require cmd.exe (shell:true) to execute.
-    // On Unix, binaries execute directly (shell:false is safer).
+    // On Unix, we use shell:true to properly handle multi-word message arguments
     const needsShell = process.platform === 'win32' &&
 /\.(cmd|bat)$/i.test(this.kiloBin);
-      const proc = spawn(this.kiloBin, args, {
+
+    console.log('[KILO SPAWN] cwd:', this.cwd, 'shell:', needsShell);
+
+    // Log the complete command being executed
+    console.log('[KILO ARGS]', JSON.stringify(args, null, 2));
+    console.log('[KILO EXEC]', this.kiloBin, args.join(' '));
+
+    const proc = spawn(this.kiloBin, args, {
       cwd: this.cwd,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: needsShell,
     });
 
-    // Close stdin immediately (non-interactive)
-    proc.stdin.end();
+    // Declare variables for process management
+    let _finished = false, _abortListener = null, globalTimer = null, sigkillTimer = null;
+    let detectedSid = null, stderrBuf = '', mcpHash = null;
+    let attFiles = [], attDir = null;
 
-    const h = { onText: null, onTool: null, onDone: null, onError: null, onSessionId: null, onThinking: null, onRateLimit: null, onResult: null, _deltaBlocks: new Set(), _detectedSid: sessionId || null };
+    // Create decoders for stream processing
+    const { StringDecoder } = require('string_decoder');
     const stdoutDecoder = new StringDecoder('utf8');
     const stderrDecoder = new StringDecoder('utf8');
-    let buffer = '', stderrBuf = '', detectedSid = sessionId || null;
-    // SIGKILL fallback timer — cleared on normal close to avoid zombie timers
-    let sigkillTimer = null;
-    // Global timeout — kills subprocess if it doesn't finish within MAX_SUBPROCESS_MS
-    let globalTimer = null;
-    // Track MCP config hash for ref-counted cleanup
-    let mcpHash = mcpConfigHash;
-    let _finished = false;
-    let _abortListener = null;
-    // Track temp attachment files + parent dir for cleanup
-    let attFiles = _tempFiles.slice();
-    let attDir = _tempDir;
+    let buffer = '';
 
-    proc.stdout.on('data', (chunk) => {
-      buffer += stdoutDecoder.write(chunk);
-      // Guard against a runaway line (no \n) consuming all heap
-      if (buffer.length > MAX_LINE_BUFFER) {
-        // Process any complete lines before discarding the oversized partial line
-        const lastNl = buffer.lastIndexOf('\n');
-        if (lastNl > 0) {
-          const completeLines = buffer.slice(0, lastNl).split(/\r?\n/);
-          for (const cl of completeLines) { if (cl.trim()) { try { this._handle(JSON.parse(cl), h); } catch {} } }
-        }
-        console.warn(`[kilo-cli] Buffer overflow (${(buffer.length / 1024 / 1024).toFixed(1)} MB), dropping incomplete line`);
-        buffer = '';
-        return;
-      }
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const d = JSON.parse(line);
-          this._handle(d, h);
-          continue;
-        } catch {}
-        // Fallback: session ID detection in plain text
-        const sm = line.match(/session[_\s]*id[:\s]*([a-f0-9-]+)/i);
-        if (sm && !detectedSid) {
-          detectedSid = sm[1];
-          h._detectedSid = detectedSid;
-          if (h.onSessionId) h.onSessionId(detectedSid);
-        }
-      }
-    });
+    // Create handlers object
+    const h = {};
+
+    // Close stdin immediately (non-interactive)
+    proc.stdin.end();
+    console.log('[KILO SPAWN] spawning process, stdin closed, cwd:', this.cwd);
 
     proc.stderr.on('data', (chunk) => {
       const str = stderrDecoder.write(chunk);
-      // Cap stderr buffer at 8 KB to prevent unbounded memory growth
+      if (str.trim()) console.log('[KILO STDERR]', str.slice(0, 300).replace(/\n/g, '\\n'));
+      if (stderrBuf.length < 8192) stderrBuf += str.slice(0, 8192 - stderrBuf.length);
       if (stderrBuf.length < 8192) stderrBuf += str.slice(0, 8192 - stderrBuf.length);
       // Extract session ID from stderr
       const sm = str.match(/Session:\s*([a-f0-9-]+)/i)
@@ -330,8 +270,14 @@ class KiloCLI {
       }
     });
 
-    proc.on('close', (code) => {
+proc.on('close', (code) => {
       if (_finished) return; _finished = true;
+
+      // Cleanup temp attachment files
+      for (const fp of filePaths) {
+        try { fs.unlinkSync(fp); } catch {}
+      }
+
       // Remove abort listener to prevent GC leak (listener holds proc reference)
       if (abortController && _abortListener) {
         abortController.signal.removeEventListener('abort', _abortListener);
@@ -356,9 +302,6 @@ class KiloCLI {
         }
       }
       releaseMcpConfig(mcpHash); mcpHash = null;
-      for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
-      if (attDir) { try { fs.rmSync(attDir, { recursive: true, force: true }); } catch {} attDir = null; }
-      attFiles = [];
       if (code !== 0 && stderrBuf.trim() && h.onError) {
         // Filter out known non-error noise (MCP loading messages) line-by-line,
         // then report any remaining real error lines to the caller.
@@ -435,8 +378,11 @@ class KiloCLI {
       onError(fn) { h.onError = fn; return this; },
       onSessionId(fn) { h.onSessionId = fn; return this; },
       onThinking(fn) { h.onThinking = fn; return this; },
+      onReasoning(fn) { h.onReasoning = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
       onResult(fn) { h.onResult = fn; return this; },
+      onStepStart(fn) { h.onStepStart = fn; return this; },
+      onStepFinish(fn) { h.onStepFinish = fn; return this; },
       process: proc,
     };
   }
@@ -466,9 +412,10 @@ class KiloCLI {
         h._deltaBlocks.add(idx);
         h._hasEmittedText = true;
         h.onText(data.delta.text);
-      } else if (data.delta.type === 'thinking_delta' && data.delta.thinking && h.onThinking) {
+      } else if (data.delta.type === 'thinking_delta' && data.delta.thinking) {
         h._deltaBlocks.add(idx);
-        h.onThinking(data.delta.thinking);
+        if (h.onThinking) h.onThinking(data.delta.thinking);
+        if (h.onReasoning) h.onReasoning(data.delta.thinking);
       }
     }
     // Handle assistant messages with content blocks (legacy format / tool_use)
@@ -480,7 +427,10 @@ class KiloCLI {
         const b = blocks[i];
         const streamed = h._deltaBlocks.has(i);
         if (b.type === 'text' && b.text && h.onText && !streamed) { h._hasEmittedText = true; h.onText(b.text); }
-        else if (b.type === 'thinking' && b.thinking && h.onThinking && !streamed) h.onThinking(b.thinking);
+        else if (b.type === 'thinking' && b.thinking && !streamed) {
+          if (h.onThinking) h.onThinking(b.thinking);
+          if (h.onReasoning) h.onReasoning(b.thinking);
+        }
         else if (b.type === 'tool_use' && h.onTool) {
           h.onTool(b.name, typeof b.input === 'string' ? b.input : JSON.stringify(b.input, null, 2));
         }
@@ -489,6 +439,14 @@ class KiloCLI {
     // Rate limit event
     if (data.type === 'rate_limit_event' && data.rate_limit_info && h.onRateLimit) {
       h.onRateLimit(data.rate_limit_info);
+    }
+    // Step start event
+    if (data.type === 'step_start' && h.onStepStart) {
+      h.onStepStart(data);
+    }
+    // Step finish event
+    if (data.type === 'step_finish' && h.onStepFinish) {
+      h.onStepFinish(data);
     }
     // Result message — emitted at end of stream with session_id, subtype, num_turns etc.
     // subtype: "success" | "error_max_turns" | "error_during_execution" | "error_max_budget_usd" | ...
