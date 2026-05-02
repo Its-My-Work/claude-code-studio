@@ -13,7 +13,6 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
-const KiloCLI = require('./kilo-cli');
 const KiloSSH = require('./kilo-ssh');
 const { testSshConnection } = require('./kilo-ssh');
 const TelegramBot = require('./telegram-bot');
@@ -134,7 +133,7 @@ const GLOBAL_PLUGIN_CACHE_DIR = path.join(GLOBAL_PLUGINS_DIR, 'cache');
 const GLOBAL_PLUGIN_MARKETPLACES_DIR = path.join(GLOBAL_PLUGINS_DIR, 'marketplaces');
 const GLOBAL_CONFIG_PATH = path.join(GLOBAL_KILO_DIR, 'config.json');
 
-const kiloCli = new KiloCLI({ cwd: WORKDIR });
+
 
 // Expand leading ~ to os.homedir() — works on macOS, Linux and Windows
 function expandTilde(v) {
@@ -981,7 +980,14 @@ async function startTask(task) {
     // Resume existing kilo session if any
     const session = stmts.getSession.get(sessionId);
     const kiloSessionId = sanitizeSessionId(session?.kilo_session_id) || null;
-    const cli = new KiloCLI({ cwd: task.workdir || WORKDIR });
+    const { default: BackendFactory } = await import('./backends/backend-factory.mjs');
+    const cli = await BackendFactory.createBackend(null, {
+      cwd: task.workdir || WORKDIR,
+      serverUrl: KILO_SERVER_URL,
+      timeout: KILO_REQUEST_TIMEOUT,
+      logger: log,
+      streamMode: process.env.KILO_STREAM_MODE || 'native'
+    });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
     let fullText = '', newKiloId = kiloSessionId, hasError = false;
@@ -1031,10 +1037,7 @@ async function startTask(task) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
       const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'kilo/kilo-auto/free', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort });
-      // Save subprocess PID so startup recovery can kill orphans on restart
-      if (stream.process?.pid) {
-        db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
-      }
+      // Note: KiloAgentBackend doesn't have process.pid, so worker_pid remains null
       await new Promise(resolve => {
         stream
           .onText(t => {
@@ -2786,11 +2789,19 @@ async function runMultiAgent(p) {
   ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Planning...', statusKey:'agent.planning', ...(tabId ? { tabId } : {}) }));
 
   const effectiveWorkdir = workdir || WORKDIR;
-  const cli = new KiloCLI({ cwd: effectiveWorkdir });
   let planText = '';
   // Orchestrator gets existing session context via --resume if available
   const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
   let currentSessionId = kiloSessionId || null;
+
+  const { default: BackendFactory } = await import('./backends/backend-factory.mjs');
+  const cli = await BackendFactory.createBackend(null, {
+    cwd: effectiveWorkdir,
+    serverUrl: KILO_SERVER_URL,
+    timeout: KILO_REQUEST_TIMEOUT,
+    logger: log,
+    streamMode: process.env.KILO_STREAM_MODE || 'native'
+  });
 
   await new Promise(res => {
     let _settled = false;
@@ -3440,90 +3451,6 @@ app.put('/api/lang', express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── Translate via Claude CLI ─────────────────────────────────────────────────
-// One-shot translation using haiku model, no session persistence.
-// Source text is written to a temp file to avoid OS ARG_MAX limits on large thinking blocks.
-// Translation result is read from a temp file written by Claude via the Write tool.
-
-app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
-  const { text, targetLang } = req.body;
-  if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text required' });
-  const langName = LANG_NAMES[targetLang] || 'English';
-
-  const bin = kiloCli.kiloBin;
-  const env = { ...process.env };
-  delete env.CLAUDECODE;
-  if (!env.ANTHROPIC_BASE_URL) delete env.ANTHROPIC_API_KEY;
-
-  // Write source text to temp file — avoids CLI argument length limits
-  const tmpId = `kilo-translate-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-  const tmpDir = path.join(os.tmpdir(), tmpId);
-  fs.mkdirSync(tmpDir, { recursive: true });
-  const srcFile = path.join(tmpDir, 'source.txt');
-  const dstFile = path.join(tmpDir, 'translated.txt');
-  fs.writeFileSync(srcFile, text, 'utf-8');
-
-  const sysPrompt = 'You are a translator. Follow file I/O instructions exactly. Never add commentary.';
-  const prompt = `Read the file ${srcFile}. Translate the entire content to ${langName}. Write ONLY the pure translation (no comments, no explanations, preserve all line breaks and structure) to ${dstFile}.`;
-  const args = [
-    '--print',
-    '--model', 'haiku',
-    '--max-turns', '3',
-    '--no-session-persistence',
-    '--dangerously-skip-permissions',
-    '--tools', 'Read,Write',
-    '--output-format', 'text',
-    '--system-prompt', sysPrompt,
-    prompt,
-  ];
-
-  const needsShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin);
-  const proc = spawnProc(bin, args, { cwd: tmpDir, env, stdio: ['pipe', 'pipe', 'pipe'], shell: needsShell });
-  proc.stdin.end();
-
-  let stdout = '';
-  let stderr = '';
-  proc.stdout.on('data', d => { stdout += d; });
-  proc.stderr.on('data', d => { stderr += d; });
-
-  const timeout = setTimeout(() => { try { proc.kill('SIGTERM'); } catch {} }, 120_000);
-  let responded = false;
-
-  proc.on('close', code => {
-    clearTimeout(timeout);
-    if (responded) return;
-    responded = true;
-    try {
-      if (code !== 0) {
-        console.error('[translate] kilo exit code', code, stderr.substring(0, 500));
-        return res.status(502).json({ error: 'Translation failed' });
-      }
-      // Primary: read from output file; fallback: use stdout if file was not created
-      let translated = '';
-      if (fs.existsSync(dstFile)) {
-        translated = fs.readFileSync(dstFile, 'utf-8').trim();
-      } else if (stdout.trim()) {
-        translated = stdout.trim();
-      }
-      if (!translated) {
-        console.error('[translate] empty translation, stderr:', stderr.substring(0, 500));
-        return res.status(502).json({ error: 'Translation failed' });
-      }
-      res.json({ translated });
-    } finally {
-      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
-    }
-  });
-
-  proc.on('error', err => {
-    clearTimeout(timeout);
-    if (responded) return;
-    responded = true;
-    console.error('[translate] spawn error', err.message);
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
-    res.status(500).json({ error: 'Failed to spawn translator' });
-  });
-});
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 // Deep health check: verifies DB connectivity, reports uptime / memory / WS connections.
@@ -4480,11 +4407,19 @@ Be structured and actionable — this summary will be used as context to continu
 CONVERSATION TRANSCRIPT:
 ${transcript}`;
 
-  // Use CLI (Haiku) for fast summarization — no tools needed
-  const cli = new KiloCLI({ cwd: sess.workdir || WORKDIR });
+  // Use backend for fast summarization — no tools needed
   let summaryText = '';
 
   try {
+    const { default: BackendFactory } = await import('./backends/backend-factory.mjs');
+    const cli = await BackendFactory.createBackend(null, {
+      cwd: sess.workdir || WORKDIR,
+      serverUrl: KILO_SERVER_URL,
+      timeout: KILO_REQUEST_TIMEOUT,
+      logger: log,
+      streamMode: process.env.KILO_STREAM_MODE || 'native'
+    });
+
     await new Promise((resolve, reject) => {
       const ac = new AbortController();
       const timeout = setTimeout(() => { ac.abort(); reject(new Error('Compact timed out')); }, 120000);
@@ -4493,7 +4428,7 @@ ${transcript}`;
         prompt: compactPrompt,
         model: 'haiku',
         maxTurns: 1,
-        tools: '',
+        allowedTools: [],
         mcpServers: {},
         abortController: ac,
       })
@@ -7031,11 +6966,19 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'agent_status', agent: 'orchestrator', status: 'Planning...', statusKey: 'agent.planning', ...(tabId ? { tabId } : {}) }));
 
             const effectiveWorkdir = workdir || WORKDIR;
-            const cli = new KiloCLI({ cwd: effectiveWorkdir });
             const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${text}`;
 
             const session = sessionId ? stmts.getSession.get(sessionId) : null;
             let planText = '';
+
+            const { default: BackendFactory } = await import('./backends/backend-factory.mjs');
+            const cli = await BackendFactory.createBackend(null, {
+              cwd: effectiveWorkdir,
+              serverUrl: KILO_SERVER_URL,
+              timeout: KILO_REQUEST_TIMEOUT,
+              logger: log,
+              streamMode: process.env.KILO_STREAM_MODE || 'native'
+            });
 
             await new Promise(resolve => {
               let done = false;
