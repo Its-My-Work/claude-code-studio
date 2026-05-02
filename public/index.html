@@ -3474,7 +3474,7 @@ async function detectCliVersion() {
       if (!availableModes.includes(curMode)) {
         if (cliType === 'kilocode') {
           // Map Claude modes to Kilo modes
-          const modeMap = { auto: 'orchestrator', planning: 'plan', task: 'code' };
+          const modeMap = { auto: 'code', planning: 'plan', task: 'code' };
           curMode = modeMap[curMode] || availableModes[0];
         } else {
           curMode = availableModes[0];
@@ -7346,13 +7346,11 @@ function newTab() {
   inEl.style.height = 'auto';
   _clearAttachments();
   clearReply();
-   // Reset skills and mode settings for new tab — new chat = clean slate
-   activeSkills = new Set();
-   curAgent = 'single';
-   const defaultMode = cliType === 'kilocode' ? 'orchestrator' : 'auto';
-   curMode = defaultMode;
-   syncBtn('agent', 'single');
-   syncBtn('mode', defaultMode);
+// Reset skills for new tab — new chat = clean slate
+    activeSkills = new Set();
+    curAgent = 'single';
+    syncBtn('agent', 'single');
+    syncBtn('mode', curMode);
   // New tab is never generating — reset interrupt bar and stop button
   isGen = false; generatingTabId = null; setSendStop(false);
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
@@ -8613,7 +8611,7 @@ async function loadSess(id) {
       // Map mode if it's from a different CLI type
       let mappedMode = d.mode;
       if (cliType === 'kilocode') {
-        const modeMap = { auto: 'orchestrator', planning: 'plan', task: 'code' };
+        const modeMap = { auto: 'code', planning: 'plan', task: 'code' };
         mappedMode = modeMap[d.mode] || d.mode;
       }
       curMode = mappedMode;

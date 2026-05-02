@@ -186,8 +186,11 @@ send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemProm
 
     // Agent mapping for CLI
     const validAgents = ['code', 'ask', 'plan', 'debug', 'orchestrator'];
-    if (mode && validAgents.includes(mode)) {
-      args.push('--agent', mode);
+    // Map high-level modes to specific agents (same mapping as UI)
+    const modeMap = { auto: 'code', planning: 'plan', task: 'code' };
+    const mappedMode = modeMap[mode] || mode;
+    if (mappedMode && validAgents.includes(mappedMode)) {
+      args.push('--agent', mappedMode);
     }
 
     // Format and permissions
