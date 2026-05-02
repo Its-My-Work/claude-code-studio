@@ -104,7 +104,6 @@ class KiloAgentBackend extends AgentBackend {
       onDone(fn) { h.onDone = fn; return this; },
       onError(fn) { h.onError = fn; return this; },
       onSessionId(fn) { h.onSessionId = fn; return this; },
-      onThinking(fn) { h.onThinking = fn; return this; },
       onReasoning(fn) { h.onReasoning = fn; return this; },
       onResult(fn) { h.onResult = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
@@ -156,7 +155,6 @@ class KiloAgentBackend extends AgentBackend {
                   if (h.onText) h.onText(part.text);
                 } else if (part.type === 'reasoning' && part.text) {
                   if (h.onReasoning) h.onReasoning(part.text);
-                  if (h.onThinking) h.onThinking(part.text);
                 } else if (part.type === 'tool' && h.onTool) {
                   const toolPart = part;
                   const input = typeof toolPart.input === 'string'
@@ -339,7 +337,6 @@ class KiloAgentBackend extends AgentBackend {
       onDone(fn) { h.onDone = fn; return this; },
       onError(fn) { h.onError = fn; return this; },
       onSessionId(fn) { h.onSessionId = fn; return this; },
-      onThinking(fn) { h.onThinking = fn; return this; },
       onReasoning(fn) { h.onReasoning = fn; return this; },
       onResult(fn) { h.onResult = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
@@ -391,7 +388,6 @@ class KiloAgentBackend extends AgentBackend {
                   if (h.onText) h.onText(part.text);
                 } else if (part.type === 'reasoning' && part.text) {
                   if (h.onReasoning) h.onReasoning(part.text);
-                  if (h.onThinking) h.onThinking(part.text);
                 } else if (part.type === 'tool' && h.onTool) {
                   const toolPart = part;
                   const input = typeof toolPart.input === 'string'
@@ -473,7 +469,6 @@ class KiloAgentBackend extends AgentBackend {
                 if (word.trim()) {
                   await new Promise(resolve => setTimeout(resolve, 10));
                   if (h.onReasoning) h.onReasoning(word);
-                  if (h.onThinking) h.onThinking(word);
                 }
               }
             } else if (part.type === 'text' && part.text) {

@@ -407,7 +407,6 @@ proc.on('close', (code) => {
       onDone(fn) { h.onDone = fn; return this; },
       onError(fn) { h.onError = fn; return this; },
       onSessionId(fn) { h.onSessionId = fn; return this; },
-      onThinking(fn) { h.onThinking = fn; return this; },
       onReasoning(fn) { h.onReasoning = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
       onResult(fn) { h.onResult = fn; return this; },
@@ -444,7 +443,7 @@ proc.on('close', (code) => {
         h.onText(data.delta.text);
       } else if (data.delta.type === 'thinking_delta' && data.delta.thinking) {
         h._deltaBlocks.add(idx);
-        if (h.onThinking) h.onThinking(data.delta.thinking);
+        if (h.onReasoning) h.onReasoning(data.delta.thinking);
       }
     }
     // Handle assistant messages with content blocks (legacy format / tool_use)
@@ -457,7 +456,7 @@ proc.on('close', (code) => {
         const streamed = h._deltaBlocks.has(i);
         if (b.type === 'text' && b.text && h.onText && !streamed) { h._hasEmittedText = true; h.onText(b.text); }
         else if (b.type === 'thinking' && b.thinking && !streamed) {
-          if (h.onThinking) h.onThinking(b.thinking);
+          if (h.onReasoning) h.onReasoning(b.thinking);
         }
         else if (b.type === 'tool_use' && h.onTool) {
           h.onTool(b.name, typeof b.input === 'string' ? b.input : JSON.stringify(b.input, null, 2));

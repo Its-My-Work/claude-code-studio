@@ -120,7 +120,7 @@ class KiloSSH {
 
     const h = {
       onText: null, onTool: null, onDone: null, onError: null,
-      onSessionId: null, onThinking: null, onRateLimit: null, onResult: null,
+      onSessionId: null, onReasoning: null, onRateLimit: null, onResult: null,
       _deltaBlocks: new Set(), _hasEmittedText: false,
     };
 
@@ -292,8 +292,8 @@ class KiloSSH {
       onTool(fn)      { h.onTool      = fn; return this; },
       onDone(fn)      { h.onDone      = fn; return this; },
       onError(fn)     { h.onError     = fn; return this; },
-      onSessionId(fn) { h.onSessionId = fn; return this; },
-      onThinking(fn)  { h.onThinking  = fn; return this; },
+onSessionId(fn) { h.onSessionId = fn; return this; },
+       onReasoning(fn)  { h.onReasoning  = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
       onResult(fn)    { h.onResult    = fn; return this; },
     };
@@ -310,8 +310,8 @@ class KiloSSH {
       const idx = data.index ?? 0;
       if (data.delta.type === 'text_delta' && data.delta.text && h.onText) {
         h._deltaBlocks.add(idx); h._hasEmittedText = true; h.onText(data.delta.text);
-      } else if (data.delta.type === 'thinking_delta' && data.delta.thinking && h.onThinking) {
-        h._deltaBlocks.add(idx); h.onThinking(data.delta.thinking);
+} else if (data.delta.type === 'thinking_delta' && data.delta.thinking && h.onReasoning) {
+         h._deltaBlocks.add(idx); h.onReasoning(data.delta.thinking);
       }
     }
 
@@ -321,7 +321,7 @@ class KiloSSH {
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i], streamed = h._deltaBlocks.has(i);
         if (b.type === 'text'     && b.text     && h.onText     && !streamed) { h._hasEmittedText = true; h.onText(b.text); }
-        else if (b.type === 'thinking' && b.thinking && h.onThinking && !streamed) h.onThinking(b.thinking);
+        else if (b.type === 'thinking' && b.thinking && h.onReasoning && !streamed) h.onReasoning(b.thinking);
         else if (b.type === 'tool_use' && h.onTool) h.onTool(b.name, typeof b.input === 'string' ? b.input : JSON.stringify(b.input, null, 2));
       }
     }

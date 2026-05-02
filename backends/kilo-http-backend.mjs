@@ -116,7 +116,6 @@ class KiloHttpBackend extends AgentBackend {
       onDone(fn) { h.onDone = fn; return this; },
       onError(fn) { h.onError = fn; return this; },
       onSessionId(fn) { h.onSessionId = fn; return this; },
-      onThinking(fn) { h.onThinking = fn; return this; },
       onReasoning(fn) { h.onReasoning = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
       onResult(fn) { h.onResult = fn; return this; },
