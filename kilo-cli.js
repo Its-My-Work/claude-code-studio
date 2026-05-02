@@ -254,6 +254,22 @@ send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemProm
     proc.stdin.end();
     console.log('[KILO SPAWN] spawning process, stdin closed, cwd:', this.cwd);
 
+    proc.stdout.on('data', (chunk) => {
+      buffer += stdoutDecoder.write(chunk);
+      let idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        if (!line.trim()) continue;
+        try {
+          const data = JSON.parse(line);
+          this._handle(data, h);
+        } catch (err) {
+          console.error('[kilo-cli] failed to parse line:', line.slice(0, 200), err);
+        }
+      }
+    });
+
     proc.stderr.on('data', (chunk) => {
       const str = stderrDecoder.write(chunk);
       if (str.trim()) console.log('[KILO STDERR]', str.slice(0, 300).replace(/\n/g, '\\n'));
@@ -288,6 +304,20 @@ proc.on('close', (code) => {
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
       // Flush remaining buffer (including any incomplete multi-byte sequence held by the decoder)
       buffer += stdoutDecoder.end();
+      // Parse any remaining complete lines in buffer
+      let idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        if (!line.trim()) continue;
+        try {
+          const data = JSON.parse(line);
+          this._handle(data, h);
+        } catch (err) {
+          console.error('[kilo-cli] failed to parse remaining line:', line.slice(0, 200), err);
+        }
+      }
+      // Handle any remaining buffer content
       if (buffer.trim()) {
         try {
           this._handle(JSON.parse(buffer), h);
@@ -415,7 +445,6 @@ proc.on('close', (code) => {
       } else if (data.delta.type === 'thinking_delta' && data.delta.thinking) {
         h._deltaBlocks.add(idx);
         if (h.onThinking) h.onThinking(data.delta.thinking);
-        if (h.onReasoning) h.onReasoning(data.delta.thinking);
       }
     }
     // Handle assistant messages with content blocks (legacy format / tool_use)
@@ -429,7 +458,6 @@ proc.on('close', (code) => {
         if (b.type === 'text' && b.text && h.onText && !streamed) { h._hasEmittedText = true; h.onText(b.text); }
         else if (b.type === 'thinking' && b.thinking && !streamed) {
           if (h.onThinking) h.onThinking(b.thinking);
-          if (h.onReasoning) h.onReasoning(b.thinking);
         }
         else if (b.type === 'tool_use' && h.onTool) {
           h.onTool(b.name, typeof b.input === 'string' ? b.input : JSON.stringify(b.input, null, 2));

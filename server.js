@@ -17,7 +17,7 @@ const KiloCLI = require('./kilo-cli');
 const KiloSSH = require('./kilo-ssh');
 const { testSshConnection } = require('./kilo-ssh');
 const TelegramBot = require('./telegram-bot');
-const BackendFactory = require('./backends/backend-factory');
+
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
@@ -76,7 +76,7 @@ const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
 const CONFIG_PATH = path.join(APP_DIR, 'data', 'config.json');
 
 // ─── Kilo HTTP Server Configuration ──────────────────────────────────────────
-const KILO_SERVER_URL = process.env.KILO_SERVER_URL || 'http://127.0.0.1:4097';
+const KILO_SERVER_URL = process.env.KILO_SERVER_URL || 'http://127.0.0.1:4098';
 const KILO_REQUEST_TIMEOUT = parseInt(process.env.KILO_REQUEST_TIMEOUT || '30000', 10);
 
 // ─── Security config ──────────────────────────────────────────────────────────
@@ -2308,11 +2308,13 @@ async function runCliSingle(p) {
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
   log.debug('runCliSingle currentContentBlocks', { isArray: Array.isArray(userContent), currentContentBlocksLen: currentContentBlocks?.length || 0, userContentType: typeof userContent });
 
-    const cli = BackendFactory.createBackend(null, {
+    const { default: BackendFactory } = await import('./backends/backend-factory.mjs');
+    const cli = await BackendFactory.createBackend(null, {
       cwd: workdir || WORKDIR,
       serverUrl: KILO_SERVER_URL,
       timeout: KILO_REQUEST_TIMEOUT,
-      logger: log
+      logger: log,
+      streamMode: process.env.KILO_STREAM_MODE || 'native' // Enable native streaming by default for web interface
     });
   let pendingFork = !!forkSession; // only fork on first CLI call
 
@@ -2352,8 +2354,10 @@ async function runCliSingle(p) {
       hasExtraSettings: !!interruptHookSettings
     });
 
-cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
+ cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
       .onText(t => {
+        console.log('[DBG RAW onText chunk]', JSON.stringify(t));
+        t = t.replace(/\\n/g, '\n');
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
         ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t, timestamp: Date.now() }, ...(tabId ? { tabId } : {}) }));
@@ -2361,10 +2365,12 @@ cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurn
           try { stmts.setPartialText.run(fullText, sessionId); } catch {}
         }
       })
-      .onThinking(t => { fullThinking += t; log.info('[THINKING-DIAG-CLI] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'reasoning', text: t, timestamp: Date.now() }, ...(tabId ? { tabId } : {}) })); })
+      .onThinking(t => { log.info('[THINKING-DIAG-CLI] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); })
       .onReasoning(t => {
+        console.log('[DBG RAW onReasoning chunk]', JSON.stringify(t));
+        t = t.replace(/\\n/g, '\n');
         fullThinking += t;
-        log.info('[REASONING-DIAG-CLI] onReasoning fired', { len: t.length, totalLen: fullThinking.length, sessionId, firstChars: t.substring(0, 50) });
+        log.info('[REASONING-DIAG-CLI] onReasoning fired', { len: t.length, totalLen: fullThinking.length, sessionId, firstChars: fullThinking.substring(0, 50) });
         ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'reasoning', text: t, timestamp: Date.now() }, ...(tabId ? { tabId } : {}) }));
       })
       .onTool((name, inp) => {
@@ -2568,6 +2574,8 @@ cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurn
 
   // Persist final text and clean up
   log.info('[THINKING-DIAG-CLI] save phase', { sessionId, hasThinking: !!fullThinking, thinkingLen: fullThinking.length, hasText: !!fullText, textLen: fullText.length });
+  console.log('[FINAL THINKING]', fullThinking);
+  console.log('[FINAL TEXT]', fullText);
 
   // If stream didn't deliver thinking, extract from JSONL file (CLI always writes thinking there)
   let thinkingFromJsonl = false;
@@ -2851,7 +2859,7 @@ async function runMultiAgent(p) {
         const _res = () => { if (!_settled) { _settled = true; res(); } };
         // Agent resumes session to maintain context
         cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
-          .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
+          .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } console.log('[DBG onText]', { raw: JSON.stringify(t), len: t.length }); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
           .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
           .onSessionId(sid => { currentSessionId = sid; })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
@@ -2890,6 +2898,10 @@ Provide a clear summary of what was accomplished. Be concise.`;
   }
   ws.send(JSON.stringify({ type:'agent_status', agent:'summarizer', status:'✅ Summary complete', ...(tabId ? { tabId } : {}) }));
   ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'All agents done', statusKey:'agent.done', ...(tabId ? { tabId } : {}) }));
+
+  console.log('[FINAL PLAN]', planText);
+  console.log('[FINAL AGENT RESULTS]', results);
+  console.log('[FINAL SUMMARY]', summaryText);
 
   // Return session_id for future resume
   return currentSessionId;

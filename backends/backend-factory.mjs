@@ -1,7 +1,9 @@
-const KiloCLI = require('../kilo-cli');
-const KiloBackend = require('./kilo-backend');
-const KiloHttpBackend = require('./kilo-http-backend');
-const KiloAgentBackend = (await import('./kilo-agent-backend.mjs')).default;
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+import KiloCLI from '../kilo-cli.js';
+import KiloBackend from './kilo-backend.mjs';
+import KiloHttpBackend from './kilo-http-backend.mjs';
 
 class BackendFactory {
   static createBackend(engine, options = {}) {
@@ -9,7 +11,11 @@ class BackendFactory {
 
     // Local kilo serve backend (connects to running kilo serve instance)
     if (engineType === 'kilo-agent' || engineType === 'kilo-local' || engineType === 'local') {
-      return new KiloAgentBackend(options);
+      const streamMode = process.env.KILO_STREAM_MODE || options.streamMode || 'prompt';
+      // For now, return a promise that resolves to the backend
+      return import('./kilo-agent-backend.mjs').then(({ default: KiloAgentBackend }) => {
+        return new KiloAgentBackend({ ...options, streamMode });
+      });
     }
 
     // Gateway API backend (explicit)
@@ -25,7 +31,10 @@ class BackendFactory {
     // Default: auto-detect based on environment
     // If KILO_SERVER_URL is set, prefer local server
     if (process.env.KILO_SERVER_URL) {
-      return new KiloAgentBackend(options);
+      const streamMode = process.env.KILO_STREAM_MODE || options.streamMode || 'prompt';
+      return import('./kilo-agent-backend.mjs').then(({ default: KiloAgentBackend }) => {
+        return new KiloAgentBackend({ ...options, streamMode });
+      });
     }
 
     // Default to HTTP backend for server mode (Gateway API)
@@ -44,7 +53,7 @@ class BackendFactory {
       // Check if kilo serve is reachable
       try {
         const http = require('http');
-        const url = new URL(process.env.KILO_SERVER_URL || 'http://127.0.0.1:4097');
+        const url = new URL(process.env.KILO_SERVER_URL || 'http://127.0.0.1:4098');
         const req = http.request({
           hostname: url.hostname,
           port: url.port,
@@ -84,4 +93,10 @@ class BackendFactory {
   }
 }
 
-module.exports = BackendFactory;
+// ES module export
+export default BackendFactory;
+
+// CommonJS compatibility
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = BackendFactory;
+}

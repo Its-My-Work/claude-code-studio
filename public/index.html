@@ -67,6 +67,7 @@ body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
 .reasoning-text {
   color: var(--text);
   opacity: .85;
+  white-space: pre-wrap;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -4683,6 +4684,8 @@ async function toggleProjectRules() {
 }
 
 function renderMd(text) {
+  // 1. Unescape \\n to \n
+  text = text.replace(/\\n/g, '\n');
   // 2. Escape remaining HTML
   text = escH(text);
 

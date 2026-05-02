@@ -1,7 +1,7 @@
-const AgentBackend = require('./agent-backend');
-const http = require('http');
-const https = require('https');
-const EventSource = require('eventsource');
+import AgentBackend from './agent-backend.js';
+import http from 'http';
+import https from 'https';
+import EventSource from 'eventsource';
 
 class KiloHttpBackend extends AgentBackend {
   constructor(options = {}) {
@@ -283,4 +283,4 @@ class KiloHttpBackend extends AgentBackend {
   }
 }
 
-module.exports = KiloHttpBackend;
+export default KiloHttpBackend;

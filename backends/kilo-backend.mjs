@@ -1,5 +1,5 @@
-const AgentBackend = require('./agent-backend');
-const KiloCLI = require('../kilo-cli');
+import AgentBackend from './agent-backend.js';
+import KiloCLI from '../kilo-cli.js';
 
 class KiloBackend extends AgentBackend {
   constructor(options = {}) {
@@ -52,4 +52,4 @@ send(options) {
   }
 }
 
-module.exports = KiloBackend;
+export default KiloBackend;

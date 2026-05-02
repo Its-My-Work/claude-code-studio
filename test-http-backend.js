@@ -4,7 +4,7 @@ async function testBackend() {
   console.log('Testing KiloHttpBackend...');
 
   const backend = new KiloHttpBackend({
-    serverUrl: 'http://127.0.0.1:4097',
+    serverUrl: 'http://127.0.0.1:4098',
     timeout: 10000,
     cwd: process.cwd()
   });
