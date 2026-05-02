@@ -2356,22 +2356,28 @@ async function runCliSingle(p) {
 
  cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
       .onText(t => {
-        console.log('[DBG RAW onText chunk]', JSON.stringify(t));
         t = t.replace(/\\n/g, '\n');
+        // Add space between text chunks if needed
+        if (fullText && !/\s$/.test(fullText) && !/^\s/.test(t) && t.trim()) {
+          fullText += ' ';
+          { const _cb = (chatBuffers.get(sessionId) || '') + ' '; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        }
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t, timestamp: Date.now() }, ...(tabId ? { tabId } : {}) }));
+        ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t, timestamp: Date.now(), responseType: p.responseType || 'single' }, ...(tabId ? { tabId } : {}) }));
         if (++chunkCount % 5 === 0) {
           try { stmts.setPartialText.run(fullText, sessionId); } catch {}
         }
       })
-      .onThinking(t => { log.info('[THINKING-DIAG-CLI] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); })
       .onReasoning(t => {
-        console.log('[DBG RAW onReasoning chunk]', JSON.stringify(t));
         t = t.replace(/\\n/g, '\n');
+        wasReasoningStreamed = true;
+        // Add space between reasoning chunks if needed
+        if (fullThinking && !/\s$/.test(fullThinking) && !/^\s/.test(t) && t.trim()) {
+          fullThinking += ' ';
+        }
         fullThinking += t;
-        log.info('[REASONING-DIAG-CLI] onReasoning fired', { len: t.length, totalLen: fullThinking.length, sessionId, firstChars: fullThinking.substring(0, 50) });
-        ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'reasoning', text: t, timestamp: Date.now() }, ...(tabId ? { tabId } : {}) }));
+        ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'reasoning', text: t, timestamp: Date.now(), responseType: p.responseType || 'single' }, ...(tabId ? { tabId } : {}) }));
       })
       .onTool((name, inp) => {
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
@@ -2573,29 +2579,8 @@ async function runCliSingle(p) {
   }
 
   // Persist final text and clean up
-  log.info('[THINKING-DIAG-CLI] save phase', { sessionId, hasThinking: !!fullThinking, thinkingLen: fullThinking.length, hasText: !!fullText, textLen: fullText.length });
-  console.log('[FINAL THINKING]', fullThinking);
-  console.log('[FINAL TEXT]', fullText);
-
-  // If stream didn't deliver thinking, extract from JSONL file (CLI always writes thinking there)
-  let thinkingFromJsonl = false;
-  if (!fullThinking && newKiloId) {
-    try {
-      const extracted = extractThinkingFromJsonl(newKiloId, workdir || WORKDIR);
-      if (extracted) {
-        fullThinking = extracted;
-        thinkingFromJsonl = true;
-        log.info('[THINKING-JSONL] extracted thinking from JSONL', { sessionId, kiloSessionId: newKiloId, len: extracted.length });
-      }
-    } catch (e) { log.warn('[THINKING-JSONL] extraction failed', { sessionId, error: e.message }); }
-  }
-
+  log.info('[FINAL OUTPUT]', { sessionId, fullThinking, fullText });
   try { if (fullThinking) stmts.addMsg.run(sessionId, 'assistant', 'thinking', fullThinking, null, null, null, null); } catch (e) { log.error('[THINKING-SAVE-ERR] CLI thinking save failed', { sessionId, error: e.message }); }
-  // If thinking was extracted from JSONL (not streamed), send it to client now
-  // so the badge renders on the done event without requiring a page reload
-  if (thinkingFromJsonl && fullThinking) {
-    try { ws.send(JSON.stringify({ type: 'thinking', text: fullThinking, ...(tabId ? { tabId } : {}) })); } catch {}
-  }
   try { if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch (e) { log.error('[THINKING-SAVE-ERR] CLI text save failed', { sessionId, error: e.message }); }
   try { stmts.setPartialText.run(null, sessionId); } catch {}
   const _modelInfo = lastResult?.modelUsage ? Object.values(lastResult.modelUsage)[0] : null;
@@ -2653,8 +2638,8 @@ async function runSshSingle(p) {
           try { stmts.setPartialText.run(fullText, sessionId); } catch {}
         }
       })
-      .onThinking(t => { fullThinking += t; log.info('[THINKING-DIAG-SSH] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
-      .onTool((name, inp) => {
+.onReasoning(t => { fullThinking += t; ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
+       .onTool((name, inp) => {
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;

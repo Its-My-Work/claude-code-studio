@@ -2698,6 +2698,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <span style="flex:1"></span>
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
     <span id="sessBarClaudeId" style="font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;    min-width:250px;" title="Скопировать ID сессии Claude" onclick="copySessId()"></span>
+    <span id="sessBarSessionId" style="font-family:monospace;font-size:10px;color:var(--text);background:var(--s2);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="Копировать Session ID" onclick="copySessionId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openKilo()">⚡ Kilo</a>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
      <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегировать внешнему агенту">⇗ <span data-i18n="dlg.btn">Делегировать</span></button>
@@ -5081,7 +5082,13 @@ function handleWsMsg(d) {
         }
         const reasonTextEl = reasonEl.querySelector('.reasoning-text');
         if (reasonTextEl) {
-          streaming.reasoningTxt = (streaming.reasoningTxt || '') + reasoningText;
+          // Initialize on first chunk
+          if (!streaming.reasoningTxt) streaming.reasoningTxt = '';
+          // Add space between reasoning chunks if needed
+          if (streaming.reasoningTxt && !/\s$/.test(streaming.reasoningTxt) && reasoningText && !/^\s/.test(reasoningText) && reasoningText.trim()) {
+            streaming.reasoningTxt += ' ';
+          }
+          streaming.reasoningTxt += reasoningText || '';
           reasonTextEl.textContent = cleanReasoningText(streaming.reasoningTxt);
           // Auto-scroll for reasoning
           scrollBottom();
@@ -5098,7 +5105,7 @@ function handleWsMsg(d) {
             }
             ts._hadTool = false;
           }
-          ts.curTxt = d.catchUp ? chunk.text : (ts.curTxt || '') + chunk.text;
+          ts.curTxt = d.catchUp ? chunk.text : (ts.curTxt || '') + (ts.curTxt && !/\s$/.test(ts.curTxt) && !/^\s/.test(chunk.text) && chunk.text.trim() ? ' ' : '') + chunk.text;
           break;
         }
         rmStatus();
@@ -5111,7 +5118,13 @@ function handleWsMsg(d) {
           getTS(tabId)._hadTool = false;
         }
         // catchUp = full replay from server after reconnect → replace, not append
-        if (d.catchUp) { streaming.txt = chunk.text; } else { streaming.txt += chunk.text; }
+        if (d.catchUp) { streaming.txt = chunk.text; } else {
+          // Add space between chunks if needed to prevent words from merging
+          if (streaming.txt && !/\s$/.test(streaming.txt) && !/^\s/.test(chunk.text) && chunk.text.trim()) {
+            streaming.txt += ' ';
+          }
+          streaming.txt += chunk.text;
+        }
         streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
         if (d.agent) addAgentBadge(streaming.el, d.agent);
         scrollBottom();
@@ -5306,6 +5319,11 @@ function handleWsMsg(d) {
           idEl.title = '';
           delete idEl.dataset.fullId;
         }
+        const sessIdEl = $i('sessBarSessionId');
+        if (sessIdEl) {
+          sessIdEl.style.display = 'none';
+          sessIdEl.textContent = '';
+        }
       }
       { const openBtn = $i('sessBarOpenBtn'); if (openBtn) openBtn.style.display = 'none'; }
       toast('✅ Session restarted - you can continue chatting', false, 3000);
@@ -5466,8 +5484,14 @@ function handleWsMsg(d) {
           if (!sf.isCurrent && sf.projId && projectActiveTab[sf.projId] === oldId) {
             projectActiveTab[sf.projId] = d.sessionId;
           }
-          if (sf.isCurrent) renderTabs();
-          saveUIState();
+        if (sf.isCurrent) renderTabs();
+        saveUIState();
+        // Update session id button
+        const sessIdEl = $i('sessBarSessionId');
+        if (sessIdEl) {
+          sessIdEl.textContent = d.sessionId;
+          sessIdEl.style.display = '';
+        }
         } else if (d.sessionId === activeTabId && streaming.el) {
           // Existing tab: a new queued message is starting — the previous done should have cleared
           // streaming.el, but defensively reset it here to prevent stale bubble contamination
@@ -5605,7 +5629,7 @@ function handleWsMsg(d) {
       { const q = msgsEl.querySelector('.msg-queued'); if (q) q.remove(); }
       if (isVisible) {
         isGen = true;
-        showStatus('status.processing');
+        showStatus(t('status.processing'));
         setStatus('status.processing', 'warn');
         setSendStop(true);
       }
@@ -5666,7 +5690,7 @@ function handleWsMsg(d) {
         // Mark tab as generating and fire retry
         const targetTab = openTabs.find(x => x.id === targetSessionId);
         if (targetTab) { targetTab.generating = true; renderTabs(); saveUIState(); }
-        if (isVisible) { isGen = true; generatingTabId = activeTabId; showStatus('status.processing'); setStatus('status.processing', 'warn'); setSendStop(true); }
+        if (isVisible) { isGen = true; generatingTabId = activeTabId; showStatus(t('status.processing')); setStatus('status.processing', 'warn'); setSendStop(true); }
         if (ws && ws.readyState === 1) {
           ws.send(JSON.stringify({
             type: 'chat', text: d.prompt,
@@ -7125,6 +7149,11 @@ async function updateSessBar(opts = {}) {
       }
     }
     if (openBtn) { openBtn.style.display = ''; }
+    const sessIdEl = $i('sessBarSessionId');
+    if (sessIdEl && currentSessionId) {
+      sessIdEl.textContent = currentSessionId;
+      sessIdEl.style.display = '';
+    }
     updateSessBarSkills();
     const tab = findTabAcrossProjects(sessionId)?.tab || openTabs.find(t => t.id === sessionId);
     // Show compact button when session has messages and is not actively generating
@@ -7152,6 +7181,10 @@ function copySessId() {
   const id = $i('sessBarClaudeId')?.dataset?.fullId;
   if (!id) return;
   navigator.clipboard.writeText(id).then(() => toast('✓ ' + t('session.copy_id')));
+}
+function copySessionId() {
+  if (!currentSessionId) return;
+  navigator.clipboard.writeText(currentSessionId).then(() => toast('✓ Session ID скопирован'));
 }
 async function openKilo() {
   if (!currentSessionId) return;
@@ -7501,6 +7534,12 @@ function updInd() { /* removed — mode indicator no longer in toolbar */ }
 function updateSessBarSkills() {
   const el = $i('sessBarSkills');
   if (!el) return;
+  // Update session id button
+  const sessIdEl = $i('sessBarSessionId');
+  if (sessIdEl && currentSessionId) {
+    sessIdEl.textContent = currentSessionId;
+    sessIdEl.style.display = '';
+  }
   el.innerHTML = '';
   const buildSkillTip = (label, description) => [label, description].filter(Boolean).join('\n\n');
   // Auto-skills mode badge
@@ -8029,7 +8068,7 @@ async function send() {
     isGen = true;
     generatingTabId = activeTabId;
     if (activeTabId) { const at = openTabs.find(x => x.id === activeTabId); if (at) { at.generating = true; renderTabs(); } }
-    showStatus('status.processing');
+    showStatus(t('status.processing'));
     setStatus('status.processing', 'warn');
     setSendStop(true);
   }
