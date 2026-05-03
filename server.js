@@ -2286,7 +2286,6 @@ function isResettableClaudeSessionError(errorText = '') {
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, kiloSessionId, forkSession, mode, workdir, tabId, thinking } = p;
-  console.log('[server] runCliSingle: thinking =', thinking, 'mode =', mode);
 
   // KiloCode agents handle their own prompts internally
   // Mode is passed via --agent flag, prompts are handled by KiloCode internally
@@ -6390,7 +6389,6 @@ wss.on('connection', (ws) => {
         tabId: effectiveTabId,
         thinking,
       };
-      console.log('[server] params.thinking =', params.thinking);
 
       let newKiloId;
       let resultMeta = null;

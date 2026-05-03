@@ -1,4 +1,4 @@
-export default class AgentBackend {
+class AgentBackend {
   send(options) {
     throw new Error('send() must be implemented by subclass');
   }
@@ -19,3 +19,5 @@ export default class AgentBackend {
     throw new Error('manageSession() must be implemented by subclass');
   }
 }
+
+module.exports = AgentBackend;
