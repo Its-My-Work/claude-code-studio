@@ -15,6 +15,7 @@ const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 // KiloSSH and testSshConnection removed - replace with stubs if needed
 const TelegramBot = require('./telegram-bot');
+// Kilo Agent Backend - loaded lazily
 
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
@@ -72,6 +73,29 @@ const PORT = process.env.PORT || 3000;
 const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
 const CONFIG_PATH = path.join(APP_DIR, 'data', 'config.json');
+
+// ─── Kilo Agent Backend (loaded lazily due to ESM) ───────────────────────────
+let kiloBackend = null;
+const kiloBackendPromise = import('./backends/kilo-agent-backend.mjs').then(m => {
+  const KiloAgentBackend = m.default;
+  kiloBackend = new KiloAgentBackend();
+  return kiloBackend;
+}).catch(err => {
+  console.error('Failed to load KiloAgentBackend:', err.message);
+  // Fallback stub
+  kiloBackend = {
+    send: () => { throw new Error('Kilo backend not available'); },
+    getStatus: () => ({ status: 'error', message: 'Backend not loaded' }),
+    setMode: () => {},
+    setModel: () => {},
+    manageSession: () => Promise.resolve({ success: false }),
+  };
+  return kiloBackend;
+});
+
+function getKiloBackend() {
+  return kiloBackendPromise.then(() => kiloBackend);
+}
 
 // ─── Kilo HTTP Server Configuration ──────────────────────────────────────────
 const KILO_SERVER_URL = process.env.KILO_SERVER_URL || 'http://127.0.0.1:4098';
@@ -787,7 +811,9 @@ const chatBuffers = new Map();     // sessionId → accumulated text for direct 
 const MAX_CHAT_BUFFER = 2 * 1024 * 1024; // 2 MB cap per session — prevents unbounded growth
 const sessionQueues = new Map();   // sessionId → [msg, ...] — queue persistence across WS reconnects (page refresh)
 const activeChatSessions = new Set(); // Cross-connection lock: prevents two WS connections from running processChat on the same session
+const sessionLocks = new Map(); // sessionId → true — prevents multiple simultaneous processChat for the same session
 const sessionQueueCleanupTimers = new Map(); // sessionId → setTimeout handle — delayed cleanup to survive WS reconnect race
+let legacySessionId = null; // For legacy WS mode (no tabs) — maintains session continuity
 
 // ─── Ask User (Internal MCP) ─────────────────────────────────────────────
 // Pending user questions: requestId → { resolve, sessionId, timer, question, options, inputType }
@@ -979,13 +1005,13 @@ async function startTask(task) {
     // Resume existing kilo session if any
     const session = stmts.getSession.get(sessionId);
     const kiloSessionId = sanitizeSessionId(session?.kilo_session_id) || null;
-    // BackendFactory removed - stub implementation
-    const cli = {
-      send: () => { throw new Error('Backend not implemented'); },
-      getStatus: () => ({ status: 'error', message: 'Backend not implemented' }),
+    // Use Kilo Agent Backend
+    const cli = kiloBackend || {
+      send: () => { throw new Error('Kilo backend loading...'); },
+      getStatus: () => ({ status: 'loading' }),
       setMode: () => {},
       setModel: () => {},
-      manageSession: () => { throw new Error('Backend not implemented'); }
+      manageSession: () => Promise.resolve({ success: false }),
     };
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
@@ -2309,14 +2335,21 @@ async function runCliSingle(p) {
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
   log.debug('runCliSingle currentContentBlocks', { isArray: Array.isArray(userContent), currentContentBlocksLen: currentContentBlocks?.length || 0, userContentType: typeof userContent });
 
-    // BackendFactory removed - stub implementation
-    const cli = {
-      send: () => { throw new Error('Backend not implemented'); },
-      getStatus: () => ({ status: 'error', message: 'Backend not implemented' }),
+    // Use Kilo Agent Backend
+    const cli = kiloBackend || {
+      send: () => { throw new Error('Kilo backend loading...'); },
+      getStatus: () => ({ status: 'loading' }),
       setMode: () => {},
       setModel: () => {},
-      manageSession: () => { throw new Error('Backend not implemented'); }
+      manageSession: () => Promise.resolve({ success: false }),
     };
+
+    // Close previous event stream to prevent duplicate subscriptions
+    if (ws._currentEventAbort) {
+      ws._currentEventAbort.abort();
+    }
+    ws._currentEventAbort = abortController;
+
   let pendingFork = !!forkSession; // only fork on first CLI call
 
   // Run a single CLI invocation and return { resultData, sid, errorText, rateLimitInfo }
@@ -2355,8 +2388,9 @@ async function runCliSingle(p) {
       hasExtraSettings: !!interruptHookSettings
     });
 
- cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
+  cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
       .onText(t => {
+        console.log('[SERVER] onText called with:', t.substring(0, 100));
         t = t.replace(/\\n/g, '\n');
         // Add space between text chunks if needed
         if (fullText && !/\s$/.test(fullText) && !/^\s/.test(t) && t.trim()) {
@@ -2365,6 +2399,7 @@ async function runCliSingle(p) {
         }
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        console.log('[SERVER] Sending ai_chunk to ws:', { type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t.substring(0, 50), timestamp: Date.now() } });
         ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t, timestamp: Date.now(), responseType: p.responseType || 'single' }, ...(tabId ? { tabId } : {}) }));
         if (++chunkCount % 5 === 0) {
           try { stmts.setPartialText.run(fullText, sessionId); } catch {}
@@ -2792,14 +2827,14 @@ async function runMultiAgent(p) {
   const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
   let currentSessionId = kiloSessionId || null;
 
-  // BackendFactory removed - stub implementation
-  const cli = {
-    send: () => { throw new Error('Backend not implemented'); },
-    getStatus: () => ({ status: 'error', message: 'Backend not implemented' }),
-    setMode: () => {},
-    setModel: () => {},
-    manageSession: () => { throw new Error('Backend not implemented'); }
-  };
+    // Use Kilo Agent Backend
+    const cli = kiloBackend || {
+      send: () => { throw new Error('Kilo backend loading...'); },
+      getStatus: () => ({ status: 'loading' }),
+      setMode: () => {},
+      setModel: () => {},
+      manageSession: () => Promise.resolve({ success: false }),
+    };
 
   await new Promise(res => {
     let _settled = false;
@@ -4409,13 +4444,13 @@ ${transcript}`;
   let summaryText = '';
 
   try {
-    // BackendFactory removed - stub implementation
-    const cli = {
-      send: () => { throw new Error('Backend not implemented'); },
-      getStatus: () => ({ status: 'error', message: 'Backend not implemented' }),
+    // Use Kilo Agent Backend
+    const cli = kiloBackend || {
+      send: () => { throw new Error('Kilo backend loading...'); },
+      getStatus: () => ({ status: 'loading' }),
       setMode: () => {},
       setModel: () => {},
-      manageSession: () => { throw new Error('Backend not implemented'); }
+      manageSession: () => Promise.resolve({ success: false }),
     };
 
     await new Promise((resolve, reject) => {
@@ -6158,6 +6193,18 @@ wss.on('connection', (ws) => {
     const tabId = msg.tabId || null;
     const proxy = new WsProxy(ws); // buffers output when browser disconnects
 
+    // Check session lock to prevent simultaneous processChat for the same session
+    const initialSessionId = msg.sessionId || (tabId ? null : legacySessionId);
+    if (sessionLocks.has(initialSessionId)) {
+      // Queue the message
+      const q = sessionQueues.get(initialSessionId) || [];
+      q.push(msg);
+      sessionQueues.set(initialSessionId, q);
+      log.debug('processChat queued (session locked)', { sessionId: initialSessionId, queueLen: q.length });
+      return; // Do not proceed
+    }
+    sessionLocks.set(initialSessionId, true);
+
     // Mark this tab as busy (per-connection + cross-connection)
     if (tabId) { ws._tabBusy[tabId] = true; activeChatSessions.add(tabId); }
     else ws._busy = true;
@@ -6243,6 +6290,17 @@ wss.on('connection', (ws) => {
       log.debug('processChat userContent built', { userContentType: Array.isArray(userContent) ? 'array' : typeof userContent, userContentLen: Array.isArray(userContent) ? userContent.length : userContent?.length || 0, engineMessageLen: engineMessage?.length || 0 });
       const shouldReplaySessionHistory = !!existSess && !localClaudeId && !retry; // Don't replay for new messages
       let enginePrompt = engineMessage;
+
+      if (shouldReplaySessionHistory) {
+        const replayContent = buildSessionReplayContent(localSessionId);
+        if (replayContent?.length) {
+          // Add the current user message to the end of the replay content
+          replayContent.push(...userContent);
+          userContent = replayContent;
+          // Keep the original enginePrompt (userMessage) instead of replacing with recovery text
+          // enginePrompt is already set to engineMessage above
+        }
+      }
 
       if (!retry) {
         const attJson = attachments.length
@@ -6462,6 +6520,9 @@ wss.on('connection', (ws) => {
         }
       }
     } finally {
+      // Release session lock
+      sessionLocks.delete(localSessionId);
+
       // Guard: only delete activeTasks/chatBuffers if WE are the owner. In stop+new-chat
       // scenario, a newer processChat may have already called activeTasks.set() with its own
       // entry — blindly deleting would remove the new owner's task tracking.

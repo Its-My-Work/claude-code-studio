@@ -21,3 +21,4 @@ class AgentBackend {
 }
 
 module.exports = AgentBackend;
+module.exports.default = AgentBackend;
