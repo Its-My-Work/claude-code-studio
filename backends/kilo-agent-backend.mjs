@@ -213,9 +213,8 @@ class KiloAgentBackend extends AgentBackend {
     let answerText = '';
     // Карта для хранения ролей сообщений (messageID -> role)
     let messageRoles = new Map();
-    // Для избежания дубликатов в стриминге
-    let lastDelta = null;
-    let lastType = null;
+    // Хранилище частей сообщения по partID: { type, text, completed }
+    let messageParts = new Map();
 
     try {
       // Создание сессии, если ID не передан
@@ -246,6 +245,22 @@ class KiloAgentBackend extends AgentBackend {
       let buffer = '';
 
       /**
+       * Инициализирует часть сообщения по partID
+       * @param {string} partID - Идентификатор части
+       * @param {string} type - Тип части ('text' или 'reasoning')
+       */
+      const initializePart = (partID, type) => {
+        if (!messageParts.has(partID)) {
+          messageParts.set(partID, {
+            id: partID,
+            type: type || 'unknown',
+            text: '',
+            completed: false
+          });
+        }
+      };
+
+      /**
        * Асинхронная функция для обработки потока событий.
        * Читает данные из стрима, парсит JSON события и обрабатывает их.
        */
@@ -271,84 +286,84 @@ class KiloAgentBackend extends AgentBackend {
                   continue;
                 }
 
-                 // Обработка события обновления сообщения (сохранение роли)
-                 if (event.type === 'message.updated') {
-                   const info = event.properties?.info;
-                   const messageID = info?.id || event.properties?.messageID;
-                   if (info?.role && messageID) {
-                     messageRoles.set(messageID, info.role);
-                     console.log('[KiloBackend] Set role for messageID:', messageID, 'role:', info.role);
-                   }
-                  } else if (event.type === 'message.part.delta') {
-                   // Обработка дельты части сообщения (потоковые обновления)
-                   hasStreaming = true;
-                   const delta = event.properties?.delta;
-                   const type = event.properties?.type || event.properties?.field; // Используем type, если доступен, иначе field
-                   const messageID = event.properties?.messageID;
-                   const role = messageRoles.get(messageID);
-                   console.log('[KiloBackend] Delta - messageID:', messageID, 'role:', role, 'allRoles:', Array.from(messageRoles.entries()));
+                // Обработка события обновления сообщения (сохранение роли)
+                if (event.type === 'message.updated') {
+                  const info = event.properties?.info;
+                  const messageID = info?.id || event.properties?.messageID;
+                  if (info?.role && messageID) {
+                    messageRoles.set(messageID, info.role);
+                    console.log('[KiloBackend] Set role for messageID:', messageID, 'role:', info.role);
+                  }
+} else if (event.type === 'message.part.delta') {
+                  // DELTA - инкрементальное добавление текста
+                  hasStreaming = true;
+                  const delta = event.properties?.delta;
+                  const field = event.properties?.field;
+                  const partID = event.properties?.partID;
+                  const messageID = event.properties?.messageID;
+                  const role = messageRoles.get(messageID);
 
-                   // Игнорируем события без известной роли или от пользователя
-                   if (!role || role === 'user') {
-                     console.log('[KiloBackend] Skipping delta - unknown or user role');
-                     continue;
-                   }
+                  // Игнорируем события без известной роли или от пользователя
+                  if (!role || role === 'user') {
+                    console.log('[KiloBackend] Skipping delta - unknown or user role');
+                    continue;
+                  }
 
-                   // Пропускаем дубликаты
-                   if (delta === lastDelta && type === lastType) {
-                     console.log('[KiloBackend] Skipping duplicate delta');
-                     continue;
-                   }
-                   lastDelta = delta;
-                   lastType = type;
-                   console.log('[KiloBackend] Delta event - messageID:', messageID, 'role:', role, 'type:', type, 'delta:', delta?.substring(0, 50));
-                   // Обрабатываем части от ассистента
-                   if (role === 'assistant') { // Предполагаем assistant, если роль не установлена
-                    // Добавляем текст ответа или размышлений в соответствующие буферы
-                    if (type === 'text' && delta && callbacks.onText) {
+                  // Получаем часть (должна быть уже создана в message.part.updated)
+                  let part = messageParts.get(partID);
+                  if (!part) {
+                    // Резервный вариант: создаём без типа (будет обновлён позже)
+                    messageParts.set(partID, { id: partID, type: 'unknown', text: '', completed: false });
+                    part = messageParts.get(partID);
+                  }
+
+                  // Добавляем delta к тексту части
+                  part.text += delta;
+
+                  // Отправляем в UI в зависимости от типа части
+                  const isReasoning = part.type === 'reasoning';
+                  const eventType = isReasoning ? 'reasoning_chunk' : 'answer_chunk';
+
+                  if (delta && callbacks.onText) {
+                    const chunkData = { chunk: delta, partID, partType: part.type };
+                    if (!isReasoning) {
                       answerText += delta;
                       callbacks.onText(delta);
-                      this.logEvent(logFile, 'answer_chunk', { chunk: delta });
-                      console.log('[KiloBackend] Calling onText with delta:', delta);
-                    } else if (type === 'reasoning' && delta) {
+                    } else {
                       reasoningText += delta;
-                      // Показываем размышления только если включен режим thinking
                       if (options.thinking && callbacks.onReasoning) {
                         callbacks.onReasoning(delta);
-                        this.logEvent(logFile, 'reasoning_chunk', { chunk: delta });
-                        console.log('[KiloBackend] Calling onReasoning with delta:', delta);
                       }
                     }
+                    this.logEvent(logFile, eventType, chunkData);
+                    console.log(`[KiloBackend] Calling on${isReasoning ? 'Reasoning' : 'Text'} with delta:`, delta?.substring(0, 50));
                   }
-                 } else if (event.type === 'message.part.updated') {
-                   // Обработка полного обновления части сообщения
-                   const part = event.properties?.part;
-                   const messageID = event.properties?.messageID;
-                   const role = messageRoles.get(messageID);
+                } else if (event.type === 'message.part.updated') {
+                  // UPDATED - обновление метаданных части
+                  const part = event.properties?.part;
+                  const partID = part?.id;
+                  const partType = part?.type;
 
-                   // Игнорируем события без известной роли или от пользователя
-                   if (!role || role === 'user') {
-                     console.log('[KiloBackend] Skipping updated - unknown or user role');
-                     continue;
-                   }
+                  if (partID) {
+                    // Сохраняем тип части в хранилище
+                    let partData = messageParts.get(partID);
+                    if (!partData) {
+                      initializePart(partID, partType);
+                      partData = messageParts.get(partID);
+                    } else {
+                      partData.type = partType;
+                    }
 
-                   console.log('[KiloBackend] Updated event - messageID:', messageID, 'role:', role, 'part.type:', part?.type);
-                   // Обрабатываем части от ассистента
-                   if (role === 'assistant') { // Предполагаем assistant, если роль не установлена
-                    // Обновляем буферы полным текстом части
-                    if (part?.type === 'text' && part.text && callbacks.onText) {
-                      answerText = part.text;
-                      callbacks.onText(part.text);
-                      this.logEvent(logFile, 'answer_part', { text: part.text });
-                      console.log('[KiloBackend] Calling onText with part.text:', part.text);
-                    } else if (part?.type === 'reasoning' && part.content) {
-                      reasoningText = part.content;
-                      // Показываем размышления только если включен режим thinking
-                      if (options.thinking && callbacks.onReasoning) {
-                        callbacks.onReasoning(part.content);
-                        this.logEvent(logFile, 'reasoning_part', { content: part.content });
-                        console.log('[KiloBackend] Calling onReasoning with part.content:', part.content);
-                      }
+                    // Если есть time.end - часть завершена
+                    if (part?.time?.end) {
+                      partData.completed = true;
+
+                      // ТОЛЬКО логируем, НЕ отправляем в UI (delta уже всё отправил)
+                      console.log(`[COMPLETED] ${partType} part finished:`, {
+                        partID: partID,
+                        length: partData.text.length,
+                        preview: partData.text.substring(0, 100) + '...'
+                      });
                     }
                   }
                 } else if (event.type === 'session.status') {
@@ -372,6 +387,12 @@ class KiloAgentBackend extends AgentBackend {
                   // Закрытие хода (turn) в сессии
                   if (!doneCalled) {
                     doneCalled = true;
+                    // Логируем итоговую статистику частей
+                    console.log('Turn completed. Parts summary:');
+                    for (const [partID, part] of messageParts) {
+                      console.log(`  ${part.type}: ${part.text.length} chars, completed: ${part.completed}`);
+                    }
+                    messageParts.clear();
                     if (callbacks.onDone) callbacks.onDone(latestSessionId);
                   }
                 }
