@@ -172,6 +172,10 @@ class KiloAgentBackend extends AgentBackend {
       onText: (fn) => { callbacks.onText = fn; return wrapper; },
       onReasoning: (fn) => { callbacks.onReasoning = fn; return wrapper; },
       onTool: (fn) => { callbacks.onTool = fn; return wrapper; },
+      onToolProposal: (fn) => { callbacks.onToolProposal = fn; return wrapper; },
+      onToolStart: (fn) => { callbacks.onToolStart = fn; return wrapper; },
+      onToolComplete: (fn) => { callbacks.onToolComplete = fn; return wrapper; },
+      onToolError: (fn) => { callbacks.onToolError = fn; return wrapper; },
       onDone: (fn) => { callbacks.onDone = fn; return wrapper; },
       onError: (fn) => { callbacks.onError = fn; return wrapper; },
       onSessionId: (fn) => { callbacks.onSessionId = fn; return wrapper; },
@@ -231,8 +235,17 @@ class KiloAgentBackend extends AgentBackend {
     let answerText = '';
     // Карта для хранения ролей сообщений (messageID -> role)
     let messageRoles = new Map();
-    // Хранилище частей сообщения по partID: { type, text, completed }
+    // Хранилище частей сообщения по partID: { type, text, completed, time, tool }
     let messageParts = new Map();
+    // Хранилище tool parts по partID для toolpartupdated событий
+    let toolPartsMap = new Map();
+    // Буфер для всех parts в buffered mode
+    let allParts = [];
+    // Буфер для tool events в buffered mode
+    let bufferedToolEvents = [];
+    // Массив для буферизации toolpartupdated при race condition
+    let pendingToolEvents = [];
+    const isBuffered = this.streamMode === 'buffered';
 
     // Класс для дедупликации событий
     class EventDeduplicator {
@@ -312,16 +325,78 @@ class KiloAgentBackend extends AgentBackend {
       /**
        * Инициализирует часть сообщения по partID
        * @param {string} partID - Идентификатор части
-       * @param {string} type - Тип части ('text' или 'reasoning')
+       * @param {string} type - Тип части ('text', 'reasoning', 'tool')
+       * @param {Object} time - Время начала/конца
+       * @param {string} tool - Название инструмента для tool parts
        */
-      const initializePart = (partID, type) => {
+      const initializePart = (partID, type, time, tool) => {
         if (!messageParts.has(partID)) {
-          messageParts.set(partID, {
+          const partData = {
             id: partID,
             type: type || 'unknown',
             text: '',
-            completed: false
-          });
+            completed: false,
+            time: time,
+            tool: tool,
+            proposed: false
+          };
+          messageParts.set(partID, partData);
+          if (isBuffered) {
+            allParts.push(partData);
+          }
+        }
+      };
+
+      /**
+       * Повторяет обработку toolpartupdated события при race condition
+       * @param {string} partID - Идентификатор части
+       */
+      const retryToolEvent = (partID) => {
+        const index = pendingToolEvents.findIndex(e => e.partID === partID);
+        if (index === -1) return;
+
+        const { partID: pID, toolName, event, retry } = pendingToolEvents[index];
+        if (retry >= 5) {
+          console.warn('[KiloBackend] Max retries exceeded for toolpartupdated:', pID);
+          pendingToolEvents.splice(index, 1);
+          return;
+        }
+
+        const toolPart = toolPartsMap.get(pID);
+        if (toolPart) {
+          // Повторяем обработку события
+          pendingToolEvents.splice(index, 1);
+          // Вставляем событие обратно для обработки
+          const syntheticEvent = { type: 'toolpartupdated', data: { partID: pID, tool: toolName }, properties: event.properties };
+          // Обработка как будто событие пришло сейчас
+          const status = toolPart.state?.status || toolPart.status || 'unknown';
+          const input = toolPart.input?.command || JSON.stringify(toolPart.input, null, 2) || '';
+
+          console.log('[TOOL EVENT RETRY]', { pID, toolName, status, inputLength: input.length });
+
+          if (isBuffered) {
+            bufferedToolEvents.push({
+              partID: pID, toolName, status, input,
+              output: toolPart.output || '',
+              error: toolPart.error || toolPart.state?.error || '',
+              timestamp: Date.now()
+            });
+          } else {
+            if (status === 'pending' && callbacks.onToolProposal) {
+              callbacks.onToolProposal({ tool: toolName, input });
+            } else if (status === 'running' && callbacks.onToolStart) {
+              callbacks.onToolStart({ tool: toolName, input });
+            } else if (status === 'completed' && callbacks.onToolComplete) {
+              callbacks.onToolComplete({ tool: toolName, input, output: toolPart.output || '' });
+            } else if (status === 'failed' && callbacks.onToolError) {
+              const error = toolPart.error || toolPart.state?.error || 'Unknown error';
+              callbacks.onToolError({ tool: toolName, input, error });
+            }
+          }
+        } else {
+          // Еще не готов, повторить через 100ms
+          pendingToolEvents[index].retry++;
+          setTimeout(() => retryToolEvent(pID), 100);
         }
       };
 
@@ -402,23 +477,36 @@ class KiloAgentBackend extends AgentBackend {
                   // Добавляем delta к тексту части
                   part.text += delta;
 
-                  // Отправляем в UI в зависимости от типа части
-                  const isReasoning = part.type === 'reasoning';
-                  const eventType = isReasoning ? 'reasoning_chunk' : 'answer_chunk';
-
-                  if (delta && callbacks.onText) {
-                    const chunkData = { chunk: delta, partID, partType: part.type };
-                    if (!isReasoning) {
-                      answerText += delta;
-                      callbacks.onText(delta);
-                    } else {
-                      reasoningText += delta;
-                      if (options.thinking && callbacks.onReasoning) {
-                        callbacks.onReasoning(delta);
+                  // Обработка в зависимости от типа части
+                  if (part.type === 'tool') {
+                    // Для tools
+                    this.logEvent(this.logFile, 'tool_delta', { partID, tool: part.tool, delta: delta.substring(0, 100) });
+                    if (!isBuffered && callbacks.onTool) {
+                      callbacks.onTool({ type: 'tool', tool: part.tool || 'unknown', input: part.text });
+                    }
+                    if (!isBuffered && callbacks.onToolStart && part.text === delta) { // первый delta
+                      callbacks.onToolStart({ tool: part.tool || 'unknown', input: delta });
+                    }
+                  } else {
+                    // Для reasoning и text
+                    const isReasoning = part.type === 'reasoning';
+                    if (!isBuffered) {
+                      const eventType = isReasoning ? 'reasoning_chunk' : 'answer_chunk';
+                      if (delta && callbacks.onText) {
+                        const chunkData = { chunk: delta, partID, partType: part.type };
+                        if (!isReasoning) {
+                          answerText += delta;
+                          callbacks.onText(delta);
+                        } else {
+                          reasoningText += delta;
+                          if (options.thinking && callbacks.onReasoning) {
+                            callbacks.onReasoning(delta);
+                          }
+                        }
+                        this.logEvent(this.logFile, eventType, chunkData);
+                        console.log(`[KiloBackend] Calling on${isReasoning ? 'Reasoning' : 'Text'} with delta:`, delta?.substring(0, 50));
                       }
                     }
-                    this.logEvent(this.logFile, eventType, chunkData);
-                    console.log(`[KiloBackend] Calling on${isReasoning ? 'Reasoning' : 'Text'} with delta:`, delta?.substring(0, 50));
                   }
                 } else if (event.type === 'message.part.updated') {
                   // UPDATED - обновление метаданных части
@@ -438,10 +526,25 @@ class KiloAgentBackend extends AgentBackend {
                     // Сохраняем тип части в хранилище
                     let partData = messageParts.get(partID);
                     if (!partData) {
-                      initializePart(partID, partType);
+                      initializePart(partID, partType, part?.time, part?.tool);
                       partData = messageParts.get(partID);
                     } else {
                       partData.type = partType;
+                      if (part?.time) partData.time = part?.time;
+                      if (part?.tool) partData.tool = part?.tool;
+                    }
+
+                    // Для tools, сохранить в toolPartsMap и вызвать proposal если еще не
+                    if (partType === 'tool') {
+                      this.logEvent(this.logFile, 'tool_part_updated', { partID, tool: partData.tool, type: partType });
+                      // Сохраняем tool part в Map для toolpartupdated событий
+                      toolPartsMap.set(partID, part);
+                      if (!isBuffered && !partData.proposed) {
+                        partData.proposed = true;
+                        if (callbacks.onToolProposal) {
+                          callbacks.onToolProposal({ tool: partData.tool || 'unknown', input: '', partID });
+                        }
+                      }
                     }
 
                     // Если есть time.end - часть завершена
@@ -454,6 +557,14 @@ class KiloAgentBackend extends AgentBackend {
                         length: partData.text.length,
                         preview: partData.text.substring(0, 100) + '...'
                       });
+
+                      // Для tools, вызвать onToolComplete если buffered, или обработать tool
+                      if (partType === 'tool') {
+                        this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
+                        if (!isBuffered && callbacks.onToolComplete) {
+                          callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: partData.text, output: '' });
+                        }
+                      }
                     }
                   }
                 } else if (event.type === 'session.status') {
@@ -481,6 +592,60 @@ class KiloAgentBackend extends AgentBackend {
                   const errorMsg = event.properties?.error?.data?.message || 'Unknown error';
                   console.log('[KiloBackend] Session error:', errorMsg);
                   this.logEvent(this.logFile, 'session_error', { error: errorMsg });
+                } else if (event.type === 'toolpartupdated') {
+                  // Обработка обновления состояния tool part
+                  const { partID, tool: toolName } = event.data || {};
+                  if (!partID) continue;
+
+                  console.log('[KiloBackend] toolpartupdated:', { partID, toolName });
+
+                  // Получаем tool part из Map
+                  let toolPart = toolPartsMap.get(partID);
+                  if (!toolPart) {
+                    // Race condition: toolpartupdated пришел до message.part.updated
+                    // Буферизуем событие для повторной обработки через 100ms
+                    pendingToolEvents.push({ partID, toolName, event, retry: 0 });
+                    setTimeout(() => retryToolEvent(partID), 100);
+                    continue;
+                  }
+
+                  // Определяем статус
+                  const status = toolPart.state?.status || toolPart.status || 'unknown';
+                  const input = toolPart.input?.command || JSON.stringify(toolPart.input, null, 2) || '';
+
+                  console.log('[TOOL EVENT]', { partID, toolName, status, inputLength: input.length });
+
+                  // Обработка output: проверка на binary
+                  let output = toolPart.output;
+                  if (output && typeof output !== 'string') {
+                    output = JSON.stringify(output, null, 2);
+                  }
+                  if (!output) output = '';
+
+                  if (isBuffered) {
+                    // В buffered mode буферизуем tool events
+                    bufferedToolEvents.push({
+                      partID, toolName, status, input,
+                      output,
+                      error: toolPart.error || toolPart.state?.error || '',
+                      timestamp: Date.now()
+                    });
+                  } else {
+                    // В native mode отправляем немедленно
+                    if (status === 'pending' && callbacks.onToolProposal) {
+                      callbacks.onToolProposal({ tool: toolName, input, partID });
+                    } else if (status === 'running' && callbacks.onToolStart) {
+                      callbacks.onToolStart({ tool: toolName, input, partID });
+                    } else if (status === 'completed' && callbacks.onToolComplete) {
+                      callbacks.onToolComplete({ tool: toolName, input, output, partID });
+                    } else if (status === 'failed' && callbacks.onToolError) {
+                      const error = toolPart.error || toolPart.state?.error || 'Unknown error';
+                      callbacks.onToolError({ tool: toolName, input, error, partID });
+                    }
+                  }
+
+                  this.logEvent(this.logFile, 'toolpartupdated', { partID, toolName, status, input: input.substring(0, 100) });
+
                 } else if (event.type === 'session.turn.close') {
                   // Проверяем на дублирование события
                   const timestamp = Date.now();
@@ -555,6 +720,43 @@ class KiloAgentBackend extends AgentBackend {
       // Ожидаем завершения обработки событий с таймаутом 60 секунд
       const timeoutPromise = new Promise(r => setTimeout(r, 60000));
       await Promise.race([eventPromise, timeoutPromise]).catch(() => {});
+
+      // Для buffered mode, отправляем все накопленные parts в правильном порядке
+      if (isBuffered && !doneCalled) {
+        allParts.sort((a, b) => (a.time?.start || 0) - (b.time?.start || 0));
+        console.log('[KiloBackend] Buffered mode: processing', allParts.length, 'parts');
+        for (const part of allParts) {
+          if (part.type === 'reasoning' && callbacks.onReasoning) {
+            callbacks.onReasoning(part.text);
+            this.logEvent(this.logFile, 'buffered_reasoning', { length: part.text.length });
+          } else if (part.type === 'text' && callbacks.onText) {
+            callbacks.onText(part.text);
+            this.logEvent(this.logFile, 'buffered_text', { length: part.text.length });
+          } else if (part.type === 'tool' && callbacks.onTool) {
+            callbacks.onTool({ type: 'tool', tool: part.tool || 'unknown', input: part.text });
+            if (callbacks.onToolProposal) callbacks.onToolProposal({ tool: part.tool || 'unknown', input: part.text });
+            if (callbacks.onToolStart) callbacks.onToolStart({ tool: part.tool || 'unknown', input: part.text });
+            if (callbacks.onToolComplete) callbacks.onToolComplete({ tool: part.tool || 'unknown', input: part.text, output: '' });
+            this.logEvent(this.logFile, 'buffered_tool', { tool: part.tool, inputLength: part.text.length });
+          }
+        }
+
+        // Отправляем buffered tool events в порядке timestamp
+        bufferedToolEvents.sort((a, b) => a.timestamp - b.timestamp);
+        for (const toolEvent of bufferedToolEvents) {
+          const { partID, toolName, status, input, output, error } = toolEvent;
+          if (status === 'pending' && callbacks.onToolProposal) {
+            callbacks.onToolProposal({ tool: toolName, input, partID });
+          } else if (status === 'running' && callbacks.onToolStart) {
+            callbacks.onToolStart({ tool: toolName, input, partID });
+          } else if (status === 'completed' && callbacks.onToolComplete) {
+            callbacks.onToolComplete({ tool: toolName, input, output, partID });
+          } else if (status === 'failed' && callbacks.onToolError) {
+            callbacks.onToolError({ tool: toolName, input, error, partID });
+          }
+          console.log('[BUFFERED TOOL EVENT]', { partID, toolName, status });
+        }
+      }
 
       // Убеждаемся, что onDone вызван
       if (!doneCalled) {

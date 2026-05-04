@@ -2424,8 +2424,82 @@ async function runCliSingle(p) {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
         }
-        ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
+        if (STREAM_MODE === 'buffered') {
+          fullTools.push({ tool: name, input: inp });
+        } else {
+          ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'tool', tool:name, input:(inp||'').substring(0,600), timestamp: Date.now() }, ...(tabId ? { tabId } : {}) }));
+        }
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
+      })
+      .onToolProposal((data) => {
+        console.log('[WS SENDING TOOL]', data.tool, 'pending');
+        ws.send(JSON.stringify({
+          type: 'ai_chunk',
+          sessionId,
+          payload: {
+            kind: 'tool',
+            status: 'pending',
+            tool: data.tool,
+            input: data.input || '',
+            partID: data.partID,
+            timestamp: Date.now(),
+            responseType: p.responseType || 'single'
+          },
+          ...(tabId ? { tabId } : {})
+        }));
+      })
+      .onToolStart((data) => {
+        console.log('[WS SENDING TOOL]', data.tool, 'running');
+        ws.send(JSON.stringify({
+          type: 'ai_chunk',
+          sessionId,
+          payload: {
+            kind: 'tool',
+            status: 'running',
+            tool: data.tool,
+            input: data.input || '',
+            partID: data.partID,
+            timestamp: Date.now(),
+            responseType: p.responseType || 'single'
+          },
+          ...(tabId ? { tabId } : {})
+        }));
+      })
+      .onToolComplete((data) => {
+        console.log('[WS SENDING TOOL]', data.tool, 'completed');
+        ws.send(JSON.stringify({
+          type: 'ai_chunk',
+          sessionId,
+          payload: {
+            kind: 'tool',
+            status: 'completed',
+            tool: data.tool,
+            input: data.input || '',
+            output: data.output || '',
+            partID: data.partID,
+            timestamp: Date.now(),
+            responseType: p.responseType || 'single'
+          },
+          ...(tabId ? { tabId } : {})
+        }));
+      })
+      .onToolError((data) => {
+        console.log('[WS SENDING TOOL]', data.tool, 'failed');
+        ws.send(JSON.stringify({
+          type: 'ai_chunk',
+          sessionId,
+          payload: {
+            kind: 'tool',
+            status: 'failed',
+            tool: data.tool,
+            input: data.input || '',
+            error: data.error || '',
+            partID: data.partID,
+            timestamp: Date.now(),
+            responseType: p.responseType || 'single'
+          },
+          ...(tabId ? { tabId } : {})
+        }));
       })
       .onSessionId(sid => { newKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
       .onRateLimit(info => {
@@ -2489,6 +2563,17 @@ async function runCliSingle(p) {
               type: 'ai_chunk',
               sessionId,
               payload: { kind: 'answer', text: fullText, timestamp: Date.now() },
+              responseType: p.responseType || 'single',
+              buffered: true,
+              ...(tabId ? { tabId } : {})
+            }));
+          }
+          // Then send tools if any
+          for (const tool of fullTools) {
+            ws.send(JSON.stringify({
+              type: 'ai_chunk',
+              sessionId,
+              payload: { kind: 'tool', tool: tool.tool, input: tool.input, timestamp: Date.now() },
               responseType: p.responseType || 'single',
               buffered: true,
               ...(tabId ? { tabId } : {})

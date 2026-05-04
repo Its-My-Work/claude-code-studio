@@ -73,6 +73,34 @@ body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
   word-break: break-word;
 }
 
+/* ─── Tool block (streaming) ─── */
+.tool-block {
+  background: linear-gradient(135deg, rgba(120,120,120,.08) 0%, rgba(120,120,120,.04) 100%);
+  border: 1px solid rgba(120,120,120,.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.tool-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(120,120,120,.2);
+}
+.tool-label svg { width: 14px; height: 14px; opacity: .7; }
+.tool-text {
+  color: var(--text);
+  opacity: .85;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
 
 /* ─── Thinking modal ─── */
 .thinking-modal-body {
@@ -2310,6 +2338,117 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   padding: 4px 10px; border-left: 2px solid rgba(16,185,129,.3);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 600px;
+}
+
+/* Tool blocks */
+.tool-block {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-hover);
+  border-bottom: 1px solid var(--border);
+}
+.tool-icon {
+  font-size: 14px;
+}
+.tool-name {
+  font-weight: 500;
+  font-size: 13px;
+}
+.tool-status {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.status-pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+.status-running {
+  background: #dbeafe;
+  color: #2563eb;
+  position: relative;
+}
+.status-running::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border: 2px solid #2563eb;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: translateY(-50%) rotate(360deg); }
+}
+.status-completed {
+  background: #d1fae5;
+  color: #065f46;
+}
+.status-failed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+.tool-input, .tool-output, .tool-error {
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  cursor: pointer;
+  transition: max-height 0.2s ease;
+}
+.tool-input.collapsed, .tool-output.collapsed, .tool-error.collapsed {
+  max-height: 60px;
+  overflow: hidden;
+  position: relative;
+}
+.tool-input.collapsed::after, .tool-output.collapsed::after, .tool-error.collapsed::after {
+  content: '... (click to expand)';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: var(--bg);
+  padding: 0 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.tool-output {
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.tool-error {
+  border-top: 1px solid #dc2626;
+  background: #fef2f2;
+}
+.tool-copy-btn {
+  display: block;
+  margin-top: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.tool-copy-btn:hover {
+  background: var(--border);
 }
 </style>
 </head>
@@ -5127,6 +5266,87 @@ function handleWsMsg(d) {
           streaming.txt += chunk.text;
         }
         streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+      } else if (chunk.kind === 'tool') {
+        // Tool chunks - create/update tool block
+        console.log('[UI RECEIVED TOOL]', chunk.tool, chunk.status, chunk.partID);
+        getTS(tabId).agentStatus = ''; // tool has arrived
+        if (!isVisible) {
+          // Accumulate tool for background tabs
+          const ts = getTS(tabId);
+          if (!ts.sessionToolChunks) ts.sessionToolChunks = [];
+          ts.sessionToolChunks.push(chunk);
+          break;
+        }
+        rmStatus();
+        if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+
+        // Find or create tool block by partID
+        let toolBlock = streaming.el.querySelector(`.tool-block[data-tool-part-id="${chunk.partID}"]`);
+        if (!toolBlock) {
+          toolBlock = document.createElement('div');
+          toolBlock.className = 'tool-block';
+          toolBlock.setAttribute('data-tool-part-id', chunk.partID);
+          streaming.el.insertBefore(toolBlock, streaming.el.querySelector('.msg'));
+        }
+
+        // Update or create tool header
+        let toolHeader = toolBlock.querySelector('.tool-header');
+        if (!toolHeader) {
+          toolHeader = document.createElement('div');
+          toolHeader.className = 'tool-header';
+          toolBlock.appendChild(toolHeader);
+        }
+        toolHeader.innerHTML = `
+          <span class="tool-icon">🔧</span>
+          <span class="tool-name">${escH(chunk.tool || 'tool')}</span>
+          <span class="tool-status status-${chunk.status || 'pending'}">${chunk.status || 'pending'}</span>
+        `;
+
+        // Update input
+        if (chunk.input !== undefined) {
+          let toolInput = toolBlock.querySelector('.tool-input');
+          if (!toolInput) {
+            toolInput = document.createElement('div');
+            toolInput.className = 'tool-input collapsed';
+            toolBlock.appendChild(toolInput);
+          }
+          toolInput.textContent = chunk.input || 'No input';
+          toolInput.onclick = () => toolInput.classList.toggle('collapsed');
+        }
+
+        // Update output or error
+        if (chunk.output !== undefined || chunk.error !== undefined) {
+          let toolOutput = toolBlock.querySelector('.tool-output');
+          if (!toolOutput) {
+            toolOutput = document.createElement('div');
+            toolOutput.className = 'tool-output collapsed';
+            toolBlock.appendChild(toolOutput);
+          }
+          if (chunk.error) {
+            toolOutput.className = 'tool-error collapsed';
+            toolOutput.textContent = chunk.error;
+          } else {
+            toolOutput.className = 'tool-output collapsed';
+            toolOutput.textContent = chunk.output || 'No output';
+          }
+          toolOutput.onclick = () => toolOutput.classList.toggle('collapsed');
+
+          // Add copy button
+          let copyBtn = toolOutput.querySelector('.tool-copy-btn');
+          if (!copyBtn && chunk.output) {
+            copyBtn = document.createElement('button');
+            copyBtn.className = 'tool-copy-btn';
+            copyBtn.textContent = '📋 Copy';
+            copyBtn.onclick = () => {
+              navigator.clipboard.writeText(chunk.output);
+              copyBtn.textContent = '✅ Copied!';
+              setTimeout(() => copyBtn.textContent = '📋 Copy', 2000);
+            };
+            toolOutput.appendChild(copyBtn);
+          }
+        }
+
+        scrollBottom();
         if (d.agent) addAgentBadge(streaming.el, d.agent);
         scrollBottom();
       }
@@ -8587,9 +8807,21 @@ async function loadSess(id) {
     // BUG FIX: streaming.txt = '' writes through proxy to getTS(activeTabId).curTxt,
     // which destroys accumulated background text before line 6227 can read it.
     const _bgTxt = tabState[id]?.curTxt || '';
+    const _bgReasoning = tabState[id]?.curReasoning || '';
+    const _bgTools = tabState[id]?.curTools || [];
+    const _bgToolChunks = tabState[id]?.sessionToolChunks || [];
     const _bgToolLog = tabState[id]?._toolLog ? tabState[id]._toolLog.slice() : null;
     const _bgToolCounts = tabState[id]?._toolCounts ? {...tabState[id]._toolCounts} : null;
     streaming.el = null; streaming.txt = ''; streaming.toolCounts = {}; streaming.toolLog = []; // Reset streaming state — stale refs cleared
+    // Clear background state after saving
+    if (tabState[id]) {
+      tabState[id].curTxt = '';
+      tabState[id].curReasoning = '';
+      tabState[id].curTools = [];
+      tabState[id].sessionToolChunks = [];
+      tabState[id]._toolLog = null;
+      tabState[id]._toolCounts = null;
+    }
     msgsEl.removeAttribute('aria-live'); // Suppress screen reader flood during batch history load
     msgsEl.innerHTML = '';
     currentSessionId = id;
@@ -8758,6 +8990,90 @@ async function loadSess(id) {
       streaming.txt = _bgTxt || '';
       addSpinner(streaming.el);
       if (_bgTxt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+      // Restore reasoning block
+      if (_bgReasoning) {
+        let reasonEl = streaming.el.querySelector('.reasoning-block');
+        if (!reasonEl) {
+          reasonEl = document.createElement('div');
+          reasonEl.className = 'reasoning-block';
+          const reasonLabel = document.createElement('div');
+          reasonLabel.className = 'reasoning-label';
+          reasonLabel.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> ${t('thinking.title')}`;
+          reasonEl.appendChild(reasonLabel);
+          const reasonText = document.createElement('div');
+          reasonText.className = 'reasoning-text';
+          reasonText.textContent = cleanReasoningText(_bgReasoning);
+          reasonEl.appendChild(reasonText);
+          streaming.el.insertBefore(reasonEl, streaming.el.querySelector('.msg'));
+        }
+      }
+      // Restore tool blocks from sessionToolChunks
+      for (const chunk of _bgToolChunks) {
+        const toolBlock = document.createElement('div');
+        toolBlock.className = 'tool-block';
+        toolBlock.setAttribute('data-tool-part-id', chunk.partID);
+        streaming.el.insertBefore(toolBlock, streaming.el.querySelector('.msg'));
+
+        // Create tool header
+        const toolHeader = document.createElement('div');
+        toolHeader.className = 'tool-header';
+        toolHeader.innerHTML = `
+          <span class="tool-icon">🔧</span>
+          <span class="tool-name">${escH(chunk.tool || 'tool')}</span>
+          <span class="tool-status status-${chunk.status || 'pending'}">${chunk.status || 'pending'}</span>
+        `;
+        toolBlock.appendChild(toolHeader);
+
+        // Create input
+        if (chunk.input !== undefined) {
+          const toolInput = document.createElement('div');
+          toolInput.className = 'tool-input collapsed';
+          toolInput.textContent = chunk.input || 'No input';
+          toolInput.onclick = () => toolInput.classList.toggle('collapsed');
+          toolBlock.appendChild(toolInput);
+        }
+
+        // Create output or error
+        if (chunk.output !== undefined || chunk.error !== undefined) {
+          const toolOutput = document.createElement('div');
+          if (chunk.error) {
+            toolOutput.className = 'tool-error collapsed';
+            toolOutput.textContent = chunk.error;
+          } else {
+            toolOutput.className = 'tool-output collapsed';
+            toolOutput.textContent = chunk.output || 'No output';
+          }
+          toolOutput.onclick = () => toolOutput.classList.toggle('collapsed');
+
+          // Add copy button if output
+          if (chunk.output) {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'tool-copy-btn';
+            copyBtn.textContent = '📋 Copy';
+            copyBtn.onclick = () => {
+              navigator.clipboard.writeText(chunk.output);
+              copyBtn.textContent = '✅ Copied!';
+              setTimeout(() => copyBtn.textContent = '📋 Copy', 2000);
+            };
+            toolOutput.appendChild(copyBtn);
+          }
+          toolBlock.appendChild(toolOutput);
+        }
+      }
+      // Legacy restore for old _bgTools
+      for (const tool of _bgTools) {
+        const toolEl = document.createElement('div');
+        toolEl.className = 'tool-block';
+        const toolLabel = document.createElement('div');
+        toolLabel.className = 'tool-label';
+        toolLabel.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> ${escH(tool.tool || 'tool')}`;
+        toolEl.appendChild(toolLabel);
+        const toolText = document.createElement('div');
+        toolText.className = 'tool-text';
+        toolText.textContent = escH(tool.input || '');
+        toolEl.appendChild(toolText);
+        streaming.el.insertBefore(toolEl, streaming.el.querySelector('.msg'));
+      }
       // Restore live tool activity panel even if there's no text yet (tools-only phase)
       if (_bgToolLog?.length) {
         streaming.toolLog = _bgToolLog.slice();
