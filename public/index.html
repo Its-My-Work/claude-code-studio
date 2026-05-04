@@ -84,6 +84,27 @@ body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
   max-height: 300px;
   overflow-y: auto;
 }
+[data-tool-part-id] {
+  transition: background-color 0.3s ease, border-left-color 0.3s ease;
+  border-left: 3px solid transparent;
+}
+[data-tool-part-id][data-status="pending"] {
+  border-left-color: var(--orange);
+  background: rgba(229,164,53,.05);
+}
+[data-tool-part-id][data-status="running"] {
+  border-left-color: var(--accent);
+  background: rgba(124,106,239,.05);
+  animation: tool-running-pulse 2s ease-in-out infinite;
+}
+[data-tool-part-id][data-status="completed"] {
+  border-left-color: var(--green);
+  background: rgba(63,185,80,.05);
+}
+@keyframes tool-running-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
 .tool-label {
   display: flex; align-items: center; gap: 8px;
   font-size: 11px; font-weight: 600; color: var(--muted);
@@ -98,6 +119,16 @@ body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
   opacity: .85;
   white-space: pre-wrap;
   line-height: 1.6;
+  word-break: break-word;
+}
+.tool-input code, .tool-output code {
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.87em;
+  color: var(--text);
+  white-space: pre-wrap;
   word-break: break-word;
 }
 
@@ -5268,7 +5299,9 @@ function handleWsMsg(d) {
         streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
       } else if (chunk.kind === 'tool') {
         // Tool chunks - create/update tool block
-        console.log('[UI RECEIVED TOOL]', chunk.tool, chunk.status, chunk.partID);
+        console.log('[TOOL EVENT]', chunk.status, '|', chunk.tool, '|',
+                    chunk.partID, '| input:', chunk.input?.substring(0,50));
+
         getTS(tabId).agentStatus = ''; // tool has arrived
         if (!isVisible) {
           // Accumulate tool for background tabs
@@ -5282,12 +5315,20 @@ function handleWsMsg(d) {
 
         // Find or create tool block by partID
         let toolBlock = streaming.el.querySelector(`.tool-block[data-tool-part-id="${chunk.partID}"]`);
+        if (toolBlock) {
+          console.log('[TOOL DOM] Block found, updating to:', chunk.status);
+        } else {
+          console.log('[TOOL DOM] Block NOT FOUND, creating new');
+        }
         if (!toolBlock) {
           toolBlock = document.createElement('div');
           toolBlock.className = 'tool-block';
           toolBlock.setAttribute('data-tool-part-id', chunk.partID);
           streaming.el.insertBefore(toolBlock, streaming.el.querySelector('.msg'));
         }
+
+        // Set data-status for CSS transitions
+        toolBlock.dataset.status = chunk.status || 'pending';
 
         // Update or create tool header
         let toolHeader = toolBlock.querySelector('.tool-header');
@@ -5310,7 +5351,7 @@ function handleWsMsg(d) {
             toolInput.className = 'tool-input collapsed';
             toolBlock.appendChild(toolInput);
           }
-          toolInput.textContent = chunk.input || 'No input';
+          toolInput.innerHTML = `<code>${escH(chunk.input || 'No input')}</code>`;
           toolInput.onclick = () => toolInput.classList.toggle('collapsed');
         }
 
@@ -5324,10 +5365,10 @@ function handleWsMsg(d) {
           }
           if (chunk.error) {
             toolOutput.className = 'tool-error collapsed';
-            toolOutput.textContent = chunk.error;
+            toolOutput.innerHTML = `<code>${escH(chunk.error)}</code>`;
           } else {
             toolOutput.className = 'tool-output collapsed';
-            toolOutput.textContent = chunk.output || 'No output';
+            toolOutput.innerHTML = `<code>${escH(chunk.output || 'No output')}</code>`;
           }
           toolOutput.onclick = () => toolOutput.classList.toggle('collapsed');
 
@@ -5346,9 +5387,100 @@ function handleWsMsg(d) {
           }
         }
 
+        // Force reflow after updates
+        void toolBlock.offsetHeight;
+
         scrollBottom();
         if (d.agent) addAgentBadge(streaming.el, d.agent);
         scrollBottom();
+      }
+      break;
+
+    case 'stream_event':
+      try {
+        const eventData = JSON.parse(d.data.event);
+        if (eventData.type === 'message.part.updated' && eventData.properties?.part?.type === 'tool') {
+          const part = eventData.properties.part;
+          const partId = part.id;
+          const status = part.state?.status;
+          const input = part.input;
+          const output = part.output;
+          console.log('[TOOL] message.part.updated for', partId, 'status:', status, 'input:', input?.substring(0,50), 'output:', output?.substring(0,50));
+
+          // Find the tool block
+          let toolBlock = document.querySelector(`[data-tool-part-id="${partId}"]`);
+          if (!toolBlock && status === 'running' && isVisible) {
+            // Create tool block if not found and status is running
+            if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+            toolBlock = document.createElement('div');
+            toolBlock.className = 'tool-block';
+            toolBlock.setAttribute('data-tool-part-id', partId);
+            streaming.el.insertBefore(toolBlock, streaming.el.querySelector('.msg'));
+
+            // Create basic structure
+            const toolHeader = document.createElement('div');
+            toolHeader.className = 'tool-header';
+            toolBlock.appendChild(toolHeader);
+            toolHeader.innerHTML = `
+              <span class="tool-icon">🔧</span>
+              <span class="tool-name">tool</span>
+              <span class="tool-status status-pending">pending</span>
+            `;
+          }
+
+          if (toolBlock) {
+            // Update status
+            if (status) {
+              toolBlock.dataset.status = status;
+              const statusEl = toolBlock.querySelector('.tool-status');
+              if (statusEl) statusEl.textContent = status;
+            }
+
+            // Update input
+            if (input !== undefined) {
+              let toolInput = toolBlock.querySelector('.tool-input');
+              if (!toolInput) {
+                toolInput = document.createElement('div');
+                toolInput.className = 'tool-input collapsed';
+                toolBlock.appendChild(toolInput);
+                toolInput.onclick = () => toolInput.classList.toggle('collapsed');
+              }
+              toolInput.innerHTML = `<code>${escH(input || 'No input')}</code>`;
+            }
+
+            // Update output
+            if (output !== undefined) {
+              let toolOutput = toolBlock.querySelector('.tool-output');
+              if (!toolOutput) {
+                toolOutput = document.createElement('div');
+                toolOutput.className = 'tool-output collapsed';
+                toolBlock.appendChild(toolOutput);
+                toolOutput.onclick = () => toolOutput.classList.toggle('collapsed');
+              }
+              toolOutput.innerHTML = `<code>${escH(output || 'No output')}</code>`;
+
+              // Add copy button if not present
+              let copyBtn = toolOutput.querySelector('.tool-copy-btn');
+              if (!copyBtn && output) {
+                copyBtn = document.createElement('button');
+                copyBtn.className = 'tool-copy-btn';
+                copyBtn.textContent = '📋 Copy';
+                copyBtn.onclick = () => {
+                  navigator.clipboard.writeText(output);
+                  copyBtn.textContent = '✅ Copied!';
+                  setTimeout(() => copyBtn.textContent = '📋 Copy', 2000);
+                };
+                toolOutput.appendChild(copyBtn);
+              }
+            }
+
+            // Force reflow
+            void toolBlock.offsetHeight;
+            scrollBottom();
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing stream_event:', e);
       }
       break;
 
