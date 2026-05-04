@@ -5000,20 +5000,20 @@ function handleWsMsg(d) {
           }
           ts._hadTool = false;
         }
-        ts.curTxt = d.catchUp ? d.text : (ts.curTxt || '') + d.text;
+        ts.curTxt = d.catchUp ? d.text : d.buffered ? d.text : (ts.curTxt || '') + d.text;
         break;
       }
       rmStatus();
       if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
       // Ensure paragraph break between text blocks separated by tool calls
-      if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
+      if (!d.catchUp && !d.buffered && streaming.txt && getTS(tabId)._hadTool) {
         if (!streaming.txt.endsWith('\n\n') && !d.text.startsWith('\n')) {
           streaming.txt = streaming.txt.replace(/\n*$/, '\n\n');
         }
         getTS(tabId)._hadTool = false;
       }
-      // catchUp = full replay from server after reconnect → replace, not append
-      if (d.catchUp) { streaming.txt = d.text; } else { streaming.txt += d.text; }
+      // catchUp or buffered = full replay/replace; normal chunks append
+      if (d.catchUp || d.buffered) { streaming.txt = d.text; } else { streaming.txt += d.text; }
       streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
       if (d.agent) addAgentBadge(streaming.el, d.agent);
       scrollBottom();
@@ -5057,7 +5057,9 @@ function handleWsMsg(d) {
         }
 
         if (!isVisible) {
-          const ts = getTS(tabId); ts._thinkingTxt = (ts._thinkingTxt || '') + reasoningText;
+          // Accumulate reasoning for background tabs
+          const ts = getTS(tabId);
+          ts.curReasoning = d.buffered ? reasoningText : (ts.curReasoning || '') + reasoningText;
           break;
         }
         if (!streaming.el) {
@@ -5084,11 +5086,12 @@ function handleWsMsg(d) {
         if (reasonTextEl) {
           // Initialize on first chunk
           if (!streaming.reasoningTxt) streaming.reasoningTxt = '';
-          // Add space between reasoning chunks if needed
-          if (streaming.reasoningTxt && !/\s$/.test(streaming.reasoningTxt) && reasoningText && !/^\s/.test(reasoningText) && reasoningText.trim()) {
-            streaming.reasoningTxt += ' ';
+          // Handle buffered or catchUp: full replace, else append
+          if (d.catchUp || d.buffered) {
+            streaming.reasoningTxt = reasoningText || '';
+          } else {
+            streaming.reasoningTxt += reasoningText || '';
           }
-          streaming.reasoningTxt += reasoningText || '';
           reasonTextEl.textContent = cleanReasoningText(streaming.reasoningTxt);
           // Auto-scroll for reasoning
           scrollBottom();
@@ -5099,30 +5102,28 @@ function handleWsMsg(d) {
         if (!isVisible) {
           // Accumulate text for background tabs
           const ts = getTS(tabId);
-          if (!d.catchUp && ts.curTxt && ts._hadTool) {
+          if (!d.catchUp && !d.buffered && ts.curTxt && ts._hadTool) {
             if (!ts.curTxt.endsWith('\n\n') && !chunk.text.startsWith('\n')) {
               ts.curTxt = ts.curTxt.replace(/\n*$/, '\n\n');
             }
             ts._hadTool = false;
           }
-          ts.curTxt = d.catchUp ? chunk.text : (ts.curTxt || '') + (ts.curTxt && !/\s$/.test(ts.curTxt) && !/^\s/.test(chunk.text) && chunk.text.trim() ? ' ' : '') + chunk.text;
+          ts.curTxt = d.catchUp || d.buffered ? chunk.text : (ts.curTxt || '') + chunk.text;
           break;
         }
         rmStatus();
         if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
         // Ensure paragraph break between text blocks separated by tool calls
-        if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
+        if (!d.catchUp && !d.buffered && streaming.txt && getTS(tabId)._hadTool) {
           if (!streaming.txt.endsWith('\n\n') && !chunk.text.startsWith('\n')) {
             streaming.txt = streaming.txt.replace(/\n*$/, '\n\n');
           }
           getTS(tabId)._hadTool = false;
         }
-        // catchUp = full replay from server after reconnect → replace, not append
-        if (d.catchUp) { streaming.txt = chunk.text; } else {
-          // Add space between chunks if needed to prevent words from merging
-          if (streaming.txt && !/\s$/.test(streaming.txt) && !/^\s/.test(chunk.text) && chunk.text.trim()) {
-            streaming.txt += ' ';
-          }
+        // catchUp or buffered = full replace; normal chunks append
+        if (d.catchUp || d.buffered) {
+          streaming.txt = chunk.text;
+        } else {
           streaming.txt += chunk.text;
         }
         streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
@@ -5132,7 +5133,12 @@ function handleWsMsg(d) {
       break;
 
     case 'thinking':
-      { const ts = getTS(tabId); ts._thinkingTxt = (ts._thinkingTxt || '') + (d.text || ''); }
+      if (!isVisible) {
+        // Accumulate thinking for background tabs
+        const ts = getTS(tabId);
+        ts._thinkingTxt = d.buffered ? d.text : (ts._thinkingTxt || '') + (d.text || '');
+        break;
+      }
       if (!streaming.el && isVisible) showStatus(t('status.thinking'));
       break;
 

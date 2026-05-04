@@ -29,6 +29,8 @@ class KiloAgentBackend extends AgentBackend {
     // Модель по умолчанию для генерации ответов
     this.defaultModel = options.model || 'kilo/kilo-auto/free';
     this.currentModel = this.defaultModel;
+    // Режим стриминга: 'native' или 'buffered'
+    this.streamMode = options.streamMode || 'native';
     // Директория для хранения логов сессий
     this.logsDir = path.join(process.cwd(), 'logs');
     if (!fs.existsSync(this.logsDir)) {
@@ -49,8 +51,7 @@ class KiloAgentBackend extends AgentBackend {
     // Генерируем уникальный ID для запроса
     const requestId = uuidv4();
     const sessionId = options.sessionId;
-    // Лог-файл для сессии (один файл на сессию)
-    const logFile = path.join(this.logsDir, `${sessionId || 'new'}.log`);
+    this.logFile = path.join(this.logsDir, `${sessionId || 'new'}.log`);
 
     console.log('[KiloBackend] Raw prompt before processing:', options.prompt);
     console.log('[KiloBackend] Content blocks:', options.contentBlocks);
@@ -70,7 +71,7 @@ class KiloAgentBackend extends AgentBackend {
     console.log('[KiloBackend] Full prompt after concat:', fullPrompt);
 
     // Логируем начало запроса
-    this.logEvent(logFile, 'request_start', {
+    this.logEvent(this.logFile, 'request_start', {
       model: options.model || this.currentModel,
       promptLength: fullPrompt.length,
       promptPreview: fullPrompt.substring(0, 500),
@@ -79,7 +80,7 @@ class KiloAgentBackend extends AgentBackend {
     });
 
     // Создаем обертку для обработки коллбеков
-    return this.createCallbackWrapper(options, requestId, sessionId, fullPrompt, logFile);
+    return this.createCallbackWrapper(options, requestId, sessionId, fullPrompt, this.logFile);
   }
 
   /**
@@ -181,27 +182,26 @@ class KiloAgentBackend extends AgentBackend {
     };
 
     // Запускаем обработку запроса с коллбеками
-    this.processSend(options, requestId, sessionId, fullPrompt, logFile, callbacks);
+    this.processSend(options, requestId, sessionId, fullPrompt, callbacks);
 
     return wrapper;
   }
 
-  /**
-   * Основная логика обработки запроса: создание сессии, подписка на события,
-   * отправка промпта и обработка стриминга ответов.
-   * @param {Object} options - Параметры запроса
-   * @param {string} requestId - ID запроса
-   * @param {string} sessionId - ID сессии
-   * @param {string} fullPrompt - Полный текст промпта
-   * @param {string} logFile - Путь к лог-файлу
-   * @param {Object} callbacks - Объект с коллбеками
-   */
-  async processSend(options, requestId, sessionId, fullPrompt, logFile, callbacks) {
+/**
+    * Основная логика обработки запроса: создание сессии, подписка на события,
+    * отправка промпта и обработка стриминга ответов.
+    * @param {Object} options - Параметры запроса
+    * @param {string} requestId - ID запроса
+    * @param {string} sessionId - ID сессии
+    * @param {string} fullPrompt - Полный текст промпта
+    * @param {Object} callbacks - Объект с коллбеками
+    */
+  async processSend(options, requestId, sessionId, fullPrompt, callbacks) {
     console.log('[KiloBackend] processSend started', { fullPrompt: fullPrompt.substring(0, 100) });
 
     // Проверка на отмену запроса
     if (options.abortController?.signal?.aborted) {
-      this.logEvent(logFile, 'request_aborted', { reason: 'aborted_before_start' });
+      this.logEvent(this.logFile, 'request_aborted', { reason: 'aborted_before_start' });
       if (callbacks.onError) callbacks.onError('Request aborted');
       if (callbacks.onDone) callbacks.onDone(sessionId);
       return;
@@ -288,7 +288,8 @@ class KiloAgentBackend extends AgentBackend {
         // ID может быть в session.id или session.data.id в зависимости от версии API
         latestSessionId = session.id || session.data?.id;
         console.log('[KiloBackend] Session created:', latestSessionId);
-        this.logEvent(logFile, 'session_created', { sessionId: latestSessionId, title });
+        this.logFile = path.join(this.logsDir, `${latestSessionId}.log`);
+        this.logEvent(this.logFile, 'session_created', { sessionId: latestSessionId, title });
         if (callbacks.onSessionId) callbacks.onSessionId(latestSessionId);
       }
 
@@ -342,7 +343,7 @@ class KiloAgentBackend extends AgentBackend {
               try {
                 const event = JSON.parse(line.slice(6));
                 console.log('[KiloBackend] Event:', event.type, JSON.stringify(event.properties || {}).substring(0, 150));
-                this.logEvent(logFile, 'stream_event', { event: JSON.stringify(event).substring(0, 4000) });
+                this.logEvent(this.logFile, 'stream_event', { event: JSON.stringify(event).substring(0, 4000) });
 
                 // Пропускаем события не для нашей сессии
                 const eventSessionId = event.properties?.sessionID;
@@ -416,7 +417,7 @@ class KiloAgentBackend extends AgentBackend {
                         callbacks.onReasoning(delta);
                       }
                     }
-                    this.logEvent(logFile, eventType, chunkData);
+                    this.logEvent(this.logFile, eventType, chunkData);
                     console.log(`[KiloBackend] Calling on${isReasoning ? 'Reasoning' : 'Text'} with delta:`, delta?.substring(0, 50));
                   }
                 } else if (event.type === 'message.part.updated') {
@@ -479,7 +480,7 @@ class KiloAgentBackend extends AgentBackend {
                   // Ошибка сессии
                   const errorMsg = event.properties?.error?.data?.message || 'Unknown error';
                   console.log('[KiloBackend] Session error:', errorMsg);
-                  this.logEvent(logFile, 'session_error', { error: errorMsg });
+                  this.logEvent(this.logFile, 'session_error', { error: errorMsg });
                 } else if (event.type === 'session.turn.close') {
                   // Проверяем на дублирование события
                   const timestamp = Date.now();
@@ -549,7 +550,7 @@ class KiloAgentBackend extends AgentBackend {
         const responseBody = await promptResp.text();
         console.log('[KiloBackend] Response body:', responseBody);
       }
-      this.logEvent(logFile, 'prompt_response', { status: promptResp.status });
+      this.logEvent(this.logFile, 'prompt_response', { status: promptResp.status });
 
       // Ожидаем завершения обработки событий с таймаутом 60 секунд
       const timeoutPromise = new Promise(r => setTimeout(r, 60000));
@@ -563,7 +564,7 @@ class KiloAgentBackend extends AgentBackend {
 
     } catch (error) {
       console.log('[KiloBackend] Error:', error.message);
-      this.logEvent(logFile, 'request_error', { error: error.message });
+      this.logEvent(this.logFile, 'request_error', { error: error.message });
       if (callbacks.onError) callbacks.onError(error.message);
     } finally {
       // Очищаем активную подписку при завершении

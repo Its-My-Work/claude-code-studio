@@ -72,13 +72,17 @@ const PORT = process.env.PORT || 3000;
 // data persists in the user's directory, not inside the npm cache.
 const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
+// Stream mode configuration
+const STREAM_MODE = process.env.KILO_STREAM_MODE || 'native';
+console.log('Stream mode:', STREAM_MODE);
+
 const CONFIG_PATH = path.join(APP_DIR, 'data', 'config.json');
 
 // ─── Kilo Agent Backend (loaded lazily due to ESM) ───────────────────────────
 let kiloBackend = null;
 const kiloBackendPromise = import('./backends/kilo-agent-backend.mjs').then(m => {
   const KiloAgentBackend = m.default;
-  kiloBackend = new KiloAgentBackend();
+  kiloBackend = new KiloAgentBackend({ streamMode: STREAM_MODE });
   return kiloBackend;
 }).catch(err => {
   console.error('Failed to load KiloAgentBackend:', err.message);
@@ -90,7 +94,6 @@ const kiloBackendPromise = import('./backends/kilo-agent-backend.mjs').then(m =>
     setModel: () => {},
     manageSession: () => Promise.resolve({ success: false }),
   };
-  return kiloBackend;
 });
 
 function getKiloBackend() {
@@ -2392,15 +2395,13 @@ async function runCliSingle(p) {
       .onText(t => {
         console.log('[SERVER] onText called with:', t.substring(0, 100));
         t = t.replace(/\\n/g, '\n');
-        // Add space between text chunks if needed
-        if (fullText && !/\s$/.test(fullText) && !/^\s/.test(t) && t.trim()) {
-          fullText += ' ';
-          { const _cb = (chatBuffers.get(sessionId) || '') + ' '; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        }
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        console.log('[SERVER] Sending ai_chunk to ws:', { type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t.substring(0, 50), timestamp: Date.now() } });
-        ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t, timestamp: Date.now(), responseType: p.responseType || 'single' }, ...(tabId ? { tabId } : {}) }));
+        // Send chunks only in native mode
+        if (STREAM_MODE === 'native') {
+          console.log('[SERVER] Sending ai_chunk to ws:', { type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t.substring(0, 50), timestamp: Date.now() } });
+          ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'answer', text: t, timestamp: Date.now(), responseType: p.responseType || 'single' }, ...(tabId ? { tabId } : {}) }));
+        }
         if (++chunkCount % 5 === 0) {
           try { stmts.setPartialText.run(fullText, sessionId); } catch {}
         }
@@ -2408,12 +2409,11 @@ async function runCliSingle(p) {
       .onReasoning(t => {
         t = t.replace(/\\n/g, '\n');
         wasReasoningStreamed = true;
-        // Add space between reasoning chunks if needed
-        if (fullThinking && !/\s$/.test(fullThinking) && !/^\s/.test(t) && t.trim()) {
-          fullThinking += ' ';
-        }
         fullThinking += t;
-        ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'reasoning', text: t, timestamp: Date.now(), responseType: p.responseType || 'single' }, ...(tabId ? { tabId } : {}) }));
+        // Send chunks only in native mode
+        if (STREAM_MODE === 'native') {
+          ws.send(JSON.stringify({ type:'ai_chunk', sessionId, payload: { kind: 'reasoning', text: t, timestamp: Date.now(), responseType: p.responseType || 'single' }, ...(tabId ? { tabId } : {}) }));
+        }
       })
       .onTool((name, inp) => {
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
@@ -2469,6 +2469,33 @@ async function runCliSingle(p) {
       })
       .onDone(sid => {
         if (sid) newKiloId = sid;
+
+        // Send buffered data in buffered mode
+        if (STREAM_MODE === 'buffered') {
+          // First send reasoning if any
+          if (fullThinking) {
+            ws.send(JSON.stringify({
+              type: 'ai_chunk',
+              sessionId,
+              payload: { kind: 'reasoning', text: fullThinking, timestamp: Date.now() },
+              responseType: p.responseType || 'single',
+              buffered: true,
+              ...(tabId ? { tabId } : {})
+            }));
+          }
+          // Then send answer if any
+          if (fullText) {
+            ws.send(JSON.stringify({
+              type: 'ai_chunk',
+              sessionId,
+              payload: { kind: 'answer', text: fullText, timestamp: Date.now() },
+              responseType: p.responseType || 'single',
+              buffered: true,
+              ...(tabId ? { tabId } : {})
+            }));
+          }
+        }
+
         // If onResult wasn't called, assume success (for backends that don't emit onResult)
         if (!resultData) {
           resultData = { subtype: 'success', sessionId: sid };
@@ -2669,12 +2696,14 @@ async function runSshSingle(p) {
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        ws.send(JSON.stringify({ type:'text', text:t, ...(tabId ? { tabId } : {}) }));
+        if (STREAM_MODE === 'native') {
+          ws.send(JSON.stringify({ type:'text', text:t, ...(tabId ? { tabId } : {}) }));
+        }
         if (++chunkCount % 5 === 0) {
           try { stmts.setPartialText.run(fullText, sessionId); } catch {}
         }
       })
-.onReasoning(t => { fullThinking += t; ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
+.onReasoning(t => { fullThinking += t; if (STREAM_MODE === 'native') { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); } })
        .onTool((name, inp) => {
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
@@ -2695,6 +2724,19 @@ async function runSshSingle(p) {
       })
       .onDone(sid => {
         if (sid) newKiloId = sid;
+
+        // Send buffered data in buffered mode
+        if (STREAM_MODE === 'buffered') {
+          // First send thinking if any
+          if (fullThinking) {
+            ws.send(JSON.stringify({ type:'thinking', text: fullThinking, buffered: true, ...(tabId ? { tabId } : {}) }));
+          }
+          // Then send text if any
+          if (fullText) {
+            ws.send(JSON.stringify({ type:'text', text: fullText, buffered: true, ...(tabId ? { tabId } : {}) }));
+          }
+        }
+
         _finish(newKiloId);
       });
   });
@@ -7132,7 +7174,9 @@ wss.on('connection', (ws) => {
               );
               created.push(stmts.getTask.get(taskId));
             }
-          })();
+})();
+
+console.log('Stream mode:', STREAM_MODE);
 
           setImmediate(processQueue);
 
