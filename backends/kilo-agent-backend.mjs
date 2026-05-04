@@ -34,6 +34,9 @@ class KiloAgentBackend extends AgentBackend {
     if (!fs.existsSync(this.logsDir)) {
       fs.mkdirSync(this.logsDir, { recursive: true });
     }
+
+    // Управление активными подписками на сессии (для предотвращения накопления подписок)
+    this.activeSubscriptions = new Map(); // sessionId -> {controller, reader}
   }
 
   /**
@@ -204,6 +207,21 @@ class KiloAgentBackend extends AgentBackend {
       return;
     }
 
+    // Закрываем предыдущую подписку на эту же сессию (если есть)
+    if (sessionId && this.activeSubscriptions.has(sessionId)) {
+      console.log('[KiloBackend] Closing previous subscription for session:', sessionId);
+      const prevSub = this.activeSubscriptions.get(sessionId);
+      if (prevSub?.controller) {
+        prevSub.controller.abort();
+      }
+      this.activeSubscriptions.delete(sessionId);
+    }
+
+    // Создаем новый AbortController для этой подписки
+    const controller = new AbortController();
+    const signal = controller.signal;
+
+    // Сохраняем активную подписку
     let latestSessionId = sessionId;
     const decoder = new TextDecoder();
     let hasStreaming = false;
@@ -215,6 +233,47 @@ class KiloAgentBackend extends AgentBackend {
     let messageRoles = new Map();
     // Хранилище частей сообщения по partID: { type, text, completed }
     let messageParts = new Map();
+
+    // Класс для дедупликации событий
+    class EventDeduplicator {
+      constructor(ttl = 100) { // 100ms окно дедупликации
+        this.seen = new Map();
+        this.ttl = ttl;
+      }
+
+      /**
+       * Проверяет, является ли событие дубликатом
+       * @param {string} eventType - Тип события
+       * @param {string} eventId - Уникальный ID события
+       * @param {number} timestamp - Timestamp события
+       * @returns {boolean} true если дубликат
+       */
+      isDuplicate(eventType, eventId, timestamp) {
+        const key = `${eventType}:${eventId}`;
+        const lastSeen = this.seen.get(key);
+
+        // Если событие было меньше ttl мс назад — дубликат
+        if (lastSeen && (timestamp - lastSeen) < this.ttl) {
+          return true;
+        }
+
+        // Сохраняем новое событие
+        this.seen.set(key, timestamp);
+
+        // Чистим старые записи если их слишком много
+        if (this.seen.size > 1000) {
+          const cutoff = timestamp - this.ttl;
+          for (const [k, v] of this.seen.entries()) {
+            if (v < cutoff) this.seen.delete(k);
+          }
+        }
+
+        return false;
+      }
+    }
+
+    // Создаем экземпляр дедупликатора
+    const eventDedup = new EventDeduplicator();
 
     try {
       // Создание сессии, если ID не передан
@@ -238,11 +297,16 @@ class KiloAgentBackend extends AgentBackend {
 
       const eventResp = await fetch(`${this.url}/event`, {
         headers: { 'Accept': 'text/event-stream' },
-        signal: options.abortController?.signal,
+        signal: signal, // Используем наш контроллер вместо options.abortController
       });
 
       const reader = eventResp.body.getReader();
       let buffer = '';
+
+      // Сохраняем reader для возможности отмены
+      if (latestSessionId) {
+        this.activeSubscriptions.set(latestSessionId, { controller, reader });
+      }
 
       /**
        * Инициализирует часть сообщения по partID
@@ -290,6 +354,15 @@ class KiloAgentBackend extends AgentBackend {
                 if (event.type === 'message.updated') {
                   const info = event.properties?.info;
                   const messageID = info?.id || event.properties?.messageID;
+
+                  // Проверяем на дублирование события
+                  const timestamp = Date.now();
+                  const eventId = `${messageID}-${JSON.stringify(info || event.properties || {})}`;
+                  if (eventDedup.isDuplicate('message.updated', eventId, timestamp)) {
+                    console.warn('[KiloBackend] Skipping duplicate message.updated event:', messageID);
+                    continue;
+                  }
+
                   if (info?.role && messageID) {
                     messageRoles.set(messageID, info.role);
                     console.log('[KiloBackend] Set role for messageID:', messageID, 'role:', info.role);
@@ -306,6 +379,14 @@ class KiloAgentBackend extends AgentBackend {
                   // Игнорируем события без известной роли или от пользователя
                   if (!role || role === 'user') {
                     console.log('[KiloBackend] Skipping delta - unknown or user role');
+                    continue;
+                  }
+
+                  // Проверяем на дублирование события
+                  const timestamp = Date.now();
+                  const eventId = `${messageID}-${partID}-${delta}`;
+                  if (eventDedup.isDuplicate('message.part.delta', eventId, timestamp)) {
+                    console.warn('[KiloBackend] Skipping duplicate delta event:', delta?.substring(0, 50));
                     continue;
                   }
 
@@ -344,6 +425,14 @@ class KiloAgentBackend extends AgentBackend {
                   const partID = part?.id;
                   const partType = part?.type;
 
+                  // Проверяем на дублирование события
+                  const timestamp = Date.now();
+                  const eventId = `${partID}-${partType}-${JSON.stringify(part?.time || {})}`;
+                  if (eventDedup.isDuplicate('message.part.updated', eventId, timestamp)) {
+                    console.warn('[KiloBackend] Skipping duplicate part.updated event:', partID, partType);
+                    continue;
+                  }
+
                   if (partID) {
                     // Сохраняем тип части в хранилище
                     let partData = messageParts.get(partID);
@@ -367,6 +456,14 @@ class KiloAgentBackend extends AgentBackend {
                     }
                   }
                 } else if (event.type === 'session.status') {
+                  // Проверяем на дублирование события
+                  const timestamp = Date.now();
+                  const eventId = `${latestSessionId}-${JSON.stringify(event.properties?.status || {})}`;
+                  if (eventDedup.isDuplicate('session.status', eventId, timestamp)) {
+                    console.warn('[KiloBackend] Skipping duplicate session.status event');
+                    continue;
+                  }
+
                   // Статус сессии: завершаем обработку при idle
                   if (event.properties?.status?.type === 'idle' && !doneCalled) {
                     doneCalled = true;
@@ -384,6 +481,14 @@ class KiloAgentBackend extends AgentBackend {
                   console.log('[KiloBackend] Session error:', errorMsg);
                   this.logEvent(logFile, 'session_error', { error: errorMsg });
                 } else if (event.type === 'session.turn.close') {
+                  // Проверяем на дублирование события
+                  const timestamp = Date.now();
+                  const eventId = `${latestSessionId}-turn-close`;
+                  if (eventDedup.isDuplicate('session.turn.close', eventId, timestamp)) {
+                    console.warn('[KiloBackend] Skipping duplicate session.turn.close event');
+                    continue;
+                  }
+
                   // Закрытие хода (turn) в сессии
                   if (!doneCalled) {
                     doneCalled = true;
@@ -460,6 +565,12 @@ class KiloAgentBackend extends AgentBackend {
       console.log('[KiloBackend] Error:', error.message);
       this.logEvent(logFile, 'request_error', { error: error.message });
       if (callbacks.onError) callbacks.onError(error.message);
+    } finally {
+      // Очищаем активную подписку при завершении
+      if (latestSessionId && this.activeSubscriptions.has(latestSessionId)) {
+        this.activeSubscriptions.delete(latestSessionId);
+        console.log('[KiloBackend] Cleaned up subscription for session:', latestSessionId);
+      }
     }
   }
 
