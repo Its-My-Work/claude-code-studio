@@ -338,7 +338,9 @@ class KiloAgentBackend extends AgentBackend {
             completed: false,
             time: time,
             tool: tool,
-            proposed: false
+            proposed: false,
+            started: false,
+            finished: false
           };
           messageParts.set(partID, partData);
           if (isBuffered) {
@@ -545,6 +547,35 @@ class KiloAgentBackend extends AgentBackend {
                           callbacks.onToolProposal({ tool: partData.tool || 'unknown', input: '', partID });
                         }
                       }
+
+                      // Обработка статусов инструментов из part.state.status
+                      const status = part.state?.status;
+                      console.log('[KiloBackend] TOOL part.updated', JSON.stringify(part).slice(0, 200));
+                      if (status && !isBuffered) {
+                        console.log('[KiloBackend TOOL STATE]', { partID, toolName: partData.tool, status });
+                        if (status === 'pending' && !partData.proposed) {
+                          partData.proposed = true;
+                          if (callbacks.onToolProposal) {
+                            callbacks.onToolProposal({ tool: partData.tool || 'unknown', input: '', partID });
+                          }
+                        } else if (status === 'running' && !partData.started) {
+                          partData.started = true;
+                          if (callbacks.onToolStart) {
+                            callbacks.onToolStart({ tool: partData.tool || 'unknown', input: '', partID });
+                          }
+                        } else if (status === 'completed' && !partData.finished) {
+                          partData.finished = true;
+                          if (callbacks.onToolComplete) {
+                            callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: '', output: '', partID });
+                          }
+                        } else if (status === 'failed' && !partData.finished) {
+                          partData.finished = true;
+                          const error = part.state?.error || 'Unknown error';
+                          if (callbacks.onToolError) {
+                            callbacks.onToolError({ tool: partData.tool || 'unknown', input: '', error, partID });
+                          }
+                        }
+                      }
                     }
 
                     // Если есть time.end - часть завершена
@@ -561,7 +592,8 @@ class KiloAgentBackend extends AgentBackend {
                       // Для tools, вызвать onToolComplete если buffered, или обработать tool
                       if (partType === 'tool') {
                         this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
-                        if (!isBuffered && callbacks.onToolComplete) {
+                        if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
+                          partData.finished = true;
                           callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: partData.text, output: '' });
                         }
                       }
@@ -632,13 +664,20 @@ class KiloAgentBackend extends AgentBackend {
                     });
                   } else {
                     // В native mode отправляем немедленно
-                    if (status === 'pending' && callbacks.onToolProposal) {
+                    // Статусы могут приходить как через toolpartupdated, так и через message.part.updated
+                    // Проверяем флаги, чтобы избежать дубликатов
+                    const partData = messageParts.get(partID);
+                    if (status === 'pending' && callbacks.onToolProposal && (!partData || !partData.proposed)) {
+                      if (partData) partData.proposed = true;
                       callbacks.onToolProposal({ tool: toolName, input, partID });
-                    } else if (status === 'running' && callbacks.onToolStart) {
+                    } else if (status === 'running' && callbacks.onToolStart && (!partData || !partData.started)) {
+                      if (partData) partData.started = true;
                       callbacks.onToolStart({ tool: toolName, input, partID });
-                    } else if (status === 'completed' && callbacks.onToolComplete) {
+                    } else if (status === 'completed' && callbacks.onToolComplete && (!partData || !partData.finished)) {
+                      if (partData) partData.finished = true;
                       callbacks.onToolComplete({ tool: toolName, input, output, partID });
-                    } else if (status === 'failed' && callbacks.onToolError) {
+                    } else if (status === 'failed' && callbacks.onToolError && (!partData || !partData.finished)) {
+                      if (partData) partData.finished = true;
                       const error = toolPart.error || toolPart.state?.error || 'Unknown error';
                       callbacks.onToolError({ tool: toolName, input, error, partID });
                     }
