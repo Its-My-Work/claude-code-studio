@@ -1,6 +1,0 @@
-{
-  "$schema": "https://app.kilo.ai/config.json",
-  "instructions": [
-    "/home/user/Projects/claude-code-studio/PROJECT_RULES.md"
-  ]
-}
