@@ -33,6 +33,29 @@ function runWithSession(sessionId, fn) {
   return sessionContext.run(sessionId, fn);
 }
 
+// ─── Session ID cache for log file renaming ───────────────────────────────────────
+// Maps local sessionId -> kilo_session_id (populated via onSessionId callback)
+const kiloIdCache = new Map();
+
+function setKiloIdForSession(localSessionId, kiloSessionId) {
+  kiloIdCache.set(localSessionId, kiloSessionId);
+}
+
+function getKiloIdForSession(localSessionId) {
+  return kiloIdCache.get(localSessionId);
+}
+
+// Rename log file from temp sessionId to kilo_session_id
+function renameLogFile(localSessionId, kiloSessionId) {
+  const oldPath = path.join(SERVER_LOGS_DIR, `${localSessionId}_server.log`);
+  const newPath = path.join(SERVER_LOGS_DIR, `${kiloSessionId}_server.log`);
+  if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+    try {
+      fs.renameSync(oldPath, newPath);
+    } catch {}
+  }
+}
+
 // ─── Server Log Writer ───────────────────────────────────────────────────────────
 function ensureLogsDir() {
   if (!fs.existsSync(SERVER_LOGS_DIR)) {
@@ -45,7 +68,14 @@ function writeServerLog(sessionId, level, msg, meta = {}) {
   ensureLogsDir();
   const time = new Date().toISOString();
   const logEntry = { time, level, msg, ...meta };
-  const logPath = path.join(SERVER_LOGS_DIR, `${sessionId}_server.log`);
+
+  // Get kilo_session_id from cache (populated by onSessionId callback)
+  const kiloSessionId = getKiloIdForSession(sessionId);
+
+  // Determine log file name
+  const logFileName = kiloSessionId ? `${kiloSessionId}_server.log` : `${sessionId}_server.log`;
+  const logPath = path.join(SERVER_LOGS_DIR, logFileName);
+
   try {
     fs.appendFileSync(logPath, JSON.stringify(logEntry) + '\n');
   } catch {}
@@ -553,6 +583,7 @@ const stmts = {
     };
     return _stmt;
   })(),
+  getKiloSessionId: db.prepare(`SELECT kilo_session_id FROM sessions WHERE id = ?`),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,kilo_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,kilo_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
@@ -1131,7 +1162,7 @@ async function startTask(task) {
               broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
             }
           })
-          .onSessionId(sid => { newKiloId = sid; currentTaskKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
+          .onSessionId(sid => { newKiloId = sid; currentTaskKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); setKiloIdForSession(sessionId, sid); renameLogFile(sessionId, sid); } catch {} })
           .onResult(r => { lastTaskResult = r; })
           .onError(err => {
             hasError = true;
@@ -2553,7 +2584,7 @@ async function runCliSingle(p) {
           ...(tabId ? { tabId } : {})
         }));
       })
-      .onSessionId(sid => { newKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
+      .onSessionId(sid => { newKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); setKiloIdForSession(sessionId, sid); renameLogFile(sessionId, sid); } catch {} })
       .onRateLimit(info => {
         try { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); } catch {}
         if (info && info.status === 'rejected') rateLimitInfo = info;
@@ -2849,7 +2880,7 @@ async function runSshSingle(p) {
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
-      .onSessionId(sid => { newKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
+      .onSessionId(sid => { newKiloId = sid; try { stmts.updateKiloId.run(sid, sessionId); setKiloIdForSession(sessionId, sid); renameLogFile(sessionId, sid); } catch {} })
       .onRateLimit(info => {
         try { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); } catch {}
         if (info && info.status === 'rejected') rateLimitInfo = info;
@@ -3020,7 +3051,7 @@ async function runMultiAgent(p) {
     const _res = () => { if (!_settled) { _settled = true; res(); } };
     cli.send({ prompt:planPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController })
       .onText(t => { planText+=t; })
-      .onSessionId(sid => { currentSessionId = sid; })
+      .onSessionId(sid => { currentSessionId = sid; setKiloIdForSession(sessionId, sid); renameLogFile(sessionId, sid); })
       .onError(() => _res())
       .onDone(() => _res());
   });
@@ -3069,7 +3100,7 @@ async function runMultiAgent(p) {
         cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } console.log('[DBG onText]', { raw: JSON.stringify(t), len: t.length }); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
           .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
-          .onSessionId(sid => { currentSessionId = sid; })
+          .onSessionId(sid => { currentSessionId = sid; setKiloIdForSession(sessionId, sid); renameLogFile(sessionId, sid); })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
       });
@@ -3096,8 +3127,8 @@ Provide a clear summary of what was accomplished. Be concise.`;
     const _res = () => { if (!_settled) { _settled = true; res(); } };
     cli.send({ prompt:summaryPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController })
       .onText(t => { summaryText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:'summarizer', ...(tabId ? { tabId } : {}) })); } catch {} })
-      .onSessionId(sid => { currentSessionId = sid; try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
       .onError(() => _res())
+      .onSessionId(sid => { currentSessionId = sid; setKiloIdForSession(sessionId, sid); renameLogFile(sessionId, sid); try { stmts.updateKiloId.run(sid, sessionId); } catch {} })
       .onDone(() => _res());
   });
 

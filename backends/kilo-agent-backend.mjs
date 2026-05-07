@@ -47,11 +47,10 @@ class KiloAgentBackend extends AgentBackend {
    * @param {Object} options - Параметры запроса (sessionId, prompt, contentBlocks и т.д.)
    * @returns {Object} Обертка с методами onText, onReasoning и т.д. для подписки на события
    */
-  send(options) {
+send(options) {
     // Генерируем уникальный ID для запроса
     const requestId = uuidv4();
     const sessionId = options.sessionId;
-    this.logFile = path.join(this.logsDir, `${sessionId || 'new'}.log`);
 
     console.log('[KiloBackend] Raw prompt before processing:', options.prompt);
     console.log('[KiloBackend] Content blocks:', options.contentBlocks);
@@ -70,17 +69,8 @@ class KiloAgentBackend extends AgentBackend {
 
     console.log('[KiloBackend] Full prompt after concat:', fullPrompt);
 
-    // Логируем начало запроса
-    this.logEvent(this.logFile, 'request_start', {
-      model: options.model || this.currentModel,
-      promptLength: fullPrompt.length,
-      promptPreview: fullPrompt.substring(0, 500),
-      sessionId,
-      maxTurns: options.maxTurns,
-    });
-
     // Создаем обертку для обработки коллбеков
-    return this.createCallbackWrapper(options, requestId, sessionId, fullPrompt, this.logFile);
+    return this.createCallbackWrapper(options, requestId, sessionId, fullPrompt, null);
   }
 
   /**
@@ -205,7 +195,6 @@ class KiloAgentBackend extends AgentBackend {
 
     // Проверка на отмену запроса
     if (options.abortController?.signal?.aborted) {
-      this.logEvent(this.logFile, 'request_aborted', { reason: 'aborted_before_start' });
       if (callbacks.onError) callbacks.onError('Request aborted');
       if (callbacks.onDone) callbacks.onDone(sessionId);
       return;
@@ -227,6 +216,7 @@ class KiloAgentBackend extends AgentBackend {
 
     // Сохраняем активную подписку
     let latestSessionId = sessionId;
+    let logFile = sessionId ? path.join(this.logsDir, `${sessionId}.log`) : null;
     const decoder = new TextDecoder();
     let hasStreaming = false;
     let doneCalled = false;
