@@ -1,0 +1,257 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - button "Projects Фильтр ＋ 0" [expanded] [ref=e5] [cursor=pointer]:
+      - generic [ref=e6]: Projects
+      - generic [ref=e7]:
+        - button "Фильтр" [ref=e8]:
+          - img [ref=e9]
+        - button "＋" [ref=e11]
+        - generic [ref=e12]: "0"
+    - generic [ref=e14]:
+      - button "SSH Hosts Фильтр ＋ 1" [expanded] [ref=e196] [cursor=pointer]:
+        - generic [ref=e16]: SSH Hosts
+        - generic [ref=e17]:
+          - button "Фильтр" [ref=e18]:
+            - img [ref=e19]
+          - button "＋" [ref=e21]
+          - generic [ref=e22]: "1"
+      - generic [ref=e199]:
+        - generic [ref=e201]:
+          - generic [ref=e202]: fr
+          - generic [ref=e203]: root@212.47.73.210
+        - button "⚡" [ref=e204] [cursor=pointer]
+        - button "✏" [ref=e205] [cursor=pointer]
+        - button "✕" [ref=e206] [cursor=pointer]
+    - button "Chats Фильтр ☑ 0" [expanded] [ref=e25] [cursor=pointer]:
+      - generic [ref=e26]: Chats
+      - generic [ref=e27]:
+        - button "Фильтр" [ref=e28]:
+          - img [ref=e29]
+        - button "☑" [ref=e31]
+        - generic [ref=e32]: "0"
+    - generic [ref=e36]:
+      - button "Kilo MCP Фильтр ＋ 0" [expanded] [ref=e37] [cursor=pointer]:
+        - generic [ref=e38]: Kilo MCP
+        - generic [ref=e39]:
+          - button "Фильтр" [ref=e40]:
+            - img [ref=e41]
+          - button "Import MCP from JSON file (Claude Desktop format)" [ref=e43]:
+            - img [ref=e44]
+          - button "Export all MCP to JSON file" [ref=e47]:
+            - img [ref=e48]
+          - button "＋" [ref=e51]
+          - generic [ref=e52]: "0"
+      - generic [ref=e209]: Loading Kilo MCP servers...
+    - generic [ref=e54]:
+      - button "/ Commands Фильтр ＋ 10" [expanded] [ref=e210] [cursor=pointer]:
+        - generic [ref=e56]: / Commands
+        - generic [ref=e57]:
+          - button "Фильтр" [ref=e58]:
+            - img [ref=e59]
+          - button "＋" [ref=e61]
+          - generic [ref=e62]: "10"
+      - generic [ref=e63]:
+        - generic [ref=e64]: Slash commands — shortcuts to prompts. Type / in chat.
+        - generic [ref=e212]:
+          - generic [ref=e213] [cursor=pointer]:
+            - generic [ref=e214]:
+              - generic [ref=e215]: /check
+              - generic [ref=e216]: "Check this step by step: syntax, logic, edge cases, and potential bugs. Be thorough."
+            - button "✏️" [ref=e217]
+            - button "✕" [ref=e218]
+          - generic [ref=e219] [cursor=pointer]:
+            - generic [ref=e220]:
+              - generic [ref=e221]: /compact
+              - generic [ref=e222]: "Summarize our conversation so far into a concise recap: key decisions made, what was built or changed, current state, and what still needs to be done. Be brief and structured."
+            - button "✏️" [ref=e223]
+            - button "✕" [ref=e224]
+          - generic [ref=e225] [cursor=pointer]:
+            - generic [ref=e226]:
+              - generic [ref=e227]: /docs
+              - generic [ref=e228]: "Write clear documentation: purpose, parameters, return values, usage examples, and any gotchas."
+            - button "✏️" [ref=e229]
+            - button "✕" [ref=e230]
+          - generic [ref=e231] [cursor=pointer]:
+            - generic [ref=e232]:
+              - generic [ref=e233]: /explain
+              - generic [ref=e234]: "Explain this code clearly: what it does, how it works, and why it's structured this way. Use examples if helpful."
+            - button "✏️" [ref=e235]
+            - button "✕" [ref=e236]
+          - generic [ref=e237] [cursor=pointer]:
+            - generic [ref=e238]:
+              - generic [ref=e239]: /fix
+              - generic [ref=e240]: Find and fix the bug. Explain what caused it and exactly what you changed.
+            - button "✏️" [ref=e241]
+            - button "✕" [ref=e242]
+          - generic [ref=e243] [cursor=pointer]:
+            - generic [ref=e244]:
+              - generic [ref=e245]: /init
+              - generic [ref=e246]: "Analyze this project and create a CLAUDE.md file in the project root. Include: project overview, tech stack, architecture, key conventions, common commands (build, test, lint), and any gotchas a developer should know. Be thorough but concise."
+            - button "✏️" [ref=e247]
+            - button "✕" [ref=e248]
+          - generic [ref=e249] [cursor=pointer]:
+            - generic [ref=e250]:
+              - generic [ref=e251]: /optimize
+              - generic [ref=e252]: Analyze performance and optimize. Identify bottlenecks, propose improvements, quantify the expected gains.
+            - button "✏️" [ref=e253]
+            - button "✕" [ref=e254]
+          - generic [ref=e255] [cursor=pointer]:
+            - generic [ref=e256]:
+              - generic [ref=e257]: /refactor
+              - generic [ref=e258]: Refactor this code for clarity and maintainability. Keep the exact same behavior. Show what changed and why.
+            - button "✏️" [ref=e259]
+            - button "✕" [ref=e260]
+          - generic [ref=e261] [cursor=pointer]:
+            - generic [ref=e262]:
+              - generic [ref=e263]: /review
+              - generic [ref=e264]: "Do a thorough code review: readability, performance, security, and adherence to best practices. Point out issues with severity levels (critical / warning / suggestion)."
+            - button "✏️" [ref=e265]
+            - button "✕" [ref=e266]
+          - generic [ref=e267] [cursor=pointer]:
+            - generic [ref=e268]:
+              - generic [ref=e269]: /test
+              - generic [ref=e270]: "Write comprehensive tests: happy path, edge cases, and error scenarios. Explain what each test covers."
+            - button "✏️" [ref=e271]
+            - button "✕" [ref=e272]
+    - generic [ref=e65]:
+      - button "Agents ＋ 3" [expanded] [ref=e273] [cursor=pointer]:
+        - generic [ref=e67]: Agents
+        - generic [ref=e68]:
+          - button "＋" [ref=e69]
+          - generic [ref=e70]: "3"
+      - generic [ref=e71]:
+        - generic [ref=e72]: External agents for task delegation.
+        - generic [ref=e275]:
+          - generic [ref=e276] [cursor=pointer]:
+            - generic [ref=e277]:
+              - generic [ref=e278]: 🧠 OpenAI Codex
+              - generic [ref=e279]: "codex {prompt}"
+            - button "▶" [ref=e280]
+            - button "✏️" [ref=e281]
+            - button "✕" [ref=e282]
+          - generic [ref=e283] [cursor=pointer]:
+            - generic [ref=e284]:
+              - generic [ref=e285]: ♊ Gemini CLI
+              - generic [ref=e286]: "gemini -i {prompt}"
+            - button "▶" [ref=e287]
+            - button "✏️" [ref=e288]
+            - button "✕" [ref=e289]
+          - generic [ref=e290] [cursor=pointer]:
+            - generic [ref=e291]:
+              - generic [ref=e292]: ⚡ opencode
+              - generic [ref=e293]: "opencode run {prompt}"
+            - button "▶" [ref=e294]
+            - button "✏️" [ref=e295]
+            - button "✕" [ref=e296]
+    - generic [ref=e73]:
+      - button "Telegram ● 0" [expanded] [ref=e74] [cursor=pointer]:
+        - generic [ref=e75]: Telegram
+        - generic [ref=e76]:
+          - generic [ref=e77]: ●
+          - generic [ref=e78]: "0"
+      - generic [ref=e79]:
+        - generic [ref=e80]: Control Studio remotely via Telegram bot.
+        - generic [ref=e81]:
+          - text: "Bot Token (from @BotFather):"
+          - generic [ref=e82]:
+            - textbox "123456:ABC-DEF..." [ref=e83]
+            - button "▶ Start" [ref=e84]
+        - generic [ref=e85]:
+          - generic [ref=e86]: "New connections:"
+          - generic "Allow/deny new connections" [ref=e87]:
+            - checkbox [checked]
+        - button "🔗 Connect Telegram" [disabled] [ref=e90] [cursor=pointer]
+        - generic [ref=e91]:
+          - generic [ref=e92]: "Connected devices:"
+          - generic [ref=e297]: No connected devices
+  - button "Toggle left panel" [ref=e94] [cursor=pointer]:
+    - img [ref=e96]
+  - generic [ref=e98]:
+    - generic [ref=e99]:
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - generic [ref=e102]: CCS
+          - navigation "Navigation" [ref=e103]:
+            - link "Chat" [ref=e104] [cursor=pointer]:
+              - /url: /
+              - img [ref=e105]
+              - generic [ref=e107]: Chat
+            - link "Kanban" [ref=e108] [cursor=pointer]:
+              - /url: /kanban
+              - img [ref=e109]
+              - generic [ref=e113]: Kanban
+            - link "Schedule" [ref=e114] [cursor=pointer]:
+              - /url: /schedule
+              - img [ref=e115]
+              - generic [ref=e117]: Schedule
+            - link "Dashboard" [ref=e118] [cursor=pointer]:
+              - /url: /dashboard
+              - img [ref=e119]
+              - generic [ref=e120]: Dashboard
+        - generic [ref=e121]:
+          - button "＋ Chat" [ref=e122] [cursor=pointer]
+          - button [ref=e123] [cursor=pointer]:
+            - img [ref=e124]
+          - button [ref=e127] [cursor=pointer]:
+            - img [ref=e128]
+          - combobox "Interface language" [ref=e129] [cursor=pointer]:
+            - option "EN" [selected]
+            - option "RU"
+          - link [ref=e130] [cursor=pointer]:
+            - /url: https://github.com/Lexus2016/claude-code-studio
+            - img [ref=e131]
+          - button [ref=e133] [cursor=pointer]:
+            - img [ref=e134]
+      - generic [ref=e137]:
+        - generic [ref=e138]:
+          - generic [ref=e139]: Mode
+          - button "Code" [ref=e140] [cursor=pointer]
+          - button "Ask" [ref=e141] [cursor=pointer]
+          - button "Architect" [ref=e142] [cursor=pointer]
+          - button "Debug" [ref=e143] [cursor=pointer]
+          - button "Orchestrator" [ref=e144] [cursor=pointer]
+        - generic [ref=e145]:
+          - button "🤖 kilo/kilo-auto/free ▼" [ref=e298] [cursor=pointer]:
+            - generic [ref=e147]: 🤖
+            - generic [ref=e148]: kilo/kilo-auto/free
+            - generic [ref=e149]: ▼
+          - generic "Show thinking blocks (Kilo only)" [ref=e150] [cursor=pointer]:
+            - generic [ref=e151]: ●Reasoning mode
+        - generic [ref=e152]: ● Processing...
+    - generic [ref=e153]:
+      - button "Collapse/expand header" [ref=e299] [cursor=pointer]:
+        - img [ref=e300]
+      - generic [ref=e302] [cursor=pointer]:
+        - generic [ref=e304]: New chat
+        - button "✕" [ref=e305]
+      - button "+" [ref=e306] [cursor=pointer]
+      - generic [ref=e307]:
+        - generic [ref=e308]: A
+        - slider [ref=e309] [cursor=pointer]: "15"
+        - generic [ref=e310]: A
+    - log "Chat messages" [ref=e162]:
+      - generic [ref=e311]:
+        - generic [ref=e312]: Привет, это тестовое сообщение от Kilo
+        - button "Copy" [ref=e313] [cursor=pointer]:
+          - img [ref=e314]
+        - button "↩" [ref=e317] [cursor=pointer]
+        - button "↓" [ref=e318] [cursor=pointer]
+        - text: You
+      - generic [ref=e321]: Processing...
+    - button "↓"
+    - generic [ref=e178]:
+      - button "⚡ Clarify" [ref=e323] [cursor=pointer]
+      - button "Attach file" [ref=e179] [cursor=pointer]:
+        - img [ref=e180]
+      - textbox "Message input" [active] [ref=e182]:
+        - /placeholder: "Write a task... Ctrl+V — screenshot · @ — files · # — SSH · 📎 — any file"
+      - text: ⏳
+      - button "Stop agent" [ref=e324] [cursor=pointer]:
+        - img [ref=e325]
+      - button "Send (Enter)" [ref=e183] [cursor=pointer]:
+        - img [ref=e184]
+  - button "Toggle right panel" [ref=e187] [cursor=pointer]:
+    - img [ref=e189]
+  - generic [ref=e192]:
+    - generic [ref=e193]: Workspace
+    - button "↻" [ref=e194] [cursor=pointer]

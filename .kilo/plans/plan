@@ -1,0 +1,49 @@
+# План реализации серверных логов по сессиям
+
+## Цель
+Серверные логи (stdout Node.js процесса) с привязкой к сессиям должны писаться в `logs/$kilo_session_id_server.log`
+
+## Текущая ситуация
+- Серверные логи идут в stdout без привязки к сессиям
+- Логи сессий Kilo хранятся в `logs/$kilo_session_id.log` (JSON события)
+- Нужен второй лог-файл `logs/$kilo_session_id_server.log` с серверными логами по сессии
+
+## Предлагаемое решение
+1. **AsyncLocalStorage** - хранение sessionId в контексте выполнения
+2. **Logger middleware** - модификация основного logger для записи в server log
+3. **WebSocket context** - установка sessionId при обработке WS сообщений
+4. **Console capture** - перехват console.log/error и запись в server log
+5. **API эндпоинты** - поддержка sessionId в REST запросах
+
+## Шаги реализации
+1. **Добавить AsyncLocalStorage**:
+   - Импорт `{ AsyncLocalStorage }` из 'async_hooks'
+   - Создать `sessionContext = new AsyncLocalStorage()`
+   - Функции `getCurrentSessionId()` и `runWithSession(sessionId, fn)`
+
+2. **Модифицировать structured logger**:
+   - Добавить путь к директории серверных логов `SERVER_LOGS_DIR`
+   - Функция `writeServerLog(sessionId, level, msg, meta)`
+   - Обновить `log.write()` для записи в server log при наличии sessionId
+
+3. **WebSocket context**:
+   - В `processChat()` обернуть выполнение в `runWithSession(localSessionId, async () => { ... })`
+   - Все логи внутри processChat пойдут в server log сессии
+
+4. **Console capture**:
+   - Переопределить `console.log/error/warn` для записи в server log
+   - Добавить `getCurrentSessionId()` в вывод
+
+5. **API эндпоинты**:
+   - Для REST запросов связанных с сессиями добавить middleware установки контекста
+
+## Риски и альтернативы
+- **Риск**: Performance impact от AsyncLocalStorage. Альтернатива: thread-local переменные
+- **Риск**: Console capture может конфликтовать с другими модулями
+- **Риск**: Логи без sessionId - игнорировать или в общий файл
+
+## Тестирование
+- Тест 1: Создать сессию и проверить server log файл
+- Тест 2: Несколько параллельных сессий - разделение логов
+- Тест 3: Логи без контекста - не пишутся в server log
+- Тест 4: UI просмотр server log через модальное окно

@@ -17,6 +17,40 @@ const auth = require('./auth');
 const TelegramBot = require('./telegram-bot');
 // Kilo Agent Backend - loaded lazily
 
+// ─── AsyncLocalStorage for session context ───────────────────────────────────────
+const { AsyncLocalStorage } = require('async_hooks');
+const sessionContext = new AsyncLocalStorage();
+
+// SERVER_LOGS_DIR must be defined before server log functions that use it
+const APP_DIR = process.env.APP_DIR || __dirname;
+const SERVER_LOGS_DIR = path.join(APP_DIR, 'logs');
+
+function getCurrentSessionId() {
+  return sessionContext.getStore();
+}
+
+function runWithSession(sessionId, fn) {
+  return sessionContext.run(sessionId, fn);
+}
+
+// ─── Server Log Writer ───────────────────────────────────────────────────────────
+function ensureLogsDir() {
+  if (!fs.existsSync(SERVER_LOGS_DIR)) {
+    fs.mkdirSync(SERVER_LOGS_DIR, { recursive: true });
+  }
+}
+
+function writeServerLog(sessionId, level, msg, meta = {}) {
+  if (!sessionId) return;
+  ensureLogsDir();
+  const time = new Date().toISOString();
+  const logEntry = { time, level, msg, ...meta };
+  const logPath = path.join(SERVER_LOGS_DIR, `${sessionId}_server.log`);
+  try {
+    fs.appendFileSync(logPath, JSON.stringify(logEntry) + '\n');
+  } catch {}
+}
+
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
@@ -53,6 +87,11 @@ const log = (() => {
       const metaStr = Object.keys(meta).length ? ' ' + JSON.stringify(meta) : '';
       process.stdout.write(`${icons[level] || ''} [${time}] ${msg}${metaStr}\n`);
     }
+    // Also write to server log if session context is available
+    const sessionId = getCurrentSessionId();
+    if (sessionId) {
+      writeServerLog(sessionId, level, msg, meta);
+    }
   }
   return {
     error: (msg, meta = {}) => write('error', msg, meta),
@@ -63,6 +102,20 @@ const log = (() => {
 })();
 
 
+// ─── Console capture for server logs ───────────────────────────────────────────
+const _origConsole = { log: console.log, error: console.error, warn: console.warn, info: console.info, debug: console.debug };
+['log','error','warn','info','debug'].forEach(method => {
+  console[method] = (...args) => {
+    const sessionId = getCurrentSessionId();
+    if (sessionId) {
+      try { 
+        writeServerLog(sessionId, method, args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')); 
+      } catch {}
+    }
+    _origConsole[method].apply(console, args);
+  };
+});
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
@@ -70,7 +123,6 @@ const wss = new WebSocketServer({ noServer: true });
 const PORT = process.env.PORT || 3000;
 // When launched via npx/global install, cli.js sets APP_DIR to cwd so user
 // data persists in the user's directory, not inside the npm cache.
-const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
 // Stream mode configuration
 const STREAM_MODE = process.env.KILO_STREAM_MODE || 'native';
@@ -6382,6 +6434,9 @@ wss.on('connection', (ws) => {
       // The client renames the tab from tempId → localSessionId upon receiving session_started,
       // so further events must carry localSessionId (not the original temp tabId) to be routed correctly.
       effectiveTabId = tabId ? localSessionId : null;
+
+      // Enter session context for server logs (after session is established)
+      sessionContext.enterWith(localSessionId);
       // Migrate _tabBusy/_tabAbort keys from tempId to real session id
       if (tabId && tabId !== localSessionId) {
         ws._tabBusy[localSessionId] = true; delete ws._tabBusy[tabId];
@@ -7089,10 +7144,10 @@ wss.on('connection', (ws) => {
               for (const [rid, entry] of pendingAskUser) {
                 if (entry.sessionId === sessionId && ws.readyState === 1) {
                   ws.send(JSON.stringify({ type: 'ask_user', requestId: rid, question: entry.question, questions: entry.questions, tabId: sessionId }));
-                }
-              }
-            }
-          }
+}
+      }
+    }
+  }
         }
         // Cancel any pending delayed cleanup — a live WS is reclaiming this session
         const _cleanupTimer = sessionQueueCleanupTimers.get(sessionId);
