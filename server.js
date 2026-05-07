@@ -6404,7 +6404,7 @@ wss.on('connection', (ws) => {
     const proxy = new WsProxy(ws); // buffers output when browser disconnects
 
     // Check session lock to prevent simultaneous processChat for the same session
-    const initialSessionId = msg.sessionId || (tabId ? null : legacySessionId);
+    const initialSessionId = msg.sessionId || tabId || legacySessionId;
     if (sessionLocks.has(initialSessionId)) {
       // Queue the message
       const q = sessionQueues.get(initialSessionId) || [];
@@ -6457,6 +6457,12 @@ wss.on('connection', (ws) => {
 
       // For legacy (no tabId) mode, keep WS-level state in sync
       if (!tabId) { legacySessionId = localSessionId; }
+
+      // Transfer lock from initialSessionId to localSessionId if they differ
+      if (initialSessionId !== localSessionId) {
+        sessionLocks.delete(initialSessionId);
+        sessionLocks.set(localSessionId, true);
+      }
 
       // Tell client which real session this tab is using (converts temp tab id → real session id)
       ws.send(JSON.stringify({ type:'session_started', sessionId:localSessionId, tabId }));
@@ -6777,11 +6783,19 @@ wss.on('connection', (ws) => {
           delete ws._tabQueue[effectiveTabId];
           sessionQueues.delete(effectiveTabId);
           try { ws.send(JSON.stringify({ type: 'queue_update', tabId: effectiveTabId, pending: 0, items: [] })); } catch {}
-          // Fix: WS-reconnect scenario — old WS had empty queue but a newer WS (page refresh / network blip)
-          // may have restored queue items from sessionQueues into its own _tabQueue (shared-ref).
-          // Since the shared-ref persists after sessionQueues.delete, check sessionWatchers for a live
-          // WS with pending items and fire _dequeue_next on it so the queue isn't stuck.
-          setImmediate(() => {
+        }
+        // Process session queue for initialSessionId (handles case where sessionId was null)
+        const sessQ = sessionQueues.get(initialSessionId);
+        if (sessQ?.length && !sessionLocks.has(initialSessionId)) {
+          const next = sessQ.shift();
+          if (sessQ.length === 0) sessionQueues.delete(initialSessionId);
+          processChat(next).catch(err => log.error('processChat session-queue error', { message: err.message }));
+        }
+        // Fix: WS-reconnect scenario — old WS had empty queue but a newer WS (page refresh / network blip)
+        // may have restored queue items from sessionQueues into its own _tabQueue (shared-ref).
+        // Since the shared-ref persists after sessionQueues.delete, check sessionWatchers for a live
+        // WS with pending items and fire _dequeue_next on it so the queue isn't stuck.
+        setImmediate(() => {
             const watchers = sessionWatchers.get(effectiveTabId);
             if (!watchers) return;
             for (const liveWs of watchers) {
@@ -6796,7 +6810,7 @@ wss.on('connection', (ws) => {
             }
           });
         }
-      } else if (!isStale) {
+      else if (!isStale) {
         ws._busy = false;
         ws._abort = null;
         if (ws._queue.length > 0) {

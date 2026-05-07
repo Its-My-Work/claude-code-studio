@@ -78,3 +78,6 @@ README_RU.html
 .crosswork/
 test-snapshot-*.md
 *.planning/quick/**
+
+logs/
+.playwright-mcp/
