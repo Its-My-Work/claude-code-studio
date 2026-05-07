@@ -5844,11 +5844,10 @@ function handleWsMsg(d) {
           }
         if (sf.isCurrent) renderTabs();
         saveUIState();
-        // Update session id button
+        // Update session id button - will be updated by updateSessBar later
         const sessIdEl = $i('sessBarSessionId');
         if (sessIdEl) {
-          sessIdEl.textContent = d.sessionId;
-          sessIdEl.style.display = '';
+          sessIdEl.style.display = 'none';
         }
         } else if (d.sessionId === activeTabId && streaming.el) {
           // Existing tab: a new queued message is starting — the previous done should have cleared
@@ -7508,11 +7507,15 @@ async function updateSessBar(opts = {}) {
     }
     if (openBtn) { openBtn.style.display = ''; }
     const sessIdEl = $i('sessBarSessionId');
-    if (sessIdEl && currentSessionId) {
-      sessIdEl.textContent = currentSessionId;
-      sessIdEl.style.display = '';
+    if (sessIdEl) {
+      if (sess.kilo_session_id) {
+        sessIdEl.textContent = sess.kilo_session_id;
+        sessIdEl.style.display = '';
+      } else {
+        sessIdEl.style.display = 'none';
+      }
     }
-    updateSessBarSkills();
+    updateSessBarSkills(sess);
     const tab = findTabAcrossProjects(sessionId)?.tab || openTabs.find(t => t.id === sessionId);
     // Show compact button when session has messages and is not actively generating
     const compactBtn = $i('sessBarCompactBtn');
@@ -7887,14 +7890,18 @@ function setOpt(el, group) {
 
 function updInd() { /* removed — mode indicator no longer in toolbar */ }
 
-function updateSessBarSkills() {
+function updateSessBarSkills(sess) {
   const el = $i('sessBarSkills');
   if (!el) return;
   // Update session id button
   const sessIdEl = $i('sessBarSessionId');
-  if (sessIdEl && currentSessionId) {
-    sessIdEl.textContent = currentSessionId;
-    sessIdEl.style.display = '';
+  if (sessIdEl) {
+    if (sess && sess.kilo_session_id) {
+      sessIdEl.textContent = sess.kilo_session_id;
+      sessIdEl.style.display = '';
+    } else {
+      sessIdEl.style.display = 'none';
+    }
   }
   el.innerHTML = '';
   const buildSkillTip = (label, description) => [label, description].filter(Boolean).join('\n\n');
