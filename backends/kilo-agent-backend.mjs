@@ -795,7 +795,7 @@ send(options) {
 
     } catch (error) {
       console.log('[KiloBackend] Error:', error.message);
-      this.logEvent(this.logFile, 'request_error', { error: error.message });
+      this.logEvent(logFile, 'request_error', { error: error.message });
       if (callbacks.onError) callbacks.onError(error.message);
     } finally {
       // Очищаем активную подписку при завершении

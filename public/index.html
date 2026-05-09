@@ -7640,7 +7640,7 @@ function switchTab(id) {
     const oldTS = getTS(activeTabId);
     saveComposerState(activeTabId);
     oldTS.curTxt = streaming.txt; // Save via proxy (reads from old activeTabId)
-    if (streaming.toolLog.length) oldTS._toolLog = streaming.toolLog.slice();
+    if (streaming.toolLog && streaming.toolLog.length) oldTS._toolLog = streaming.toolLog.slice();
   }
   // Clear only the DOM reference for the old tab — curTxt/_toolLog/_toolCounts are kept
   // so loadSess can restore them when the user switches back while Claude is still running.
