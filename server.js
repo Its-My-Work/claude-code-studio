@@ -15,6 +15,8 @@ const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 // KiloSSH and testSshConnection removed - replace with stubs if needed
 const TelegramBot = require('./telegram-bot');
+// Kilo Manager for per-project kilo serve processes
+const kiloManager = require('./kiloManager');
 // Kilo Agent Backend - loaded lazily
 
 // ─── AsyncLocalStorage for session context ───────────────────────────────────────
@@ -161,22 +163,58 @@ console.log('Stream mode:', STREAM_MODE);
 const CONFIG_PATH = path.join(APP_DIR, 'data', 'config.json');
 
 // ─── Kilo Agent Backend (loaded lazily due to ESM) ───────────────────────────
-let kiloBackend = null;
+let KiloAgentBackendClass = null;
 const kiloBackendPromise = import('./backends/kilo-agent-backend.mjs').then(m => {
-  const KiloAgentBackend = m.default;
-  kiloBackend = new KiloAgentBackend({ streamMode: STREAM_MODE });
-  return kiloBackend;
+  KiloAgentBackendClass = m.default;
+  return KiloAgentBackendClass;
 }).catch(err => {
   console.error('Failed to load KiloAgentBackend:', err.message);
-  // Fallback stub
-  kiloBackend = {
-    send: () => { throw new Error('Kilo backend not available'); },
-    getStatus: () => ({ status: 'error', message: 'Backend not loaded' }),
-    setMode: () => {},
-    setModel: () => {},
-    manageSession: () => Promise.resolve({ success: false }),
-  };
+  return null;
 });
+
+// Function to get project from workdir
+function getProjectFromWorkdir(workdir) {
+  if (!workdir) return null;
+  const projects = loadProjects();
+  return projects.find(p => p.workdir === workdir) || null;
+}
+
+// Cache for kilo backend instances per workdir to prevent duplicate subscriptions
+const kiloBackendCache = new Map();
+
+// Function to create kilo backend for a specific workdir
+async function createKiloBackendForWorkdir(workdir) {
+  if (!KiloAgentBackendClass) {
+    throw new Error('Kilo backend not loaded');
+  }
+
+  // Check cache first
+  if (kiloBackendCache.has(workdir)) {
+    return kiloBackendCache.get(workdir);
+  }
+
+  const project = getProjectFromWorkdir(workdir);
+  if (!project) {
+    throw new Error('No project found for workdir ' + workdir);
+  }
+
+  // Ensure kilo is running for this project
+  await kiloManager.ensureKiloForProject(project);
+
+  const kiloBaseUrl = kiloManager.getKiloUrlForProject(project.id);
+  if (!kiloBaseUrl) {
+    throw new Error('Failed to start kilo for project ' + project.id);
+  }
+
+  const backend = new KiloAgentBackendClass({
+    baseUrl: kiloBaseUrl,
+    streamMode: STREAM_MODE
+  });
+
+  // Cache the backend instance
+  kiloBackendCache.set(workdir, backend);
+  return backend;
+}
 
 function getKiloBackend() {
   return kiloBackendPromise.then(() => kiloBackend);
@@ -1091,14 +1129,20 @@ async function startTask(task) {
     // Resume existing kilo session if any
     const session = stmts.getSession.get(sessionId);
     const kiloSessionId = sanitizeSessionId(session?.kilo_session_id) || null;
-    // Use Kilo Agent Backend
-    const cli = kiloBackend || {
-      send: () => { throw new Error('Kilo backend loading...'); },
-      getStatus: () => ({ status: 'loading' }),
-      setMode: () => {},
-      setModel: () => {},
-      manageSession: () => Promise.resolve({ success: false }),
-    };
+    // Use Kilo Agent Backend for this workdir
+    let cli;
+    try {
+      cli = await createKiloBackendForWorkdir(task.workdir);
+    } catch (err) {
+      log.error('Failed to create kilo backend for task', { workdir: task.workdir, error: err.message });
+      cli = {
+        send: () => { throw new Error('Kilo backend unavailable: ' + err.message); },
+        getStatus: () => ({ status: 'error', message: err.message }),
+        setMode: () => {},
+        setModel: () => {},
+        manageSession: () => Promise.resolve({ success: false }),
+      };
+    }
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
     let fullText = '', newKiloId = kiloSessionId, hasError = false;
@@ -2421,14 +2465,20 @@ async function runCliSingle(p) {
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
   log.debug('runCliSingle currentContentBlocks', { isArray: Array.isArray(userContent), currentContentBlocksLen: currentContentBlocks?.length || 0, userContentType: typeof userContent });
 
-    // Use Kilo Agent Backend
-    const cli = kiloBackend || {
-      send: () => { throw new Error('Kilo backend loading...'); },
-      getStatus: () => ({ status: 'loading' }),
-      setMode: () => {},
-      setModel: () => {},
-      manageSession: () => Promise.resolve({ success: false }),
-    };
+    // Use Kilo Agent Backend for this workdir
+    let cli;
+    try {
+      cli = await createKiloBackendForWorkdir(workdir);
+    } catch (err) {
+      log.error('Failed to create kilo backend for workdir', { workdir, error: err.message });
+      cli = {
+        send: () => { throw new Error('Kilo backend unavailable: ' + err.message); },
+        getStatus: () => ({ status: 'error', message: err.message }),
+        setMode: () => {},
+        setModel: () => {},
+        manageSession: () => Promise.resolve({ success: false }),
+      };
+    }
 
     // Close previous event stream to prevent duplicate subscriptions
     if (ws._currentEventAbort) {
@@ -2474,7 +2524,7 @@ async function runCliSingle(p) {
       hasExtraSettings: !!interruptHookSettings
     });
 
-  cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking })
+  cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, mode, thinking, cwd: workdir })
       .onText(t => {
         console.log('[SERVER] onText called with:', t.substring(0, 100));
         t = t.replace(/\\n/g, '\n');
@@ -2549,7 +2599,7 @@ async function runCliSingle(p) {
         }));
       })
       .onToolComplete((data) => {
-        console.log('[WS SENDING TOOL]', data.tool, 'completed');
+        console.log('[WS SENDING TOOL]', data.tool, 'completed', data.partID);
         ws.send(JSON.stringify({
           type: 'ai_chunk',
           sessionId,
@@ -3037,14 +3087,20 @@ async function runMultiAgent(p) {
   const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
   let currentSessionId = kiloSessionId || null;
 
-    // Use Kilo Agent Backend
-    const cli = kiloBackend || {
-      send: () => { throw new Error('Kilo backend loading...'); },
-      getStatus: () => ({ status: 'loading' }),
-      setMode: () => {},
-      setModel: () => {},
-      manageSession: () => Promise.resolve({ success: false }),
-    };
+    // Use Kilo Agent Backend for this workdir
+    let cli;
+    try {
+      cli = await createKiloBackendForWorkdir(effectiveWorkdir);
+    } catch (err) {
+      log.error('Failed to create kilo backend for workdir', { workdir: effectiveWorkdir, error: err.message });
+      cli = {
+        send: () => { throw new Error('Kilo backend unavailable: ' + err.message); },
+        getStatus: () => ({ status: 'error', message: err.message }),
+        setMode: () => {},
+        setModel: () => {},
+        manageSession: () => Promise.resolve({ success: false }),
+      };
+    }
 
   await new Promise(res => {
     let _settled = false;
@@ -4654,14 +4710,20 @@ ${transcript}`;
   let summaryText = '';
 
   try {
-    // Use Kilo Agent Backend
-    const cli = kiloBackend || {
-      send: () => { throw new Error('Kilo backend loading...'); },
-      getStatus: () => ({ status: 'loading' }),
-      setMode: () => {},
-      setModel: () => {},
-      manageSession: () => Promise.resolve({ success: false }),
-    };
+    // Use Kilo Agent Backend for this workdir
+    let cli;
+    try {
+      cli = await createKiloBackendForWorkdir(workdir);
+    } catch (err) {
+      log.error('Failed to create kilo backend for workdir', { workdir, error: err.message });
+      cli = {
+        send: () => { throw new Error('Kilo backend unavailable: ' + err.message); },
+        getStatus: () => ({ status: 'error', message: err.message }),
+        setMode: () => {},
+        setModel: () => {},
+        manageSession: () => Promise.resolve({ success: false }),
+      };
+    }
 
     await new Promise((resolve, reject) => {
       const ac = new AbortController();
@@ -5418,6 +5480,39 @@ app.patch('/api/projects/:id', (req,res) => {
 app.delete('/api/projects/:id', (req,res) => {
   saveProjects(loadProjects().filter(p => p.id !== req.params.id));
   res.json({ ok:true });
+});
+
+// ─── Kilo per-project endpoints ──────────────────────────────────────────────
+app.post('/api/projects/:projectId/open', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const projects = loadProjects();
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (project.isRemote) return res.status(400).json({ error: 'Remote projects not supported yet' });
+
+    const instance = await kiloManager.ensureKiloForProject(project);
+    const kiloBaseUrl = kiloManager.getKiloUrlForProject(projectId);
+    res.json({
+      projectId: project.id,
+      kiloBaseUrl,
+      rootDir: project.workdir
+    });
+  } catch (err) {
+    log.error('Failed to open project', { projectId: req.params.projectId, error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/projects/:projectId/close', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    await kiloManager.stopKiloForProject(projectId);
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('Failed to close project', { projectId: req.params.projectId, error: err.message });
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Remote SSH Hosts CRUD ────────────────────────────────────────────────────
@@ -7505,6 +7600,20 @@ console.log('Stream mode:', STREAM_MODE);
 // (not deferred until the first config-write operation).
 loadConfig();
 
+// Validate Kilo configuration
+const start = Number(process.env.KILO_PORT_RANGE_START || 4100);
+const end = Number(process.env.KILO_PORT_RANGE_END || 4199);
+if (isNaN(start) || isNaN(end) || end < start) {
+  log.error('Invalid KILO_PORT_RANGE configuration', { start, end });
+  process.exit(1);
+}
+log.info('Kilo port range validated', { start, end });
+
+// Restore kilo instances from persistent storage
+kiloManager.restoreKiloInstances(loadProjects()).catch(err => {
+  log.error('Failed to restore kilo instances', { error: err.message });
+});
+
 // Start Telegram bot if configured
 initTelegramBot();
 
@@ -7549,6 +7658,11 @@ function gracefulShutdown(signal) {
     if (ws._tabAbort) { Object.values(ws._tabAbort).forEach(ac => { try { ac.abort(); } catch {} }); }
     // Close WebSocket with "server going down" code so clients reconnect
     try { ws.close(1001, 'Server shutting down'); } catch {}
+  });
+
+  // 1.5. Stop all kilo instances
+  kiloManager.stopAllKiloInstances().catch(err => {
+    console.error('Error stopping kilo instances:', err.message);
   });
 
   // 2. Force-exit after 10 s if server.close() hangs (long-lived WS connections)

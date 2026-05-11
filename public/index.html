@@ -3857,6 +3857,7 @@ function renderMobModeChips() {
 // Load models and detect CLI version on page load
 detectCliVersion();
 let curWorkdir = null; // current working directory for the session
+let curKiloBaseUrl = null; // kilo base URL for current project
 let projects = [], curProjectId = null; // projects list + active project
 
 // ─── Project switch generation counter ───────────────────────────────────
@@ -5301,6 +5302,9 @@ function handleWsMsg(d) {
         // Tool chunks - create/update tool block
         console.log('[TOOL EVENT]', chunk.status, '|', chunk.tool, '|',
                     chunk.partID, '| input:', chunk.input?.substring(0,50));
+        if (chunk.partID === 'prt_e1621316a001NBRvzjoE9fnr0D') {
+          console.log('[DEBUG BASH TOOL]', chunk.status, new Date().toISOString());
+        }
 
         getTS(tabId).agentStatus = ''; // tool has arrived
         if (!isVisible) {
@@ -7544,8 +7548,9 @@ function copySessId() {
   navigator.clipboard.writeText(id).then(() => toast('✓ ' + t('session.copy_id')));
 }
 function copySessionId() {
-  if (!currentSessionId) return;
-  navigator.clipboard.writeText(currentSessionId).then(() => toast('✓ Session ID скопирован'));
+  const sessIdEl = $i('sessBarSessionId');
+  if (!sessIdEl || !sessIdEl.textContent) return;
+  navigator.clipboard.writeText(sessIdEl.textContent).then(() => toast('✓ Session ID скопирован'));
 }
 async function openKilo() {
   if (!currentSessionId) return;
@@ -8323,15 +8328,21 @@ async function send() {
   const txt = inEl.value.trim();
   if (!txt && !_attachments.length) return;
 
-  // Require a project before sending the first message in a new session.
-  // Keep the composer intact so text, reply target, and attachments survive
-  // the project creation flow without any rehydration hacks.
-  if (!curProjectId && !currentSessionId) {
-    _pendingProjectSend = true;
-    _onProjectCreated = () => { _pendingProjectSend = false; send(); };
-    openAddProject();
-    return;
-  }
+   // Require a project before sending the first message in a new session.
+   // Keep the composer intact so text, reply target, and attachments survive
+   // the project creation flow without any rehydration hacks.
+   if (!curProjectId && !currentSessionId) {
+     _pendingProjectSend = true;
+     _onProjectCreated = () => { _pendingProjectSend = false; send(); };
+     openAddProject();
+     return;
+   }
+
+   // Require a workdir (selected project) before sending any message.
+   if (!curWorkdir) {
+     toast('Пожалуйста, выберите проект перед отправкой сообщения.', true);
+     return;
+   }
 
   // Clear input IMMEDIATELY before any async work to prevent double-send.
   // If user presses Enter during an async file fetch, the second send()
@@ -11066,6 +11077,20 @@ async function loadProjectsList() {
   } catch(e) { console.error('loadProjectsList:', e); }
 }
 
+async function openProject(projectId) {
+  try {
+    const r = await fetch(`/api/projects/${projectId}/open`, { method: 'POST' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    // Store kiloBaseUrl for the current project
+    curKiloBaseUrl = data.kiloBaseUrl;
+    console.log('Project opened:', data);
+  } catch(e) {
+    console.error('openProject:', e);
+    throw e;
+  }
+}
+
 // ─── Projects drag-and-drop ───────────────────────────────────────────────
 let _dragProjEl = null;
 
@@ -11431,10 +11456,14 @@ function switchProject(id) {
     return;
   }
 
-  curProjectId = id;
-  curWorkdir = p.workdir;
+   curProjectId = id;
+   curWorkdir = p.workdir;
+   curKiloBaseUrl = null; // Reset until openProject succeeds
 
-  // Restore from in-memory state (if project was visited before), else from localStorage
+   // Open project (start kilo serve if needed)
+   openProject(id).catch(e => console.error('Failed to open project:', e));
+
+   // Restore from in-memory state (if project was visited before), else from localStorage
   if (projectTabs[id]) {
     openTabs = projectTabs[id];
     activeTabId = projectActiveTab[id] ?? openTabs[0]?.id ?? null;

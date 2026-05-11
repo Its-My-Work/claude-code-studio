@@ -18,14 +18,16 @@ class KiloAgentBackend extends AgentBackend {
   /**
    * Конструктор класса. Инициализирует настройки подключения к Kilo серверу,
    * модель по умолчанию и директорию для логов.
-   * @param {Object} options - Параметры конфигурации (url, timeout, model и т.д.)
+   * @param {Object} options - Параметры конфигурации (baseUrl, timeout, model и т.д.)
    */
   constructor(options = {}) {
     super();
-    // URL сервера Kilo, берется из опций или переменных окружения
-    this.url = options.url || process.env.KILO_SERVER_URL || process.env.KILO_URL || 'http://127.0.0.1:4096';
+    // Base URL сервера Kilo для проекта
+    this.url = options.baseUrl || process.env.KILO_SERVER_URL || process.env.KILO_URL || 'http://127.0.0.1:4096';
     // Таймаут для запросов в миллисекундах
     this.timeout = options.timeout || 30000;
+    // Пароль для доступа к серверу
+    this.password = process.env.KILO_SERVER_PASSWORD || null;
     // Модель по умолчанию для генерации ответов
     this.defaultModel = options.model || 'kilo/kilo-auto/free';
     this.currentModel = this.defaultModel;
@@ -79,7 +81,7 @@ send(options) {
    */
   async getStatus() {
     try {
-      const resp = await fetch(`${this.url}/health`);
+      const resp = await fetch(`${this.url}/health`, { headers: { ...(this.password ? { 'Authorization': `Bearer ${this.password}` } : {}) } });
       return { status: resp.ok ? 'connected' : 'error', url: this.url };
     } catch (error) {
       return { status: 'error', message: error.message, url: this.url };
@@ -118,7 +120,7 @@ send(options) {
           // Создание новой сессии
           const resp = await fetch(`${this.url}/session`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(this.password ? { 'Authorization': `Bearer ${this.password}` } : {}) },
             body: JSON.stringify({ title: 'New Session' }),
           });
           const session = await resp.json();
@@ -126,12 +128,12 @@ send(options) {
         }
         case 'delete': {
           // Удаление сессии
-          await fetch(`${this.url}/session/${sessionId}`, { method: 'DELETE' });
+          await fetch(`${this.url}/session/${sessionId}`, { method: 'DELETE', headers: { ...(this.password ? { 'Authorization': `Bearer ${this.password}` } : {}) } });
           return { success: true };
         }
         case 'list': {
           // Получение списка сессий
-          const resp = await fetch(`${this.url}/session`);
+          const resp = await fetch(`${this.url}/session`, { headers: { ...(this.password ? { 'Authorization': `Bearer ${this.password}` } : {}) } });
           const sessions = await resp.json();
           return { success: true, sessions };
         }
@@ -200,12 +202,18 @@ send(options) {
       return;
     }
 
+    // Дать время kilo server запуститься полностью
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     // Закрываем предыдущую подписку на эту же сессию (если есть)
     if (sessionId && this.activeSubscriptions.has(sessionId)) {
       console.log('[KiloBackend] Closing previous subscription for session:', sessionId);
       const prevSub = this.activeSubscriptions.get(sessionId);
       if (prevSub?.controller) {
         prevSub.controller.abort();
+      }
+      if (prevSub?.reader) {
+        try { prevSub.reader.cancel(); } catch (e) { console.log('[KiloBackend] Reader cancel error:', e.message); }
       }
       this.activeSubscriptions.delete(sessionId);
     }
@@ -227,6 +235,8 @@ send(options) {
     let messageRoles = new Map();
     // Хранилище частей сообщения по partID: { type, text, completed, time, tool }
     let messageParts = new Map();
+    // Счетчик частей для определения типа (reasoning/text)
+    let partCounter = 0;
     // Хранилище tool parts по partID для toolpartupdated событий
     let toolPartsMap = new Map();
     // Буфер для всех parts в buffered mode
@@ -282,10 +292,12 @@ send(options) {
       // Создание сессии, если ID не передан
       if (!latestSessionId) {
         const title = fullPrompt.substring(0, 100);
-        const resp = await fetch(`${this.url}/session`, {
+        const sessionUrl = `${this.url}/session`;
+        console.log('[KiloBackend] Creating session at', sessionUrl);
+        const resp = await fetch(sessionUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, directory: options.cwd || process.cwd() }),
+          headers: { 'Content-Type': 'application/json', ...(this.password ? { 'Authorization': `Bearer ${this.password}` } : {}) },
+          body: JSON.stringify({ title: 'New Session' }),
         });
         const session = await resp.json();
         // ID может быть в session.id или session.data.id в зависимости от версии API
@@ -300,7 +312,7 @@ send(options) {
       console.log('[KiloBackend] Subscribing to events...');
 
       const eventResp = await fetch(`${this.url}/event`, {
-        headers: { 'Accept': 'text/event-stream' },
+        headers: { 'Accept': 'text/event-stream', ...(this.password ? { 'Authorization': `Bearer ${this.password}` } : {}) },
         signal: signal, // Используем наш контроллер вместо options.abortController
       });
 
@@ -313,17 +325,20 @@ send(options) {
       }
 
       /**
-       * Инициализирует часть сообщения по partID
-       * @param {string} partID - Идентификатор части
-       * @param {string} type - Тип части ('text', 'reasoning', 'tool')
-       * @param {Object} time - Время начала/конца
-       * @param {string} tool - Название инструмента для tool parts
-       */
+        * Инициализирует часть сообщения по partID
+        * @param {string} partID - Идентификатор части
+        * @param {string} type - Тип части ('text', 'reasoning', 'tool')
+        * @param {Object} time - Время начала/конца
+        * @param {string} tool - Название инструмента для tool parts
+        */
       const initializePart = (partID, type, time, tool) => {
         if (!messageParts.has(partID)) {
+          if (!type) {
+            type = partCounter++ === 0 ? 'reasoning' : 'text';
+          }
           const partData = {
             id: partID,
-            type: type || 'unknown',
+            type: type,
             text: '',
             completed: false,
             time: time,
@@ -378,7 +393,7 @@ send(options) {
               callbacks.onToolProposal({ tool: toolName, input });
             } else if (status === 'running' && callbacks.onToolStart) {
               callbacks.onToolStart({ tool: toolName, input });
-            } else if (status === 'completed' && callbacks.onToolComplete) {
+            } else if ((status === 'completed' || status === 'complete') && callbacks.onToolComplete) {
               callbacks.onToolComplete({ tool: toolName, input, output: toolPart.output || '' });
             } else if (status === 'failed' && callbacks.onToolError) {
               const error = toolPart.error || toolPart.state?.error || 'Unknown error';
@@ -401,7 +416,9 @@ send(options) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
+          const chunk = decoder.decode(value, { stream: true });
+          console.log('[KiloBackend] Chunk received, length:', chunk.length);
+          buffer += chunk;
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
 
@@ -514,17 +531,38 @@ send(options) {
                     continue;
                   }
 
-                  if (partID) {
-                    // Сохраняем тип части в хранилище
-                    let partData = messageParts.get(partID);
-                    if (!partData) {
-                      initializePart(partID, partType, part?.time, part?.tool);
-                      partData = messageParts.get(partID);
-                    } else {
-                      partData.type = partType;
-                      if (part?.time) partData.time = part?.time;
-                      if (part?.tool) partData.tool = part?.tool;
-                    }
+                   if (partID) {
+                     // Сохраняем тип части в хранилище
+                     let partData = messageParts.get(partID);
+                     if (!partData) {
+                       initializePart(partID, partType, part?.time, part?.tool);
+                       partData = messageParts.get(partID);
+                     } else {
+                       partData.type = partType;
+                       if (part?.time) partData.time = part?.time;
+                       if (part?.tool) partData.tool = part?.tool;
+                     }
+
+                     // Если есть time.end - часть завершена
+                     if (part?.time?.end) {
+                       partData.completed = true;
+
+                       // ТОЛЬКО логируем, НЕ отправляем в UI (delta уже всё отправил)
+                       console.log(`[COMPLETED] ${partType} part finished:`, {
+                         partID: partID,
+                         length: partData.text.length,
+                         preview: partData.text.substring(0, 100) + '...'
+                       });
+
+                       // Для tools, вызвать onToolComplete если buffered, или обработать tool
+                       if (partType === 'tool') {
+                         this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
+                         if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
+                           partData.finished = true;
+                           callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: partData.text, output: '' });
+                         }
+                       }
+                     }
 
                     // Для tools, сохранить в toolPartsMap и вызвать proposal если еще не
                     if (partType === 'tool') {
@@ -553,7 +591,7 @@ send(options) {
                           if (callbacks.onToolStart) {
                             callbacks.onToolStart({ tool: partData.tool || 'unknown', input: '', partID });
                           }
-                        } else if (status === 'completed' && !partData.finished) {
+                        } else if ((status === 'completed' || status === 'complete') && !partData.finished) {
                           partData.finished = true;
                           if (callbacks.onToolComplete) {
                             callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: '', output: '', partID });
@@ -602,12 +640,14 @@ send(options) {
                   if (event.properties?.status?.type === 'idle' && !doneCalled) {
                     doneCalled = true;
                     if (callbacks.onDone) callbacks.onDone(latestSessionId);
+                    options.abortController?.abort();
                   }
                 } else if (event.type === 'session.idle') {
                   // Сессия стала idle (завершена)
                   if (!doneCalled && callbacks.onDone) {
                     doneCalled = true;
                     callbacks.onDone(latestSessionId);
+                    options.abortController?.abort();
                   }
                 } else if (event.type === 'session.error') {
                   // Ошибка сессии
@@ -663,8 +703,9 @@ send(options) {
                     } else if (status === 'running' && callbacks.onToolStart && (!partData || !partData.started)) {
                       if (partData) partData.started = true;
                       callbacks.onToolStart({ tool: toolName, input, partID });
-                    } else if (status === 'completed' && callbacks.onToolComplete && (!partData || !partData.finished)) {
+                    } else if ((status === 'completed' || status === 'complete') && callbacks.onToolComplete && (!partData || !partData.finished)) {
                       if (partData) partData.finished = true;
+                      console.log('[KiloBackend] Calling onToolComplete for', toolName, partID);
                       callbacks.onToolComplete({ tool: toolName, input, output, partID });
                     } else if (status === 'failed' && callbacks.onToolError && (!partData || !partData.finished)) {
                       if (partData) partData.finished = true;
@@ -694,6 +735,7 @@ send(options) {
                     }
                     messageParts.clear();
                     if (callbacks.onDone) callbacks.onDone(latestSessionId);
+                    options.abortController?.abort();
                   }
                 }
               } catch (e) {
@@ -734,7 +776,7 @@ send(options) {
       // Отправляем запрос на генерацию ответа
       const promptResp = await fetch(`${this.url}/session/${latestSessionId}/prompt_async`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(this.password ? { 'Authorization': `Bearer ${this.password}` } : {}) },
         body: JSON.stringify(promptPayload),
         signal: options.abortController?.signal,
       });
@@ -751,7 +793,7 @@ send(options) {
       await Promise.race([eventPromise, timeoutPromise]).catch(() => {});
 
       // Для buffered mode, отправляем все накопленные parts в правильном порядке
-      if (isBuffered && !doneCalled) {
+      if (isBuffered && !doneCalled && !hasStreaming) {
         allParts.sort((a, b) => (a.time?.start || 0) - (b.time?.start || 0));
         console.log('[KiloBackend] Buffered mode: processing', allParts.length, 'parts');
         for (const part of allParts) {
@@ -778,7 +820,7 @@ send(options) {
             callbacks.onToolProposal({ tool: toolName, input, partID });
           } else if (status === 'running' && callbacks.onToolStart) {
             callbacks.onToolStart({ tool: toolName, input, partID });
-          } else if (status === 'completed' && callbacks.onToolComplete) {
+          } else if ((status === 'completed' || status === 'complete') && callbacks.onToolComplete) {
             callbacks.onToolComplete({ tool: toolName, input, output, partID });
           } else if (status === 'failed' && callbacks.onToolError) {
             callbacks.onToolError({ tool: toolName, input, error, partID });
@@ -791,6 +833,7 @@ send(options) {
       if (!doneCalled) {
         doneCalled = true;
         if (callbacks.onDone) callbacks.onDone(latestSessionId);
+        options.abortController?.abort();
       }
 
     } catch (error) {
@@ -800,6 +843,10 @@ send(options) {
     } finally {
       // Очищаем активную подписку при завершении
       if (latestSessionId && this.activeSubscriptions.has(latestSessionId)) {
+        const sub = this.activeSubscriptions.get(latestSessionId);
+        if (sub?.reader) {
+          try { sub.reader.cancel(); } catch (e) { console.log('[KiloBackend] Reader cancel error:', e.message); }
+        }
         this.activeSubscriptions.delete(latestSessionId);
         console.log('[KiloBackend] Cleaned up subscription for session:', latestSessionId);
       }
@@ -813,6 +860,7 @@ send(options) {
    * @param {Object} data - Данные события
    */
   logEvent(logFile, eventType, data) {
+    if (!logFile) return;
     const entry = {
       timestamp: new Date().toISOString(),
       eventType,
