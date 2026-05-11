@@ -525,7 +525,7 @@ send(options) {
 
                   // Проверяем на дублирование события
                   const timestamp = Date.now();
-                  const eventId = `${partID}-${partType}-${JSON.stringify(part?.time || {})}`;
+                  const eventId = `${partID}-${partType}-${JSON.stringify(part?.state || {})}-${JSON.stringify(part?.time || {})}`;
                   if (eventDedup.isDuplicate('message.part.updated', eventId, timestamp)) {
                     console.warn('[KiloBackend] Skipping duplicate part.updated event:', partID, partType);
                     continue;
