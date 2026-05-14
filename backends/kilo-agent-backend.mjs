@@ -554,57 +554,60 @@ send(options) {
                          preview: partData.text.substring(0, 100) + '...'
                        });
 
-                       // Для tools, вызвать onToolComplete если buffered, или обработать tool
-                       if (partType === 'tool') {
-                         this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
-                         if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
-                           partData.finished = true;
-                           callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: partData.text, output: '' });
-                         }
-                       }
+// Для tools, вызвать onToolComplete если buffered, или обработать tool
+                        if (partType === 'tool') {
+                          this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
+                          if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
+                            partData.finished = true;
+                            const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
+                            callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output: '' });
+                          }
+                        }
                      }
 
-                    // Для tools, сохранить в toolPartsMap и вызвать proposal если еще не
-                    if (partType === 'tool') {
-                      this.logEvent(this.logFile, 'tool_part_updated', { partID, tool: partData.tool, type: partType });
-                      // Сохраняем tool part в Map для toolpartupdated событий
-                      toolPartsMap.set(partID, part);
-                      if (!isBuffered && !partData.proposed) {
-                        partData.proposed = true;
-                        if (callbacks.onToolProposal) {
-                          callbacks.onToolProposal({ tool: partData.tool || 'unknown', input: '', partID });
-                        }
-                      }
-
-                      // Обработка статусов инструментов из part.state.status
-                      const status = part.state?.status;
-                      console.log('[KiloBackend] TOOL part.updated', JSON.stringify(part).slice(0, 200));
-                      if (status && !isBuffered) {
-                        console.log('[KiloBackend TOOL STATE]', { partID, toolName: partData.tool, status });
-                        if (status === 'pending' && !partData.proposed) {
+// Для tools, сохранить в toolPartsMap и вызвать proposal если еще не
+                      if (partType === 'tool') {
+                        this.logEvent(this.logFile, 'tool_part_updated', { partID, tool: partData.tool, type: partType });
+                        // Объединяем part с накопленным text из messageParts, сохраняя input из state
+                        const combinedPart = { ...part, text: partData.text, input: part.state?.input };
+                        toolPartsMap.set(partID, combinedPart);
+                        const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
+                        if (!isBuffered && !partData.proposed) {
                           partData.proposed = true;
                           if (callbacks.onToolProposal) {
-                            callbacks.onToolProposal({ tool: partData.tool || 'unknown', input: '', partID });
-                          }
-                        } else if (status === 'running' && !partData.started) {
-                          partData.started = true;
-                          if (callbacks.onToolStart) {
-                            callbacks.onToolStart({ tool: partData.tool || 'unknown', input: '', partID });
-                          }
-                        } else if ((status === 'completed' || status === 'complete') && !partData.finished) {
-                          partData.finished = true;
-                          if (callbacks.onToolComplete) {
-                            callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: '', output: '', partID });
-                          }
-                        } else if (status === 'failed' && !partData.finished) {
-                          partData.finished = true;
-                          const error = part.state?.error || 'Unknown error';
-                          if (callbacks.onToolError) {
-                            callbacks.onToolError({ tool: partData.tool || 'unknown', input: '', error, partID });
+                            callbacks.onToolProposal({ tool: partData.tool || 'unknown', input: inputFromState, partID });
                           }
                         }
-                      }
-                    }
+
+// Обработка статусов инструментов из part.state.status
+                        const status = part.state?.status;
+                        console.log('[KiloBackend] TOOL part.updated', JSON.stringify(part).slice(0, 200));
+                        if (status && !isBuffered) {
+                          console.log('[KiloBackend TOOL STATE]', { partID, toolName: partData.tool, status });
+                          if (status === 'pending' && !partData.proposed) {
+                            partData.proposed = true;
+                            if (callbacks.onToolProposal) {
+                              callbacks.onToolProposal({ tool: partData.tool || 'unknown', input: inputFromState, partID });
+                            }
+                          } else if (status === 'running' && !partData.started) {
+                            partData.started = true;
+                            if (callbacks.onToolStart) {
+                              callbacks.onToolStart({ tool: partData.tool || 'unknown', input: inputFromState, partID });
+                            }
+                          } else if ((status === 'completed' || status === 'complete') && !partData.finished) {
+                            partData.finished = true;
+                            if (callbacks.onToolComplete) {
+                              callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output: '', partID });
+                            }
+                          } else if (status === 'failed' && !partData.finished) {
+                            partData.finished = true;
+                            const error = part.state?.error || 'Unknown error';
+                            if (callbacks.onToolError) {
+                              callbacks.onToolError({ tool: partData.tool || 'unknown', input: inputFromState, error, partID });
+                            }
+                          }
+                       }
+                     }
 
                     // Если есть time.end - часть завершена
                     if (part?.time?.end) {
@@ -617,14 +620,15 @@ send(options) {
                         preview: partData.text.substring(0, 100) + '...'
                       });
 
-                      // Для tools, вызвать onToolComplete если buffered, или обработать tool
-                      if (partType === 'tool') {
-                        this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
-                        if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
-                          partData.finished = true;
-                          callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: partData.text, output: '' });
-                        }
-                      }
+// Для tools, вызвать onToolComplete если buffered, или обработать tool
+                       if (partType === 'tool') {
+                         this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
+                         if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
+                           partData.finished = true;
+                           const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
+                           callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output: '' });
+                         }
+                       }
                     }
                   }
                 } else if (event.type === 'session.status') {
@@ -671,18 +675,19 @@ send(options) {
                     continue;
                   }
 
-                  // Определяем статус
-                  const status = toolPart.state?.status || toolPart.status || 'unknown';
-                  const input = toolPart.input?.command || JSON.stringify(toolPart.input, null, 2) || '';
+// Определяем статус
+                    const status = toolPart.state?.status || toolPart.status || 'unknown';
+                    // Input находится в state.input (объект с command/description) или из delta-событий в toolPart.text
+                    const input = toolPart.text || toolPart.input?.command || toolPart.state?.input?.command || toolPart.state?.input?.text || JSON.stringify(toolPart.state?.input || toolPart.input, null, 2) || '';
 
                   console.log('[TOOL EVENT]', { partID, toolName, status, inputLength: input.length });
 
-                  // Обработка output: проверка на binary
-                  let output = toolPart.output;
-                  if (output && typeof output !== 'string') {
-                    output = JSON.stringify(output, null, 2);
-                  }
-                  if (!output) output = '';
+// Обработка output: проверка на binary. Output может быть в state.output или state.metadata.output
+                    let output = toolPart.output || toolPart.state?.output || toolPart.state?.metadata?.output || '';
+                    if (output && typeof output !== 'string') {
+                      output = JSON.stringify(output, null, 2);
+                    }
+                    if (!output) output = '';
 
                   if (isBuffered) {
                     // В buffered mode буферизуем tool events

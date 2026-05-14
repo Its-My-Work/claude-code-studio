@@ -5301,7 +5301,7 @@ function handleWsMsg(d) {
       } else if (chunk.kind === 'tool') {
         // Tool chunks - create/update tool block
         console.log('[TOOL EVENT]', chunk.status, '|', chunk.tool, '|',
-                    chunk.partID, '| input:', chunk.input?.substring(0,50));
+                    chunk.partID, '| input:', JSON.stringify(chunk.input)?.substring(0,50), '| output:', chunk.output?.substring(0,50));
         if (chunk.partID === 'prt_e1621316a001NBRvzjoE9fnr0D') {
           console.log('[DEBUG BASH TOOL]', chunk.status, new Date().toISOString());
         }
