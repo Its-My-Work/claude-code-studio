@@ -560,7 +560,8 @@ send(options) {
                           if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
                             partData.finished = true;
                             const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
-                            callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output: '' });
+                            const output = part.state?.output || part.state?.metadata?.output || '';
+                            callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output, partID });
                           }
                         }
                      }
@@ -594,12 +595,13 @@ send(options) {
                             if (callbacks.onToolStart) {
                               callbacks.onToolStart({ tool: partData.tool || 'unknown', input: inputFromState, partID });
                             }
-                          } else if ((status === 'completed' || status === 'complete') && !partData.finished) {
-                            partData.finished = true;
-                            if (callbacks.onToolComplete) {
-                              callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output: '', partID });
-                            }
-                          } else if (status === 'failed' && !partData.finished) {
+} else if ((status === 'completed' || status === 'complete') && !partData.finished) {
+                             partData.finished = true;
+                             if (callbacks.onToolComplete) {
+                               const output = part.state?.output || part.state?.metadata?.output || '';
+                               callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output, partID });
+                             }
+                           } else if (status === 'failed' && !partData.finished) {
                             partData.finished = true;
                             const error = part.state?.error || 'Unknown error';
                             if (callbacks.onToolError) {
@@ -621,17 +623,18 @@ send(options) {
                       });
 
 // Для tools, вызвать onToolComplete если buffered, или обработать tool
-                       if (partType === 'tool') {
-                         this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
-                         if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
-                           partData.finished = true;
-                           const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
-                           callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output: '' });
-                         }
-                       }
-                    }
-                  }
-                } else if (event.type === 'session.status') {
+                        if (partType === 'tool') {
+                          this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
+                          if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
+                            partData.finished = true;
+                            const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
+                            const output = part.state?.output || part.state?.metadata?.output || '';
+                            callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output, partID });
+                          }
+                        }
+                     }
+                   }
+                 } else if (event.type === 'session.status') {
                   // Проверяем на дублирование события
                   const timestamp = Date.now();
                   const eventId = `${latestSessionId}-${JSON.stringify(event.properties?.status || {})}`;
