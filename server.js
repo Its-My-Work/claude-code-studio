@@ -2598,8 +2598,40 @@ async function runCliSingle(p) {
           ...(tabId ? { tabId } : {})
         }));
       })
-      .onToolComplete((data) => {
+.onToolComplete((data) => {
         console.log('[WS SENDING TOOL]', data.tool, 'completed', data.partID);
+
+        // Special handling for task tool - extract and display task_result
+        if (data.tool === 'task' && data.output) {
+          const taskIdMatch = data.output.match(/task_id:\s*(\S+)/);
+          const taskResultMatch = data.output.match(/<task_result>\s*([\s\S]*?)\s*<\/task_result>/);
+
+          if (taskIdMatch && taskResultMatch) {
+            const taskId = taskIdMatch[1];
+            let taskResult = taskResultMatch[1].trim();
+
+            // Truncate large results for display (show first 1000 chars)
+            const MAX_RESULT_DISPLAY = 1000;
+            let truncated = false;
+            if (taskResult.length > MAX_RESULT_DISPLAY) {
+              taskResult = taskResult.slice(0, MAX_RESULT_DISPLAY) + '...';
+              truncated = true;
+            }
+
+            // Send as answer text
+            ws.send(JSON.stringify({
+              type: 'ai_chunk',
+              sessionId,
+              payload: {
+                kind: 'answer',
+                text: `Subtask result (id: ${taskId})${truncated ? ' (truncated)' : ''}: ${taskResult}`,
+                timestamp: Date.now()
+              },
+              ...(tabId ? { tabId } : {})
+            }));
+          }
+        }
+
         ws.send(JSON.stringify({
           type: 'ai_chunk',
           sessionId,
