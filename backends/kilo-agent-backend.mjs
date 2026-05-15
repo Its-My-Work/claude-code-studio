@@ -41,10 +41,27 @@ class KiloAgentBackend extends AgentBackend {
 
     // Управление активными подписками на сессии (для предотвращения накопления подписок)
     this.activeSubscriptions = new Map(); // sessionId -> {controller, reader}
+}
+
+  /**
+   * Извлекает input для отображения в UI из различных форматов инструментов.
+   * Поддерживает bash (command/text), а также структурированные входные данные других инструментов.
+   * @param {Object|string} input - Входные данные инструмента
+   * @returns {string} Строка для отображения в UI
+   */
+  getToolInput(input) {
+    if (!input) return '';
+    if (typeof input === 'string') return input;
+    // Для bash сохраняем command/text если есть
+    if (input.command || input.text) {
+      return input.command || input.text;
+    }
+    // Для остальных инструментов - JSON строка (отформатированная)
+    return JSON.stringify(input, null, 2);
   }
 
   /**
-   * Основной метод отправки запроса к Kilo агенту.
+    * Основной метод отправки запроса к Kilo агенту.
    * Подготавливает промпт, создает лог-файл и возвращает обертку с коллбеками для обработки ответа.
    * @param {Object} options - Параметры запроса (sessionId, prompt, contentBlocks и т.д.)
    * @returns {Object} Обертка с методами onText, onReasoning и т.д. для подписки на события
@@ -555,25 +572,25 @@ send(options) {
                        });
 
 // Для tools, вызвать onToolComplete если buffered, или обработать tool
-                        if (partType === 'tool') {
-                          this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
-                          if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
-                            partData.finished = true;
-                            const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
-                            const output = part.state?.output || part.state?.metadata?.output || '';
-                            callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output, partID });
-                          }
-                        }
-                     }
+                         if (partType === 'tool') {
+                           this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
+                           if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
+                             partData.finished = true;
+                             const inputFromState = this.getToolInput(part.state?.input);
+                             const output = part.state?.output || part.state?.metadata?.output || '';
+                             callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output, partID });
+                           }
+                         }
+                      }
 
 // Для tools, сохранить в toolPartsMap и вызвать proposal если еще не
                       if (partType === 'tool') {
                         this.logEvent(this.logFile, 'tool_part_updated', { partID, tool: partData.tool, type: partType });
-                        // Объединяем part с накопленным text из messageParts, сохраняя input из state
-                        const combinedPart = { ...part, text: partData.text, input: part.state?.input };
-                        toolPartsMap.set(partID, combinedPart);
-                        const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
-                        if (!isBuffered && !partData.proposed) {
+// Объединяем part с накопленным text из messageParts, сохраняя input из state
+                         const combinedPart = { ...part, text: partData.text, input: part.state?.input };
+                         toolPartsMap.set(partID, combinedPart);
+                         const inputFromState = this.getToolInput(part.state?.input);
+                         if (!isBuffered && !partData.proposed) {
                           partData.proposed = true;
                           if (callbacks.onToolProposal) {
                             callbacks.onToolProposal({ tool: partData.tool || 'unknown', input: inputFromState, partID });
@@ -623,18 +640,18 @@ send(options) {
                       });
 
 // Для tools, вызвать onToolComplete если buffered, или обработать tool
-                        if (partType === 'tool') {
-                          this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
-                          if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
-                            partData.finished = true;
-                            const inputFromState = part.state?.input?.command || part.state?.input?.text || partData.text;
-                            const output = part.state?.output || part.state?.metadata?.output || '';
-                            callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output, partID });
-                          }
-                        }
-                     }
-                   }
-                 } else if (event.type === 'session.status') {
+                         if (partType === 'tool') {
+                           this.logEvent(this.logFile, 'tool_completed', { partID, tool: partData.tool, input: partData.text });
+                           if (!isBuffered && !partData.finished && callbacks.onToolComplete) {
+                             partData.finished = true;
+                             const inputFromState = this.getToolInput(part.state?.input);
+                             const output = part.state?.output || part.state?.metadata?.output || '';
+                             callbacks.onToolComplete({ tool: partData.tool || 'unknown', input: inputFromState, output, partID });
+                           }
+                         }
+                      }
+                    }
+                  } else if (event.type === 'session.status') {
                   // Проверяем на дублирование события
                   const timestamp = Date.now();
                   const eventId = `${latestSessionId}-${JSON.stringify(event.properties?.status || {})}`;
@@ -679,9 +696,9 @@ send(options) {
                   }
 
 // Определяем статус
-                    const status = toolPart.state?.status || toolPart.status || 'unknown';
-                    // Input находится в state.input (объект с command/description) или из delta-событий в toolPart.text
-                    const input = toolPart.text || toolPart.input?.command || toolPart.state?.input?.command || toolPart.state?.input?.text || JSON.stringify(toolPart.state?.input || toolPart.input, null, 2) || '';
+                     const status = toolPart.state?.status || toolPart.status || 'unknown';
+                     // Input находится в state.input (объект с command/description) или из delta-событий в toolPart.text
+                     const input = this.getToolInput(toolPart.state?.input || toolPart.input) || toolPart.text || '';
 
                   console.log('[TOOL EVENT]', { partID, toolName, status, inputLength: input.length });
 
