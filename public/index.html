@@ -4058,7 +4058,7 @@ const TRANSLATIONS = {
     
 
 
-    'status.connecting':'Connecting...','status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.classifying':'⚡ Classifying specialists...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
+    'status.connecting':'Connecting...','status.connected':'Connected','status.slowConnect':'Slow connection...','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.classifying':'⚡ Classifying specialists...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
     'models.loading':'Getting models...','models.error':'Error loading models',
     'fpv.download':'Download','fpv.download.title':'Download file','fpv.copy_img':'Copy','fpv.copy_img.title':'Copy image to clipboard','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
     'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.img_copied':'✓ Image copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
@@ -4276,7 +4276,7 @@ const TRANSLATIONS = {
 
     'auto.title.on':'⚡ Auto-Skills: включено — клик для отключения',
     'auto.title.off':'⚡ Auto-Skills: отключено — клик для включения',
-    'status.connecting':'Подключение...','status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.classifying':'⚡ Определение специалистов...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
+    'status.connecting':'Подключение...','status.connected':'Подключено','status.slowConnect':'Медленное соединение...','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.classifying':'⚡ Определение специалистов...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
     'models.loading':'Получение моделей...','models.error':'Ошибка загрузки моделей',
     'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.copy_img':'Копировать','fpv.copy_img.title':'Скопировать изображение в буфер','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
     'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.img_copied':'✓ Изображение скопировано','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
@@ -5044,8 +5044,11 @@ async function subscribeAllTabs() {
 let _reconnectDelay = 1000; // starts at 1 s, doubles up to 30 s
 let _reconnectTimer = null;
 let _intentionalClose = false; // set before navigating away to suppress reconnect
+let _slowConnTimer = null;      // P1: timeout indicator for slow WS
 
 function connect() {
+  // P1: warn if connection takes >4s
+  _slowConnTimer = setTimeout(() => setStatus('status.slowConnect', 'warn'), 4000);
   if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
   // Close any existing socket before opening a new one (prevents duplicate event handlers)
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
@@ -5059,6 +5062,7 @@ function connect() {
   ws.onopen = () => {
     _reconnectDelay = 1000; // reset backoff on successful connect
     _retryingSessions.clear(); // new WS connection — allow retries for all sessions again
+    if (_slowConnTimer) clearTimeout(_slowConnTimer); // P1: clear slow warning
     setStatus('status.connected', 'ok');
     loadFiles();
     loadHist();
@@ -13174,6 +13178,7 @@ async function _restoreDelegationState() {
 setLang(localStorage.getItem('lang') || 'en');
 // Initialize status translation
 setStatus('status.connecting', 'warn');
+connect(); // P0: early WS connect for faster handshake
 // Sync lang from server on load
 fetch('/api/lang').then(r => r.json()).then(d => {
   if (d.lang && d.lang !== localStorage.getItem('lang')) {
@@ -13198,7 +13203,6 @@ renderTabs();
 loadCfg();
 loadProjectsList();
 loadRemoteHosts();
-connect();
 // ─── Image chip hover preview ───
 {
   const _prev = $i('imgChipPreview');
