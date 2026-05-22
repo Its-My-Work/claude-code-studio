@@ -212,9 +212,9 @@ send(options) {
   async processSend(options, requestId, sessionId, fullPrompt, callbacks) {
     console.log('[KiloBackend] processSend started', { fullPrompt: fullPrompt.substring(0, 100) });
 
-    // Проверка на отмену запроса
+    // Проверка на отмену запроса (Stop before even starting)
     if (options.abortController?.signal?.aborted) {
-      if (callbacks.onError) callbacks.onError('Request aborted');
+      if (callbacks.onError) callbacks.onError('ABORTED_BY_USER');
       if (callbacks.onDone) callbacks.onDone(sessionId);
       return;
     }
@@ -238,6 +238,17 @@ send(options) {
     // Создаем новый AbortController для этой подписки
     const controller = new AbortController();
     const signal = controller.signal;
+
+    // Linked to tab abortController so Stop button actually terminates kilo serve processing
+    // by closing the /event SSE (outer abort -> inner controller.abort() -> reader aborts -> catch -> onDone)
+    if (options.abortController?.signal) {
+      const outer = options.abortController.signal;
+      if (outer.aborted) {
+        controller.abort();
+      } else {
+        outer.addEventListener('abort', () => controller.abort(), { once: true });
+      }
+    }
 
     // Сохраняем активную подписку
     let latestSessionId = sessionId;
@@ -428,10 +439,12 @@ send(options) {
        * Асинхронная функция для обработки потока событий.
        * Читает данные из стрима, парсит JSON события и обрабатывает их.
        */
-      const processEvents = async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+       const processEvents = async () => {
+         while (true) {
+           // Early exit on outer (tab) or inner abort — ensures Stop actually breaks the reader loop
+           if (options.abortController?.signal?.aborted || signal.aborted) break;
+           const { done, value } = await reader.read();
+           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
           console.log('[KiloBackend] Chunk received, length:', chunk.length);
@@ -862,9 +875,20 @@ send(options) {
       }
 
     } catch (error) {
-      console.log('[KiloBackend] Error:', error.message);
-      this.logEvent(logFile, 'request_error', { error: error.message });
-      if (callbacks.onError) callbacks.onError(error.message);
+      const isAbort = error?.name === 'AbortError' || options.abortController?.signal?.aborted || signal?.aborted;
+      if (isAbort) {
+        console.log('[KiloBackend] Aborted by user stop for session', latestSessionId);
+      } else {
+        console.log('[KiloBackend] Error:', error.message);
+      }
+      this.logEvent(logFile, 'request_error', { error: error.message, aborted: isAbort });
+      // Treat AbortError (from linked outer tab stop) or explicit aborted flag as user stop,
+      // send machine-readable marker so server suppresses client error and lets onDone be sole resolver.
+      if (callbacks.onError) callbacks.onError(isAbort ? 'ABORTED_BY_USER' : error.message);
+      if (!doneCalled) {
+        doneCalled = true;
+        if (callbacks.onDone) callbacks.onDone(latestSessionId);
+      }
     } finally {
       // Очищаем активную подписку при завершении
       if (latestSessionId && this.activeSubscriptions.has(latestSessionId)) {

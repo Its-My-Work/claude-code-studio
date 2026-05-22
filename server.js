@@ -2682,6 +2682,14 @@ async function runCliSingle(p) {
         // Capture error text for the main loop to inspect (e.g. thinking block signature errors)
         errorText += err;
 
+        // Special case for user-initiated Stop via linked abortController: suppress any error to client
+        // (frontend already shows "status.stopped" instantly). Use explicit marker from backend (no regex).
+        if (err === 'ABORTED_BY_USER' || (typeof err === 'string' && err.includes('ABORTED_BY_USER'))) {
+          log.info('[runCliSingle] user-initiated stop — suppressing error to client');
+          // do not send type:'error' — onDone from backend will still resolve the promise cleanly
+          return; // still let onDone be sole resolver, as per design comment below
+        }
+
         // Special handling for network/server errors
         const isNetworkError = err.includes('ECONNREFUSED') || err.includes('ENOTFOUND') ||
                               err.includes('timeout') || err.includes('Request timeout') ||
@@ -2760,6 +2768,11 @@ async function runCliSingle(p) {
   while (true) {
     const fullTextBefore = fullText.length;
     const { resultData, errorText, rateLimitInfo } = await runOnce(currentPrompt, currentContentBlocks, newKiloId);
+    // If user pressed Stop (tab abortController), do not continue auto-continue loop even if no success subtype.
+    // The backend onDone has already fired (via catch or normal path), processChat will handle 'Stopped' status.
+    if (abortController?.signal?.aborted) {
+      break;
+    }
     const hadOutputBeforeRateLimit = fullText.length > fullTextBefore;
     lastResult = resultData;
     totalCostUsd += resultData?.total_cost_usd || 0;
