@@ -230,7 +230,7 @@ send(options) {
         prevSub.controller.abort();
       }
       if (prevSub?.reader) {
-        try { prevSub.reader.cancel(); } catch (e) { console.log('[KiloBackend] Reader cancel error:', e.message); }
+        try { prevSub.reader.cancel().catch(e => { if (e?.name !== 'AbortError') console.log('[KiloBackend] Reader cancel error:', e.message); }); } catch (e) { console.log('[KiloBackend] Reader cancel error:', e.message); }
       }
       this.activeSubscriptions.delete(sessionId);
     }
@@ -440,11 +440,21 @@ send(options) {
        * Читает данные из стрима, парсит JSON события и обрабатывает их.
        */
        const processEvents = async () => {
-         while (true) {
-           // Early exit on outer (tab) or inner abort — ensures Stop actually breaks the reader loop
-           if (options.abortController?.signal?.aborted || signal.aborted) break;
-           const { done, value } = await reader.read();
-           if (done) break;
+          while (true) {
+            // Early exit on outer (tab) or inner abort — ensures Stop actually breaks the reader loop
+            if (options.abortController?.signal?.aborted || signal.aborted) break;
+            let readResult;
+            try {
+              readResult = await reader.read();
+            } catch (readErr) {
+              if (readErr?.name === 'AbortError' || signal.aborted || options.abortController?.signal?.aborted) {
+                break;
+              }
+              console.log('[KiloBackend] reader.read error:', readErr?.message);
+              break;
+            }
+            const { done, value } = readResult;
+            if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
           console.log('[KiloBackend] Chunk received, length:', chunk.length);
@@ -894,7 +904,7 @@ send(options) {
       if (latestSessionId && this.activeSubscriptions.has(latestSessionId)) {
         const sub = this.activeSubscriptions.get(latestSessionId);
         if (sub?.reader) {
-          try { sub.reader.cancel(); } catch (e) { console.log('[KiloBackend] Reader cancel error:', e.message); }
+          try { sub.reader.cancel().catch(e => { if (e?.name !== 'AbortError') console.log('[KiloBackend] Reader cancel error:', e.message); }); } catch (e) { console.log('[KiloBackend] Reader cancel error:', e.message); }
         }
         this.activeSubscriptions.delete(latestSessionId);
         console.log('[KiloBackend] Cleaned up subscription for session:', latestSessionId);
