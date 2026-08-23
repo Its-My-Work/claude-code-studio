@@ -38,6 +38,12 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      networks:
+      - easypanel
+
+networks:
+  easypanel:
+    external: true
 
 volumes:
   chat-data:
