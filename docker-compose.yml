@@ -26,6 +26,14 @@ services:
       # config UI writes) and .env therefore live on the data volume instead.
       - CCS_CONFIG_PATH=/app/data/config.json
       - CCS_ENV_PATH=/app/data/.env
+      # opencode (externalAgents engine) defaults to $HOME/.local/share|.config|.cache
+      # /.local/state — none of that is a volume, so a login there is lost on every
+      # redeploy. It honours the standard XDG_* vars, so point them at the data
+      # volume instead, same reasoning as CCS_CONFIG_PATH/CCS_ENV_PATH above.
+      - XDG_CONFIG_HOME=/app/data/opencode/config
+      - XDG_DATA_HOME=/app/data/opencode/data
+      - XDG_CACHE_HOME=/app/data/opencode/cache
+      - XDG_STATE_HOME=/app/data/opencode/state
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - NODE_ENV=production
       - SESSION_SECRET=${SESSION_SECRET:-}
