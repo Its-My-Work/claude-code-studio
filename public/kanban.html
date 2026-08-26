@@ -244,6 +244,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .open-link:hover{ background:var(--abg); }
 
 /* ─── New session config (in Add modal) ─── */
+.sc-note{ font-size:11px; color:var(--muted); line-height:1.45; margin:2px 0 8px; }
 .new-sess-hdr{ font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
 .sess-cfg{ border:1px solid var(--border); border-radius:var(--r-md); padding:12px 14px; background:var(--s2); }
 .sc-row{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
@@ -304,7 +305,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 }
 
 /* ─── Chain (group) card ─── */
-.chain-card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s; overflow:hidden; }
+.chain-card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s; overflow:hidden; flex-shrink:0; }
 .chain-card:hover{ border-color:var(--muted); box-shadow:var(--shadow-md); }
 .chain-card.dragging{ opacity:.4; cursor:grabbing; }
 .chain-card.status-in_progress{ border-left:3px solid var(--orange); }
@@ -456,6 +457,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TR = {
   uk: {
+    'modal.task_cfg':'Параметри запуску','modal.task_cfg_note':'Зміни зберігаються і впливають на наступний запуск, а не на поточний. Які саме дилки подіють, залежить від двигуна задачі й від того, чи вона вже має сесію.',
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача виконається промптом і моделлю цього бота',
     'hdr.title':'Kanban','hdr.add':'Завдання',
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.recent':'Нещодавні','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
@@ -503,6 +505,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Підписка','tmux.required':'Потрібен tmux на сервері',
   },
   en: {
+    'modal.task_cfg':'Run settings','modal.task_cfg_note':'Changes are saved and affect the next run, not the one in progress. Which dials take effect depends on the task engine and on whether it already has a session.',
     'tb.bot':'Bot','tb.bot.none':'no bot','tb.bot.tip':'The task runs with this bot\'s prompt and model',
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.recent':'Recent','proj.search':'Search project...','search.empty':'Not found',
@@ -550,6 +553,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Subscription','tmux.required':'tmux is required on the server',
   },
   ru: {
+    'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Изменения сохраняются и влияют на следующий запуск, а не на текущий. Какие именно настройки подействуют, зависит от движка задачи и от того, есть ли у неё уже сессия.',
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача выполнится промптом и моделью этого бота',
     'hdr.title':'Kanban','hdr.add':'Задача',
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.recent':'Недавние','proj.search':'Поиск проекта...','search.empty':'Не найдено',
@@ -597,6 +601,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Подписка','tmux.required':'Нужен tmux на сервере',
   },
   fr: {
+    'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Les modifications sont enregistrées et affectent le prochain lancement, pas celui en cours. Les réglages qui prennent effet dépendent du moteur de la tâche et du fait qu elle ait déjà une session.',
     'tb.bot':'Bot','tb.bot.none':'sans bot','tb.bot.tip':"La tâche s'exécute avec le prompt et le modèle de ce bot",
     'hdr.title':'Kanban','hdr.add':'Tâche',
     'proj.label':'Projet :','proj.all':'— Tous les projets —','proj.recent':'Récents','proj.search':'Rechercher un projet…','search.empty':'Aucun résultat',
@@ -644,6 +649,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Abonnement','tmux.required':'tmux est requis sur le serveur',
   },
   he: {
+    'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'השינויים נשמרים ומשפיעים על ההרצה הבאה, לא על זו שרצה כעת. אילו הגדרות ייכנסו לתוקף תלוי במנוע המשימה ובשאלה אם כבר יש לה סשן.',
     'tb.bot':'בוט','tb.bot.none':'ללא בוט','tb.bot.tip':'המשימה תרוץ עם הפרומפט והמודל של הבוט הזה',
     'hdr.title':'קנבן','hdr.add':'משימה',
     'proj.label':'פרויקט:','proj.all':'— כל הפרויקטים —','proj.recent':'אחרונים','proj.search':'חיפוש פרויקט...','search.empty':'לא נמצא',
@@ -1311,7 +1317,7 @@ function makeChainCard(chain){
       const iconContent=tk.status==='done'?'✓':tk.status==='cancelled'?'✕':'';
       const titleCls=tk.status==='done'?' done-text':'';
       const canEdit=tk.status==='backlog'||tk.status==='todo';
-      return `<div class="chain-task-item" data-task-id="${tk.id}"${canEdit?` onclick="openEditChainTaskModal('${chain.id}','${tk.id}')" style="cursor:pointer"`:''}>
+      return `<div class="chain-task-item" data-task-id="${tk.id}" onclick="openEditChainTaskModal('${chain.id}','${tk.id}')" style="cursor:pointer">
         <div class="chain-task-icon ${iconCls}">${iconContent}</div>
         <span class="chain-task-title${titleCls}">${escH(tk.title)}</span>
         <div class="chain-task-actions">
@@ -1340,6 +1346,7 @@ function makeChainCard(chain){
     </div>
     <div class="chain-footer">
       ${runningBadge}${modelBadge}
+      ${chain.session_id&&(s.done>0||s.in_progress>0||s.failed>0)?`<a class="open-link" href="/?open_session=${encodeURIComponent(chain.session_id)}" target="_blank" onclick="event.stopPropagation()">💬 ${escH(t('chat.open'))}</a>`:''}
       <span class="chain-time">${relTime(chain.updated_at)}</span>
       <span class="chain-actions">
         ${chain.derived_status==='backlog'||chain.derived_status==='todo'?`<button class="cbtn" title="${escH(t('group.activate'))}" onclick="event.stopPropagation();activateChain('${chain.id}')">▶</button>`:''}
@@ -1760,19 +1767,36 @@ function openEditChainTaskModal(chainId,taskId){
   const chain=chains.find(c=>c.id===chainId);
   const tk=chain?.tasks?.find(t=>t.id===taskId);
   if(!tk)return;
-  modalMode='edit_chain_task';editingId=taskId;
+  const editable=tk.status==='backlog'||tk.status==='todo';
+  modalMode=editable?'edit_chain_task':'view_chain_task';editingId=taskId;
   $i('modalTitle').textContent=t('group.edit_task');
+  const dis=editable?'':' disabled';
   $i('modalBody').innerHTML=`
     <div><label class="lbl">${t('modal.name')}</label>
-      <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200" value="${escH(tk.title)}">
+      <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200" value="${escH(tk.title)}"${dis}>
     </div>
     <div><label class="lbl">${t('modal.desc')}</label>
-      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
+      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000"${dis}>${escH(tk.description||'')}</textarea>
     </div>`;
-  $i('modalFt').innerHTML=`
+  $i('modalFt').innerHTML=editable?`
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
-    <button class="btn btn-primary btn-sm" onclick="saveChainTaskEdit()">${t('modal.save')}</button>`;
+    <button class="btn btn-primary btn-sm" onclick="saveChainTaskEdit()">${t('modal.save')}</button>`:`
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>`;
   openOverlay('taskOv',{initialFocus:'#fChainTaskTitle',onEscape:closeModal});
+  // The task's own conversation lives in the CHAIN's shared session, not a per-task
+  // one — every task in a chain resumes the same claude session (server.js startTask).
+  if(!editable&&chain.session_id){
+    (async()=>{
+      try{
+        const msgs=await fetchMessages(chain.session_id);
+        const chatHtml=buildChatPanel({session_id:chain.session_id,sess_title:chain.title,claude_session_id:chain.claude_session_id},msgs);
+        const body=$i('modalBody');
+        if(body&&editingId===taskId&&!$i('taskOv').classList.contains('hidden')){
+          const div=document.createElement('div');div.innerHTML=chatHtml;body.appendChild(div.firstElementChild);
+        }
+      }catch{}
+    })();
+  }
 }
 async function saveChainTaskEdit(){
   const title=($i('fChainTaskTitle')?.value||'').trim();
@@ -1841,8 +1865,7 @@ function engineSegHtml(val){
   const eng=(raw==='subscription'&&_kbTmuxAvailable)?'subscription':'api';
   const subDisabled=!_kbTmuxAvailable;
   const subAttrs=subDisabled?` disabled style="opacity:0.4;cursor:not-allowed" title="${escH(t('tmux.required'))}"`:'';
-  // Engine switcher hidden (Subscription paused; API/claude -p only). Un-hide to restore.
-  return `<div class="sc-seg" data-group="run_engine" style="display:none">
+  return `<div class="sc-seg" data-group="run_engine">
     <span class="sc-lbl">${t('tb.engine')}</span>
     <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">${escH(t('engine.api'))}</button>
     <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>${escH(t('engine.sub'))}</button>
@@ -1855,7 +1878,18 @@ function buildForm(tk={}){
   const statusOpts=COLS.map(c=>`<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`).join('');
   const sessOpts=`<option value="">${escH(isNew?t('modal.new_session'):t('modal.no_session'))}</option>`+
     sessions.map(s=>`<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,60))}</option>`).join('');
-  const visClass=!tk.session_id?' visible':'';
+  // Shown whenever we are EDITING, not only while a session is being created.
+  //
+  // These dials are read from the TASK row on every run, not from the session:
+  // `effectiveTaskMaxTurns = task.max_turns`, `mode: task.mode`, `task.effort`,
+  // `task.run_engine` (server.js, startTask). Hiding them once a session existed
+  // meant the settings that actually drive each run became uneditable the moment
+  // the task first ran — issue #79.
+  //
+  // `model` is the one exception and the header says so: the runner resolves
+  // `session?.model || task.model`, so an existing session keeps its own model and
+  // a change here applies to the next session this task creates.
+  const visClass=(!tk.session_id||!isNew)?' visible':'';
   const schedInfoHtml=(tk.scheduled_at&&(tk.status==='todo'||tk.status==='backlog'))?`
     <div class="sched-info">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>
@@ -1911,7 +1945,8 @@ function buildForm(tk={}){
       <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
     </div>
     <div id="newSessCfg" class="new-sess-cfg${visClass}">
-      <div class="new-sess-hdr">${t('modal.new_sess_cfg')}</div>
+      <div class="new-sess-hdr">${isNew?t('modal.new_sess_cfg'):t('modal.task_cfg')}</div>
+      ${(isNew||!tk.session_id)?'':`<div class="sc-note">${escH(t('modal.task_cfg_note'))}</div>`}
       <div class="sc-row">
         <div class="sc-seg" data-group="mode">
           <span class="sc-lbl">${t('tb.mode')}</span>
@@ -2045,7 +2080,10 @@ function scOpt(btn){
 function onFSessionChange(){
   const hasSess=!!$i('fSession')?.value;
   const cfg=$i('newSessCfg');
-  if(cfg)cfg.classList.toggle('visible',!hasSess);
+  // While CREATING, the block is about the session that is about to be made, so it
+  // follows the session picker. While EDITING it stays: mode, turns, effort and
+  // engine are read off the task on every run regardless of which session it uses.
+  if(cfg&&modalMode!=='edit')cfg.classList.toggle('visible',!hasSess);
 }
 function getSessCfg(){
   const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',run_engine:kbSettings.run_engine||'api',maxTurns:30,effort:'',bot_id:null};

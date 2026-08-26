@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.3.0** — **Settings you can finally see.** A Settings form now lists every setting next to the place its value actually comes from — a shell variable, `.env`, the local `config.json`, the global one, a per-project override or the built-in default — flags the ones that are being overridden or silently ignored, masks every secret before it leaves the server, and resets any setting back to its default in one click. Also in this release: import Claude CLI sessions from a **remote SSH host**, answer a **blocked permission or plan prompt** straight from the browser instead of dropping to a terminal, a **global workspace** that searches tasks and files across every project at once, and the last untranslated UI surfaces translated in all five languages. Security: an SSH password or key never reaches the model, the transcript or the database.
+> **v7.9.0** — **A stuck remote chat is no longer stuck for good.** A remote SSH chat could lock up permanently when the connection dropped mid-run — every new message refused, and even **Restart Session** answered "Task is still running." The fix reworks how a remote run ends so nothing is left half-finished, and Restart Session now recovers a wedged chat instead of refusing to touch it. Also in this release: a broken or missing local Claude CLI install is now caught and shown in the UI **before** it fails a chat mid-send, and two small Telegram gaps are closed — `/cancel` works, and a project added after the initial connect gets its forum topic right away.
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
@@ -243,6 +243,7 @@ Both bots work the turn **in order**, and each one sees what the previous one pr
 - **`@@` calls a bot, `@` still attaches a file** — two separate sigils, so a mention is never ambiguous. Unknown handle? You get told, not silence.
 - **Per-project availability, global identity** — a bot lives in your library once; you choose which projects it appears in. No philosopher bot cluttering a crypto project.
 - **They know about each other** — every bot gets a roster of its teammates, so it can hand work over instead of doing someone else's job badly.
+- **Hand-off works mid-turn, not just at the start** — a bot can call another by name before its own turn ends. If the target already took its turn, the hand-off waits in an inbox and reaches it the next time it runs, instead of getting lost.
 - **Evidence clause built in** — every bot is instructed to state the file, command output, or source behind a factual claim, and to label a guess as a guess.
 - **Visible attribution** — in chat, each bot answers in its own bubble with its name, avatar and colour. In Telegram, each answer carries its own header line.
 - **Assign a bot to work, not just chat** — pick a bot on a **Kanban** card or a **Scheduler** task, and that bot runs the job on autopilot.
@@ -250,6 +251,8 @@ Both bots work the turn **in order**, and each one sees what the previous one pr
 - **Autocomplete** — type `@@` and pick from the palette; you never have to remember a handle.
 
 A bot that fails mid-turn says so, and its unfinished output is never passed to the next bot as if it were fact.
+
+**Room mode — let the bots talk to each other.** Switch a chat to **Room** and up to 6 of the project's bots take serial turns on your message instead of you orchestrating each one by hand: every bot reads what came before and adds to it, for up to 3 rounds or 10 messages. A bot can write **PASS** to skip a turn without ending the discussion, and the room closes the moment one of them writes **@user** — the only way to escalate a question to you, so the room can't bury it under more turns instead. When the discussion settles, it closes with one artifact, not a pile of replies to sort through yourself.
 
 **A ready-made team to start from** — [`bots_example/cs_bots.json`](bots_example/cs_bots.json) is an exported roster of 11 named specialists, usable the moment it lands: **Vertex** (systems architect), **Bogdan** (business analyst / client interviewer), **Vira** (product analyst), **Hanna** (technical researcher), **Dan** (releaser), **Katya** (technical writer), **Kolya** (senior programmer), **Olya** (delivery lead), **Ryta** (staff engineer), **Sofiya** (application security engineer) and **Taras** (QA engineer).
 
@@ -417,9 +420,15 @@ The active engine is always visible at a glance: a **⚡ Max** badge appears in 
 
 **Global default** — set your preferred engine once with the **★** button next to the toolbar selector (the star lights up when the current selection is your default). Every new chat — and every new **Kanban** card and **Scheduler** task — starts on it, while any individual chat or task can still override per-item. The engine selector lives in Chat, the Kanban task form, and the Scheduler form alike, and falls back to **API** automatically when `tmux` is unavailable (e.g. native Windows without WSL) — the Subscription option is disabled with a clear hint rather than failing only after you send.
 
+**New-chat defaults** — the same idea, extended to the whole toolbar. Pin **mode, agent mode, model, effort and turn budget** in Settings → *New-chat defaults*, and every new chat opens on them instead of on the built-ins. A project can override any subset of the five in its own settings; it stores **only the dials you actually pinned**, so the rest keep following the global value as you change it later. The chain is **project override → global default → built-in**, and every row shows which of the three it came from, with a one-click Reset. Existing chats are never re-seeded — each one carries its own settings in SQLite.
+
 ### 🌐 Remote Access & SSH
 
 **SSH** — add remote servers, create projects pointing to directories on them. Claude works there as if local. Type `#` in chat for quick multi-server attachment. Screenshots and files auto-upload via SFTP.
+
+**Open in VS Code** — the ⏻-style button on a project row hands the workspace to your desktop editor, local or over SSH. A remote project opens through **VS Code Remote-SSH** at the right path, without reconnecting by hand. The studio launches the editor itself when it can find a `code` binary; when it cannot — inside Docker, on a headless host, on Windows — it hands your browser a `vscode://` link instead, so the window opens on the machine you are actually sitting at. Pick **VS Code, Insiders, VSCodium, Cursor or Windsurf** in Settings → *UI*. The file viewer gets the same button for the file you are reading.
+
+**Remote file browser** — the file tree, the file viewer and `@`-mention search now work on SSH projects as well, not only local ones. Read-only by design: list a directory, open a file. Download, share and image/PDF preview stay hidden for remote files instead of failing under your finger. Listings are capped at 2000 entries and files at 2 MB — both enforced on the remote host and announced in the UI, so an 8 GB log never crosses the link. A symlink pointing outside the project root is refused, not followed.
 
 **Remote Access** — one click: cloudflared (no signup) or ngrok. Public HTTPS URL in seconds. Works behind NAT, firewalls, corporate VPNs. URL sent to Telegram automatically.
 
@@ -473,7 +482,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | Category | Features |
 |----------|----------|
 | **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, terminal catch-up (import a `claude --resume` conversation into the web chat), extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse + Stop hooks + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save, remote CLI session import over SSH |
-| **Bots** | Named AI specialists with own prompt/model/memory, several per chat via `@@handle`, sequential turns with context hand-off, `@@` autocomplete palette, built-in templates (Analyst / Editor / Reviewer / Explainer), per-project availability with a global library, teammate roster, evidence clause, per-bot chat bubbles with name + avatar + colour, assignable to Kanban cards and Scheduler tasks, works from Telegram with per-bot headers |
+| **Bots** | Named AI specialists with own prompt/model/memory, several per chat via `@@handle`, sequential turns with context hand-off, mid-turn hand-off to a named bot with a delivery inbox for missed turns, `@@` autocomplete palette, built-in templates (Analyst / Editor / Reviewer / Explainer), per-project availability with a global library, teammate roster, evidence clause, per-bot chat bubbles with name + avatar + colour, assignable to Kanban cards and Scheduler tasks, works from Telegram with per-bot headers |
 | **Terminal agents** | Any CLI agent live in a workspace tab (Claude Code, Codex, Grok, opencode, Antigravity, Kimi, Cursor Agent, shell), full TUI over tmux control mode, several tabs side by side with chat, survives browser/server restart, exact conversation restore by id, idle reaping with revive on reopen, shared font-size control, capability-checked (tmux) on macOS/Linux/Docker/WSL |
 | **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Opus / Sonnet / Haiku / Fable model selector, answer a blocked permission / plan prompt from the browser |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
@@ -481,16 +490,17 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
 | **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU/FR/HE), Write button, file attachments, interrupt queue while busy |
 | **Delegation** | Cross-agent handoff/sync (Codex, Antigravity, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
-| **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), auto-retry, cascade cancellation, effort propagation |
+| **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), Room (project bots take serial turns on one message), auto-retry, cascade cancellation, effort propagation |
 | **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
 | **Skills** | 30 built-in, auto-classification, plugin discovery, custom `.md` files |
 | **Commands** | 10 built-in slash commands, custom commands |
-| **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels, remote CLI session import |
+| **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels, remote CLI session import, read-only remote file browser (tree + viewer + `@`-mention search over SSH, capped and symlink-guarded) |
+| **Editor** | Open the active workspace in VS Code / Insiders / VSCodium / Cursor / Windsurf — locally or through Remote-SSH; launched by the server when it has the CLI, by the browser via `vscode://` when it does not |
 | **Mobile** | Native-feel UI, bottom sheet, scroll-snap Kanban, iOS-safe, touch-optimized |
 | **Dashboard** | Activity heatmap, tool usage, model distribution, Automation Index, peak hours |
 | **Reliability** | security-hardened Telegram uploads, self-healing sessions, crash protection, atomic writes, instant stop, rate limit auto-wait, concurrency safety (session lock + busy_timeout), orphaned session lock auto-cleanup |
 | **Workspace** | Global view across every project at once — one search over tasks and files, jump straight to the owning project |
-| **Settings** | In-app settings form, every value shown next to the source it comes from (shell env / `.env` / local `config.json` / global / project override / built-in default), override + shadow + ignored badges, secrets masked server-side, one-click reset to default, raw-file editors alongside |
+| **Settings** | In-app settings form, every value shown next to the source it comes from (shell env / `.env` / local `config.json` / global / project override / built-in default), override + shadow + ignored badges, secrets masked server-side, one-click reset to default, raw-file editors alongside, global new-chat defaults (mode / agent / model / effort / turns) with sparse per-project overrides |
 | **Security** | bcrypt auth, AES-256-GCM SSH, Helmet.js, path traversal protection, XSS/SQLi prevention |
 | **Platform** | Windows/macOS/Linux, Docker (non-root, registry mirror), LLM proxy/gateway, 5 languages (EN/UA/RU/FR/HE), OpenRouter support |
 

@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 63 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 45 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 70 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 52 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the SSH run's termination guarantee (`ssh-termination.test.js` drives `ClaudeSSH.send()` through a fake ssh2 `Client` in `require.cache` and asserts `onDone` fires EXACTLY once on every ending — a missed one hangs the chat forever, a doubled one re-emits stderr) and the recovery contract of "Restart Session" (`session-restart.test.js` boots a real server against a fake `claude` that never exits, then pins that a restart ABORTS that turn and releases the session instead of refusing), the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the five tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -153,6 +153,56 @@ watchdog stops declaring a blocked turn "done". The answer is typed through
 **Why tmux (and not node-pty):** the engine needs a PTY that survives the Node process and is readable/writable from outside it. `tmux` delivers that as a plain binary — zero new npm deps, zero build step, matching the project philosophy. `node-pty` (the cross-platform alternative) is a native module requiring compilation — rejected for that reason.
 
 **Dedicated tmux socket — do not move terminals back to the default one.** `terminal-bridge.js` runs every tmux command through `-L ccstudio` (`TMUX_SOCKET`). Reason, from a real failure: an agent working in this repo ran `tmux kill-server` before a test run and destroyed every live studio terminal mid-work. `kill-server` is server-wide (per socket) — the `ccsterm-` name prefix protects nothing. On its own socket, no tmux command typed in a shell can reach studio sessions. `claude-interactive.js` (`ccs-` prefix, subscription engine) imports the same `TMUX_SOCKET` and routes every invocation through its own `tmuxArgs()` — both modules share one tmux server, which is what lets a browser viewer attach to an engine pane at all. Sessions left on the default socket by older builds are reported by `listOrphanedDefaultSocketSessions()` at boot and never killed automatically.
+
+**A SPLIT window is composited, not sampled (`tmux-composite.js`).** Claude Code's
+agent-teams splits whatever tmux window it runs in, one pane per teammate. Measured on
+a live studio session: window 155x39, the user's own `claude` squeezed into 46x38 on
+the left, four teammates at 108x9 stacked down the right, `pane-border-status top`, each
+teammate named by `#{pane_title}`. Control mode is not a renderer — it hands the client
+`%output %<pane-id> <bytes>` per pane and leaves composition to whoever is drawing — so
+the viewer used to pick ONE pane, drop every other pane's bytes, and tell the browser to
+shrink its xterm to that pane. The user saw a 46-column strip and nothing else.
+
+- **The raw streams cannot be merged, and that is why this is not three lines.** Every
+  pane addresses cursor positions LOCAL to itself; four TUIs writing into one screen
+  buffer scribble over each other, which is the bug the pick-one-pane filter was
+  introduced to stop. Re-addressing a live stream needs a terminal emulator per pane.
+  `buildFrame()` composes from `capture-pane` snapshots instead, which are positionable.
+- **The captures ride the CONTROL CLIENT, not `spawnSync`.** A control client answers
+  every command with a `%begin`/`%end` block, so the compositor asks the client it
+  already has. A `spawnSync capture-pane` per pane per frame is ~15 ms of BLOCKED event
+  loop — the whole server, not just this viewer.
+- **A reply closes on the `%end` carrying its own command NUMBER.** Pane content sits
+  inside the block, and a pane showing the literal text `%end 1 2 3` — which this
+  repository's own test output prints — would otherwise truncate the capture and blank
+  half the screen. For the FIFO to line up, EVERY write goes through `sendCmd`,
+  `send-keys` included.
+- **Only changed rows are sent.** A Claude TUI repaints for every spinner tick; measured
+  on a live four-pane session, the row diff holds a working window at ~1 fps and
+  2.2 KiB/s. `capture-pane -N` is NOT the way to pad a row to the pane width (measured on
+  tmux 3.7c: a 2-character row in a 60-column pane comes back padded to 15), and `\x1b[K`
+  would erase every pane to the right — so a row is blanked with its own width of spaces
+  and then rewritten.
+- **`geometry` now carries the WINDOW, and the browser must size its xterm to that.**
+  The composed frame is addressed in window coordinates. Reporting the mirrored pane's
+  width is exactly what produced the strip. A split window is still never resized from
+  the browser — tmux redistributes panes on the way down AND up and never restores the
+  layout.
+- **The primary pane is `pane_index` 0, never the ACTIVE pane.** Splitting makes the NEW
+  pane active, so a viewer that re-derived its pane on attach re-pinned itself to
+  whichever teammate agent-teams had spawned last. Every reconnect took that path — a
+  server restart, an idle proxy timeout, a laptop waking — and the user's own agent
+  vanished from a terminal that had been showing it a second earlier.
+- **Borders are drawn here because tmux draws them client-side.** Control mode carries
+  not one byte of them, and without the T-junction cells a seam has a one-cell hole
+  wherever a horizontal border meets the vertical one.
+- **`p.stdin` needs an `'error'` listener.** The compositor writes a command per frame,
+  so a session dying mid-repaint lands a write on a pipe that has gone. EPIPE arrives as
+  an `'error'` EVENT, not as a throw from `write()` — a try/catch does not see it and an
+  unhandled one takes down the whole studio process. Observed; the sibling guard
+  (`sendCmd` settling its waiter instead of hanging) is what `tmux-composite.test.js`
+  can pin deterministically.
+
 
 **Platform support — capability-checked, not OS-sniffed.** `/api/version` returns `tmuxAvailable` (server runs `tmux -V` once at boot); the UI disables the "Subscription" button when false. Works on macOS / Linux / Docker (tmux in Dockerfile) / Windows-via-WSL or Git-Bash. Native Windows without tmux → button disabled, user stays on `api`. There is intentionally no Windows special-casing — the capability flag covers every case.
 
@@ -341,6 +391,336 @@ is testable without booting anything:
 - **Only a chat with no session of its own is seeded.** `applyChatDefaults()` runs from
   `newTab()`, from `switchProject()` and at boot — always behind `if (!currentSessionId)`.
   An existing chat carries its own mode/model in SQLite and `loadSess()` must keep winning.
+- **The chain governs chat CREATION; execution channels keep their own budget.**
+  Both server-side doors to a new interactive chat resolve it via
+  `chatDefaultsForWorkdir()` (sessions have no `project_id` column, so the project is
+  matched by workdir the way `/api/activity` does): the WS `chat` frame and
+  `POST /api/sessions`. Both used to carry a private literal set — `sonnet`/`auto`/
+  `single`/`30` — so an API client or an older cached SPA created a chat on values
+  nobody had configured while the browser's toolbar showed the resolved ones. `_cd` is
+  hoisted ABOVE the `createSession` INSERT so the stored row and the run cannot disagree.
+  `chatDefaultsForWorkdir()` returns the FLAT `.effective` row, not the
+  `{effective, global, overridden}` envelope the REST endpoints hand the browser.
+- **Telegram and the scheduler deliberately do NOT inherit it** — `UNATTENDED_MAX_TURNS`
+  (30, declared once next to the `chat-defaults` require). A scheduled job that silently
+  inherited someone's `turns: 200` would burn a budget nobody was watching, and every
+  existing install would have jumped 30 → 50 on upgrade without being asked. The same
+  constant names every task/chain creation default (REST, MCP `create_task`/`create_chain`,
+  Kanban dispatch), so a bare `30` reappearing next to a runner is a review signal. If
+  per-channel budgets are ever wanted they belong in their own setting, not in the chat
+  dials. The `maxTurns || 30` floors inside the shared runners are left alone on purpose:
+  they fire only when a caller passes nothing at all, which is a different concern from
+  a channel policy. Pinned by `test/chat-defaults-api.test.js`.
+
+### A chat's own dials (issue #81)
+
+`sessions` persisted `mode`/`agent_mode`/`model` and **not** `max_turns`/`effort`, so
+`loadSess()` had nothing to restore for those two: the turn budget fell back to the
+markup's `value="50"` and effort carried over from the previously open tab. Reported as
+"Kanban chats ignore the default" — incidental: a task's chat is an ordinary chat.
+Two columns (`ALTER TABLE`), with the #58 chain as the fallback when a chat stored none.
+
+- **The stored value and the CLI flag are different things.** `effort: 'auto'` means
+  "pass no `--effort`" and must survive a round trip through SQLite as the literal word;
+  `_effortFlag = chatDefaults.effortToFlag(effort) || null` is the single translation
+  point into the run options. Store the flag instead and Auto becomes indistinguishable
+  from unset, which is also what the client did until it started sending the sentinel.
+- **Every door that creates or copies a chat carries both.** New chat, fork, compact,
+  JSON import — plus the two REPLAY paths (idle-interrupt, `resume_interrupted`), which
+  rebuild run options from scratch and clobbered the dials the chat had just stored.
+- **Import sanitises; the others do not need to.** That JSON is a file the user picks,
+  so `max_turns: 900` arrives as easily as a real export and would reach the engine
+  verbatim. `chatDefaults.sanitize()`, lenient: a bad dial falls back to the default and
+  the rest of the import still lands.
+- **`loadSess()` has a safe zone, and it ends at the streaming-proxy reset.** The
+  function copies a background tab's accumulated stream into locals and *then* wipes the
+  proxy-backed state; only the restore block at the end puts it back. So an `await` added
+  past that point turns a tab switch into data loss — the early return drops the locals
+  on the floor. Both awaits (`_projectsReady`, `loadChatDefaults`) sit above it, each with
+  its own `if (id !== activeTabId) return`, next to the two original guards.
+- **An empty `projects` array is not "no project".** The boot fetch is fired without
+  await, so the first `loadSess()` after a hard refresh could `find` nothing, resolve
+  `_sessProj` to `null` and take the GLOBAL defaults row for a project-pinned chat —
+  the reported symptom, once per page load. `_projectsReady` holds that promise.
+- **One defaults cache, several callers → last caller wins.** `loadSess`,
+  `switchProject`, `newTab` and boot all write `_chatDefaults`. Without `_cdSeq` a slow
+  earlier response overwrites a newer one and tags the cache with a project that is no
+  longer open — self-consistent and wrong, and it repaints the badges to match.
+
+Pinned by `test/chat-defaults-api.test.js`. Two of those pins first passed **on a
+comment**: a needle like `streaming.txt = ''` matched the prose explaining the rule
+before it reached the statement. Structural pins there compare indices of the real
+statement, and the comments no longer spell it.
+
+### Open in VS Code (issue #63)
+
+`editor-links.js` builds the links; `POST /api/editor/open` decides which of the two
+ways to launch is right for THIS deployment. Both exist because the studio is not
+always running on the machine the browser is on.
+
+- **The two URI shapes are not the same string.** The browser deep link is
+  `vscode://vscode-remote/ssh-remote+user@host/srv/app` — the editor's scheme, with
+  `vscode-remote` as the URI AUTHORITY, which is how the desktop URL handler routes
+  it. The CLI argument is `--folder-uri vscode-remote://ssh-remote+user@host/srv/app`
+  — there `vscode-remote` IS the scheme, because the editor is already running.
+  Collapse the two and one path silently stops working.
+- **The server prefers its own CLI, and falls back to the deep link.** A resolvable
+  `code` binary means the server is a workstation, so it opens the window itself and
+  can report failure honestly. No binary means Docker, a headless host or Windows —
+  and there the browser follows `vscode://`, which lands on the machine with the
+  screen. That is one rule, no `process.platform` test, correct in every deployment.
+- **Nothing about the deep-link outcome is detectable.** No browser reports whether a
+  protocol handler exists or ran. So the SPA states the condition every time it takes
+  that path ("if nothing opened, …") instead of claiming an error it cannot observe.
+- **`$PATH` is walked in-process, never through `which`/`where`.** A subprocess would
+  need a shell on Windows, and the value being launched is a user-chosen filesystem
+  path — the BatBadBut re-parse `delegate-terminal.js` already had to work around.
+  `_EXEC_EXTS` therefore excludes `.CMD`: VS Code puts `code.cmd` on PATH and Node
+  refuses to spawn one without `shell: true`, so accepting it would turn every Windows
+  launch into a throw instead of the deep-link fallback that works there.
+- **Authorisation is the file browser's resolver, not a second guard.**
+  `resolveFilesWorkdir()` gives "you may open in an editor whatever you may browse",
+  plus the default-`WORKDIR` fallback and — critically — `isRemote` from the PROJECT
+  RECORD. Inferring remoteness from the path would hand a local POSIX-looking workdir
+  to Remote-SSH.
+- **A `~/project` remote workdir is refused by name.** It is legal everywhere else in
+  this app because the remote *shell* expands it; a URI has no shell, and Remote-SSH
+  would look for a directory literally called `~`. Resolving it would need an SSH
+  round trip, which is not something a link builder should do.
+- **Per-FILE open is local-only, and not for the #57 reason.** The remote folder link
+  works; VS Code's URL handler opens a remote FILE uri as a folder
+  (microsoft/vscode-remote-release#4333). So `fpvEditorBtn` hides for a remote file
+  while the project row keeps opening the remote workspace.
+- **The editor is a fixed catalog, not a binary name field.** The value becomes both a
+  URI scheme and an `argv[0]`. `EDITORS` covers VS Code, Insiders, VSCodium, Cursor and
+  Windsurf — all VS Code forks, so `vscode-remote://` means the same thing in each —
+  and the settings row (`config-resolve.js`, `section: 'ui'`) reads its choices from
+  there rather than restating them.
+
+### A run that strands a background task (run-continuation.js)
+
+`subtype:'success'` is the ONE rung the auto-continue ladder does not cover, and that
+is where turns were being lost. A run that started something with `run_in_background`
+and then ended saying it would wait and continue reports a clean `end_turn` — so the
+ladder, which fires only on NON-success, never saw it. Nothing else resumes a headless
+`claude -p`: the process exits and takes the background shell with it. The chat printed
+`✅ Done` over work that had not happened.
+
+- **Detection is structural, never textual.** `isBackgroundLaunch()` matches a `Bash`
+  call whose input carries `run_in_background: true` — the same JSON on every install.
+  User-facing prose is written in the UI language (`buildSystemPrompt` pins that
+  explicitly), so a regex over English phrases like "I'll check back" is dead on a
+  French or Ukrainian install.
+- **The flag is read off a PARSED object, not matched as a substring.** `grep -rn
+  '"run_in_background": true' *.js` is a real command to run in this repo, and an
+  unanchored regex counted it as a launch. The regex survives only as a fallback for
+  input that does not parse at all (a truncated object), because a missed launch
+  strands the task, which is the failure the module exists to stop.
+- **The debt is INCREMENTAL and TURN-level, and the whole rule lives in the module.**
+  Four earlier shapes were wrong, which is why the current one looks over-built — every
+  one of them shipped green:
+  a one-way `bgLaunched` latch charged an extra run to every agent that OBEYED
+  `BACKGROUND_TASK_INSTRUCTION`; PER-RUN counters made the rescue run start from zero,
+  so a second walk-away that touched no tool reported nothing owed and the turn said
+  "Done" one run later — the same bug the bound existed to close; raw CALL counts let
+  two polls of one job cancel a second, genuinely abandoned launch; and a BATCH total
+  (`max(0, launches - harvests)`) BANKED a harvest with no launch behind it, so reading
+  a leftover `tasks/<id>.output` from an earlier turn — often the first thing a resumed
+  session does — paid for a launch that came afterwards. `applyBackgroundTool()` folds
+  each tool call into `{debt, seen}`: a harvest decrements only an EXISTING debt, once
+  per shell id, and a surplus is dropped rather than banked. The loops call that one
+  function instead of open-coding it, because an open-coded copy is how the local and
+  remote paths drift apart. Verified live on all four shapes.
+- **The harvest side cannot key on `BashOutput` alone.** Measured on CLI 2.1.231, a
+  background launch answers `Output is being written to: <hash>/<uuid>/tasks/<id>.output`
+  and the agent collects by READING that file — `BashOutput` is never called.
+  `backgroundHarvestId()` therefore also matches a `Read`/`View` of a
+  `/tasks/<id>.output` path and returns the id out of it (`BG_OUTPUT_PATH_RE`), which is
+  what makes repeated polling safe. A harvest whose id cannot be read returns `null` and
+  does NOT pay the debt: `bash_id` is a required parameter, so that only happens on a
+  malformed payload, and crediting it would let two such calls cancel a real launch —
+  one extra rescue run is the cheaper mistake. Verified live: an obedient agent ends at
+  `debt=0` and is not nudged; one that launches two and collects one ends at `debt=1`
+  and is.
+- **The detector sits ABOVE the MCP early-return in `onTool`.** A background launch is a
+  fact about the run, not about how one tool is rendered.
+- **`MAX_BACKGROUND_NUDGES` is 1**, so a false positive costs one short run.
+- **A bounded nudge needs an honest ending.** When the harvest run ALSO walks away,
+  `describeStrandedBackgroundTask()` says what was left running. The notice is written
+  as a real status line (`\n\n---\n⚠️ …`) because `statusLineKind()`
+  (public/index.html:7215) requires the `---` fence — without it the SPA stamps its own
+  `✅ Done` badge on top of the warning.
+- **It does NOT flip the returned `completed` flag, and that was tried.** `completed`
+  has no consumer that would do the right thing with it: the chat path discards it, and
+  the only reader (server.js:1865) is the SUBSCRIPTION branch consuming
+  `runInteractiveSingle`. The API Kanban worker has its own `while (true)` that breaks
+  on `subtype === 'success'` and never calls these functions at all. Worse, that one
+  reader turns `completed:false` into `{subtype:'error'}` → `taskStatusForStop` →
+  `'failed'`, which auto-retries a chain and re-runs every side effect. "Not marked
+  done" is not "failed, retry the chain".
+- **Coverage is uneven, and each path takes the channel that actually reaches it.**
+  The harvest rescue lives in `runCliSingle`/`runSshSingle` only — the chat and Telegram
+  paths. `taskWorker` (Kanban/scheduled, API engine), the multi-agent DAG members and
+  the bots/dispatch path each run their own `cli.send` loop and build their own system
+  prompt, so they got neither half; duplicating the debt accounting into a third and
+  fourth loop is exactly how the local and remote paths would drift apart, so they get
+  the instruction only. An UNATTENDED task walking away from a background job is the
+  worst version of this bug — nobody is reading that chat — which is why it was worth
+  wiring even where the rescue is not.
+  **Which channel matters, and appending to the system prompt is usually the wrong
+  one.** `claude-cli.js:252` drops `--system-prompt` whenever there is a session to
+  resume. A multi-agent worker starts from the orchestrator's session id, and a bot
+  keeps a persistent session per chat — so for those two the system prompt is dead on
+  arrival, and the instruction rides the USER turn instead (`agentPrompt`, and the
+  `standing` block the bots path already re-sends its roster in). `taskWorker` is the
+  same story for two reasons at once — `taskBotSp` is `undefined` for a task with no
+  bot, and dropped outright when the task resumes a session — so there too it rides the
+  task prompt, next to `TASK_VERIFICATION_SUFFIX`, which sits in that channel for
+  exactly the same reason. Chat and Telegram get it as a system prompt through
+  `buildSystemPrompt`; a bot on a FRESH session gets it that way too, via `botSp`, and
+  falls back to the `standing` user block once it has a session to resume.
+  Putting it in the task prompt also covers a Kanban task on the `subscription`
+  engine for free: that path passes `systemPrompt: ''` (server.js:1829) but
+  `runInteractiveSingle` types the prompt itself into the tmux pane
+  (claude-interactive.js:441), so the user-turn channel reaches it like every other.
+- **The system prompt is the first line of defence, the harvest run the second.**
+  `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
+  phrased as "anything that keeps running after the call returns" rather than one tool
+  field — which is what covers the two KNOWN LIMITS, both stated in the module header.
+  A process backgrounded with shell syntax (`cmd &`, `nohup`, `tmux new -d`) inside a
+  FOREGROUND `Bash` call is not detected: telling `a && b`, `2>&1` and a trailing `&`
+  apart needs a shell parser, and the false positives would land on ordinary commands.
+  And a harvest is not PAIRED to a launch — the shell id exists only in the tool
+  RESULT, while `onTool` sees tool_use blocks — so a read of some OTHER
+  `tasks/<id>.output` after a launch pays that launch's debt. The mirror case, a
+  leftover read BEFORE the launch, is closed by the no-banking rule; closing this one
+  means threading tool_result through both transports and changing the stream contract.
+- **`test/ask-user-question.test.js` extracts that `onTool` handler as source text** and
+  runs it through `new Function`, so its parameter list must carry every closure the
+  handler touches — `runContinuation` and `bgState` are passed in there deliberately
+  rather than stubbed, to keep the real module in the path.
+
+**`describeTurnBudgetAnomaly()` — when "raise Max turns" is the wrong advice.** Measured
+against CLI 2.1.231, a run capped at N reports `num_turns === N + 1`, so a genuine
+exhaustion lands AT the cap. `error_max_turns` after 3 turns against a 50-turn dial means
+the cap came from somewhere else — a different CLI version, a `settings.json`, a hook on
+the machine the agent runs on. Half the budget is the threshold, not "anything below the
+cap": a run can stop one or two turns short for ordinary reasons, and warning on those
+would be noise on every long chat. It is applied to the FIRST retry notice as well as the
+exhausted one — `hit the 50-turn limit (used 3)` contradicts itself, and a user who stops
+reading after the first retry never reaches the corrected sentence.
+
+### Composer geometry and terminal-pane control
+
+Four reports that all reduce to "the UI moved or stopped listening". Pinned by
+`test/composer-terminal.test.js`.
+
+- **The interrupt pill lives DOWNSTREAM of the textarea.** `.iw` is a flex row, so
+  every earlier sibling owns the text's left edge. Upstream, the pill shoved the
+  placeholder ~70px right the instant a turn started and narrowed the box enough to
+  re-wrap the hint — one report, two symptoms.
+- **`autosizeInput()` is the only place that reads `inEl.scrollHeight`.** The height
+  of a `rows="1"` textarea is JS-owned and has to be recomputed whenever the WRAPPED
+  LINE COUNT can change, which is not only when the value changes: boot, `setLang()`
+  (a longer translation wraps differently), a sidebar toggle, a window resize, fonts
+  landing after first paint, and the pill entering the row. The earlier fix was
+  correct and ran from `restoreComposerState()` alone, so every one of those paths
+  left the second line of the hint clipped. Open-coding the two lines again is the
+  regression; the test counts the reads.
+- **Focus, not the socket, is why a pane "needs a tab switch".** xterm routes
+  keystrokes through a hidden textarea. A reconnect swaps `entry.ws` but leaves focus
+  wherever it drifted while the socket died, so the pane looks live and swallows every
+  key; switching tabs away and back works only because `showTerminalView()` ends on
+  `term.focus()`. `ws.onopen` and a `mouseup` on the host now do the same — the latter
+  skipped while a selection is being dragged out. The server-side heartbeat (v7.6.0)
+  is the other half and only the other half: it reaps a dead TCP path within ~60s.
+- **A stale `onclose` may not repaint the live pane.** The staleness test
+  (`_terms.get(sessionId) === entry && entry.ws === ws`) used to guard only the
+  reconnect, while the "disconnected" paint above it ran unconditionally. Since
+  `refreshTerminalSession()` deliberately detaches before it closes, the old socket's
+  close event lands *after* the new one is ready and marked a working pane dead, with
+  nothing to repaint it until the next state change. The guard is now the first line
+  of the handler.
+- **The composer is watched by a `ResizeObserver`, not only by `toggle()`.** Both
+  panels animate `width .25s`, so measuring from the click measures the box the user
+  is leaving. The observer compares `clientWidth` before re-measuring — the callback
+  sets the height, so an unguarded one re-enters forever.
+- **Touching a pane is itself a reconnect trigger (`_reviveTerminal`).** Every
+  automatic path is conditional on a state a half-dead socket does not report, so all
+  three interaction paths used to give up instead: `term.onData` dropped the keystroke
+  SILENTLY (the pane renders locally, so it looks alive — this is the "terminal froze
+  until I reloaded the page" report), while paste and the send line toasted "not
+  connected" and returned, naming the problem on the very controls that exist because
+  a pane went unresponsive. They now revive and carry the frame. Only the LAST frame
+  is queued — a queue of stale keystrokes replayed into a TUI is worse than a dropped
+  one — a socket already CONNECTING is not raced with a second one, and `_pending` is
+  cleared BEFORE the send so a failure cannot replay it on the next open too.
+- **A close code is the only evidence of WHY a pane died.** `ws.onclose` took no
+  argument and there was no `onerror` at all, so a terminal socket failure left no
+  trace on either end — which is why "it freezes sometimes" stayed unexplained. Both
+  exist now; the log sits AFTER the staleness guard, because a superseded socket
+  closing is routine and would bury the closes that mean something. 1006 is an
+  abnormal close with no FIN, 1009 a frame over `maxPayload`, 1011 a server error.
+- **`sendToTerminal()` has no emptiness guard, on purpose.** A bare Return is the most
+  useful thing this line can send: it accepts a prompt's default (`[Y/n]`, "press enter
+  to continue"). `showTerminalView()` clears the box, because one send line serves every
+  pane and a draft must not follow the user to a different terminal.
+- **`refreshTerminalSession()` reconnects unconditionally.** Every automatic path is
+  conditional on a state a half-dead socket does not report. It clears the latched
+  `exited` flag first, then nulls `entry.ws` BEFORE closing the old socket — `onclose`
+  compares `entry.ws === ws`, so detaching first is what stops the dying socket from
+  racing a second reconnect against the new one.
+- **The `.term-send` line exists because the composer is hidden.**
+  `.center.term-mode > .ia` is `display: none`, so a terminal tab had no input surface
+  except the pane itself — precisely what a stale socket takes away. It writes the same
+  `{type:'input'}` frame `term.onData()` writes, which is why it also works on the
+  subscription engine's pane (a `view=engine` viewer may only send `input`) and is a
+  way to answer a blocking permission prompt. `\r`, never `\n`: a PTY needs the Return
+  key, and the text and the CR go in ONE frame so a prompt that echoes and submits on
+  the same tick cannot split them.
+
+### A remote run must always end (issue #67)
+
+`runSshSingle()` awaits a promise that resolves **only** from `onDone`. `ClaudeSSH.send()`
+therefore has one hard rule: every way a run can end goes through `finish()`. Four paths
+did not, and each one hung the caller forever.
+
+The consequence is out of proportion to the cause, which is why this is written down.
+A pending await keeps the session's `activeTasks` entry alive, and **nothing reaps that
+entry** — the 15s orphan sweeper opens with `if (activeTasks.has(sid)) continue`. So one
+missed `onDone` means: the chat refuses every new message, the spinner never stops, and
+"Restart Session" answers *"Task is still running"*. Only a server restart clears it.
+
+- **`conn.on('close')` is the backstop, and it is not redundant.** A cleanly closed socket
+  emits **no** `'error'`: sshd's `ClientAliveCountMax`/`LoginGraceTime` drop, a NAT idle-reap
+  and our own `conn.end()` from the watchdogs all land there only. With a channel open ssh2
+  closes it too and `stream 'close'` calls `finish()` first — on the nextTick queue, so it
+  wins the `setImmediate` and the run still reports its real exit code. With no channel open
+  (still handshaking, or between `'ready'` and `exec`) this is the only thing left.
+- **`conn.end()` is not a way to end a run.** It settles one only when a channel exists for
+  ssh2 to tear down with it. Both watchdogs call `finish()` after it, for that reason.
+- **The abort listener is registered at `send()` entry, not inside the `conn.exec` callback.**
+  There, a Stop pressed during the handshake had no listener at all — it neither stopped the
+  run nor settled the promise. `sshStream` is handed to it once the channel opens.
+- **`conn.on('error')` goes through `finish()` too.** A bare `h.onDone()` left `finished`
+  false, so the socket close behind the error re-emitted the stderr block and fired `onDone`
+  a second time.
+
+**"Restart Session" is a recovery action, so it aborts rather than refuses.** It used to
+open by returning *"Task is still running"* whenever the session had an `activeTasks`
+entry — useless in the one situation the button exists for. It now aborts the turn (the
+same signal Stop sends), waits up to 5s for that turn's own `finally` to release the
+session (that path also flushes partial output to SQLite, which a forced delete skips),
+identity-compares before reaping so a NEW turn's entry is never the one removed, and drops
+`activeChatSessions` + every socket's `_tabBusy` with it — otherwise the next message is
+queued instead of run and the chat still looks dead after a restart that worked.
+
+**The button has to be reachable without a working turn.** The in-message restart button
+only renders when the server got a `session_restart_available` frame out, and the run that
+needs recovering is precisely the one that never sends one. Hence `#sessBarRestartBtn` in
+the session bar, shown whenever the session has a `claude_session_id`. Clearing that id is
+the whole fix: `shouldReplaySessionHistory` is `!!existSess && !localClaudeId`, so the next
+message replays the chat's history into a fresh Claude session rather than losing it.
 
 ### Markdown Rendering in SPA
 - During streaming: `renderStreaming()` handles unclosed code fences
@@ -351,7 +731,7 @@ is testable without booting anything:
 
 ## How to Verify Changes
 
-`npm test` runs 63 test files under `test/` (18 `test/render/*.test.mjs` + 45 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 70 test files under `test/` (18 `test/render/*.test.mjs` + 52 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

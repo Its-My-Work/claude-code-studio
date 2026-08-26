@@ -552,15 +552,31 @@ class TelegramBotForum {
         const workdir = typeof project === 'string' ? project : (project?.workdir || project?.path);
         if (!workdir) continue;
 
-        const existing = this._api.stmts.getForumTopicByWorkdir.get(chatId, 'project', workdir);
-        if (existing) continue;
-
         const name = (typeof project === 'object' && project?.name) || null;
-        await this.createProjectTopic(chatId, workdir, name);
+        await this.ensureProjectTopic(chatId, workdir, name);
       }
     } catch {
       // projects.json may not exist — that's fine
     }
+  }
+
+  /**
+   * Ensure a project topic exists in this forum chat for the given workdir,
+   * creating it if missing. No-op (returns the existing thread_id) if one
+   * already exists.
+   *
+   * Public — called both by `_syncProjectTopics` (initial /connect sweep over
+   * every project on disk) and by `TelegramBot#notifyProjectAdded` (server.js
+   * calls that right after `POST /api/projects` registers a new one). Without
+   * the second caller, a project created after the forum's initial /connect
+   * never got a topic until some session activity happened to reference it via
+   * `handleActivityCallback`'s auto-create — which for a brand-new project with
+   * no chat history yet may never happen, so its topic silently never appeared.
+   */
+  async ensureProjectTopic(chatId, workdir, name) {
+    const existing = this._api.stmts.getForumTopicByWorkdir.get(chatId, 'project', workdir);
+    if (existing) return existing.thread_id;
+    return this.createProjectTopic(chatId, workdir, name);
   }
 
   /**
@@ -767,6 +783,8 @@ class TelegramBotForum {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
     this._api.stmts.insertSession.run(id, 'Telegram Session', workdir);
+    // Same write channel as a plain Telegram chat — see telegram-bot.js:_isolate.
+    this._api.isolate?.('session', id, workdir);
 
     ctx.sessionId = id;
     ctx.projectWorkdir = workdir;
@@ -1420,6 +1438,7 @@ class TelegramBotForum {
       const workdir = ctx.projectWorkdir || null;
 
       this._api.stmts.insertTask.run(id, title, workdir);
+      this._api.isolate?.('task', id, workdir);
 
       const workdirLine = workdir ? `\n📁 ${this._api.escHtml(workdir.split('/').filter(Boolean).pop())}` : '';
       const newTask = { id, title, status: 'backlog' };
@@ -1446,6 +1465,7 @@ class TelegramBotForum {
         const workdir = ctx.projectWorkdir || null;
 
         this._api.stmts.insertTask.run(id, title, workdir);
+        this._api.isolate?.('task', id, workdir);
 
         const workdirLine = workdir ? `\n📁 ${this._api.escHtml(workdir.split('/').filter(Boolean).pop())}` : '';
         const newTask = { id, title, status: 'backlog' };

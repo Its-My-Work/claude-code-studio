@@ -114,10 +114,26 @@ class TelegramBot extends EventEmitter {
    * @param {object} opts
    * @param {object} opts.log - Logger instance { info, warn, error, debug }
    */
+  /** Give a freshly-inserted Telegram unit its own worktree. Never throws: a bot
+   *  reply must not fail because git is unavailable on this host — the unit simply
+   *  stays in the project root, which is what it did before isolation existed. */
+  _isolate(kind, id, workdir) {
+    if (!this.isolateUnit || !workdir) return;
+    try { this.isolateUnit(kind, id, workdir); }
+    catch (e) { this.log.warn?.('telegram: worktree isolation skipped', { kind, id, err: e?.message }); }
+  }
+
   constructor(db, opts = {}) {
     super();
     this.db = db;
     this.log = opts.log || console;
+    // Injected by server.js, the way getRoster is. Telegram creates sessions and tasks
+    // by direct SQL, so worktree isolation cannot reach them from the HTTP layer — and
+    // without it a Telegram chat writes into the project root while a browser chat in
+    // the same project writes into its own worktree, and the browser's merge lands on
+    // top of Telegram's uncommitted work. Optional on purpose: with no injector the
+    // behaviour is exactly what it was before isolation existed.
+    this.isolateUnit = typeof opts.isolateUnit === 'function' ? opts.isolateUnit : null;
     this.token = null;
     this.running = false;
     this._pollTimer = null;
@@ -157,6 +173,9 @@ class TelegramBot extends EventEmitter {
       chunkForTelegram: this._chunkForTelegram.bind(this),
       timeAgo: this._timeAgo.bind(this),
       stmts: this._stmts,
+      // Forum topics create sessions and tasks through the shared prepared statements
+      // above, so they bypass _isolate() entirely unless the hook travels with them.
+      isolate: this._isolate.bind(this),
       emit: this.emit.bind(this),
       getDirectContext: this._getContext.bind(this),
       saveDeviceContext: this._saveDeviceContext.bind(this),
@@ -268,7 +287,7 @@ class TelegramBot extends EventEmitter {
       deleteForumTopicsByChatId: this.db.prepare('DELETE FROM forum_topics WHERE chat_id = ?'),
       // Forum sessions
       insertSession:     this.db.prepare("INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"),
-      getSessionsByWorkdir: this.db.prepare('SELECT id, title, updated_at, (SELECT COUNT(*) FROM messages WHERE session_id = s.id) as msg_count FROM sessions s WHERE workdir = ? ORDER BY updated_at DESC LIMIT 15'),
+      getSessionsByWorkdir: this.db.prepare('SELECT id, title, updated_at, (SELECT COUNT(*) FROM messages WHERE session_id = s.id) as msg_count FROM sessions s WHERE COALESCE(git_root, workdir) = ? ORDER BY updated_at DESC LIMIT 15'),
       // Forum tasks
       insertTask:        this.db.prepare("INSERT INTO tasks (id, title, description, notes, status, sort_order, workdir) VALUES (?, ?, '', '', 'backlog', 0, ?)"),
       listTasksOrdered:  this.db.prepare("SELECT id, title, status FROM tasks ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 WHEN 'blocked' THEN 3 WHEN 'done' THEN 4 END, sort_order ASC LIMIT 30"),
@@ -1021,6 +1040,7 @@ class TelegramBot extends EventEmitter {
       case '/forum':   return this._forum.cmdForum(chatId, userId);
       case '/tunnel':  return this._cmdTunnel(chatId, userId);
       case '/url':     return this._cmdUrl(chatId);
+      case '/cancel':  return this._cmdCancel(chatId, userId);
       default:
         await this._sendMessage(chatId, this._t('error_unknown_cmd', { cmd }), {
           reply_markup: JSON.stringify({ inline_keyboard: [
@@ -1389,6 +1409,15 @@ class TelegramBot extends EventEmitter {
     return this._screenSettings(chatId, userId);
   }
 
+  // FSM state is already reset generically before the command switch (FSM-03) —
+  // this only needs to clear pending attachments and land the user somewhere sane.
+  async _cmdCancel(chatId, userId) {
+    const ctx = this._getContext(userId);
+    ctx.pendingAttachments = [];
+    if (ctx.sessionId) return this._screenDialog(chatId, userId, { mode: 'overview' });
+    return this._screenMainMenu(chatId, userId);
+  }
+
   // ─── Tunnel Commands ──────────────────────────────────────────────────────
 
   async _cmdTunnel(chatId, userId, { editMsgId } = {}) {
@@ -1494,6 +1523,28 @@ class TelegramBot extends EventEmitter {
     }
   }
 
+  /**
+   * Ensure every connected forum has a topic for a newly registered project.
+   * Called by server.js right after `POST /api/projects` adds one. Without this,
+   * a project's topic list only refreshed on the initial /connect sweep, or
+   * reactively when session activity happened to reference the workdir — a
+   * project added afterward with no chat yet never got a topic at all.
+   */
+  async notifyProjectAdded(workdir, name) {
+    if (!this.running || !workdir) return;
+    const devices = this._stmts.getAllDevices.all();
+    const seenChats = new Set();
+    for (const dev of devices) {
+      if (!dev.forum_chat_id || seenChats.has(dev.forum_chat_id)) continue;
+      seenChats.add(dev.forum_chat_id);
+      try {
+        await this._forum.ensureProjectTopic(dev.forum_chat_id, workdir, name);
+      } catch (err) {
+        this.log.warn(`[telegram] Failed to sync project topic for ${workdir}: ${err.message}`);
+      }
+    }
+  }
+
   // ─── Text Messages (Send to Chat) ─────────────────────────────────────────
 
   async _handleTextMessage(msg) {
@@ -1512,6 +1563,7 @@ class TelegramBot extends EventEmitter {
       this.db.prepare(
         "INSERT INTO tasks (id, title, description, notes, status, sort_order, workdir) VALUES (?, ?, '', '', 'backlog', 0, ?)"
       ).run(id, title, workdir);
+      this._isolate('task', id, workdir);
 
       // Move to description input
       ctx.state = FSM_STATES.AWAITING_TASK_DESCRIPTION;
@@ -1573,6 +1625,7 @@ class TelegramBot extends EventEmitter {
         this.db.prepare(
           "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
         ).run(id, 'Telegram Session', workdir);
+        this._isolate('session', id, workdir);
         ctx.sessionId = id;
         this._saveDeviceContext(userId);
       }
@@ -1580,8 +1633,8 @@ class TelegramBot extends EventEmitter {
 
     // Session-project safety: ensure session belongs to current project
     if (ctx.projectWorkdir && ctx.sessionId) {
-      const sess = this.db.prepare('SELECT workdir FROM sessions WHERE id = ?').get(ctx.sessionId);
-      if (sess && sess.workdir && sess.workdir !== ctx.projectWorkdir) {
+      const sess = this.db.prepare('SELECT workdir, git_root FROM sessions WHERE id = ?').get(ctx.sessionId);
+      if (sess && sess.workdir && (sess.git_root || sess.workdir) !== ctx.projectWorkdir) {
         // Session belongs to different project — switch to correct session
         const lastForProject = this._stmts.getSessionsByWorkdir.all(ctx.projectWorkdir);
         if (lastForProject.length > 0) {
@@ -1591,6 +1644,7 @@ class TelegramBot extends EventEmitter {
           this.db.prepare(
             "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
           ).run(id, 'Telegram Session', ctx.projectWorkdir);
+          this._isolate('session', id, ctx.projectWorkdir);
           ctx.sessionId = id;
         }
         this._saveDeviceContext(userId);
@@ -1918,7 +1972,7 @@ class TelegramBot extends EventEmitter {
       // Has project but no session — auto-select if exactly 1 chat
       try {
         const rows = this.db.prepare(
-          'SELECT id, title FROM sessions WHERE workdir = ? ORDER BY updated_at DESC LIMIT 2'
+          'SELECT id, title FROM sessions WHERE COALESCE(git_root, workdir) = ? ORDER BY updated_at DESC LIMIT 2'
         ).all(ctx.projectWorkdir);
 
         if (rows.length === 1) {
@@ -1944,7 +1998,7 @@ class TelegramBot extends EventEmitter {
     // Nothing selected — auto-select if exactly 1 project
     try {
       const rows = this.db.prepare(
-        "SELECT workdir FROM sessions WHERE workdir IS NOT NULL AND workdir != '' GROUP BY workdir ORDER BY MAX(updated_at) DESC LIMIT 2"
+        "SELECT COALESCE(git_root, workdir) AS workdir FROM sessions WHERE workdir IS NOT NULL AND workdir != '' GROUP BY COALESCE(git_root, workdir) ORDER BY MAX(updated_at) DESC LIMIT 2"
       ).all();
 
       if (rows.length === 1) {
@@ -1970,9 +2024,9 @@ class TelegramBot extends EventEmitter {
 
     try {
       const rows = this.db.prepare(`
-        SELECT workdir, COUNT(*) as chat_count, MAX(updated_at) as last_active
+        SELECT COALESCE(git_root, workdir) AS workdir, COUNT(*) as chat_count, MAX(updated_at) as last_active
         FROM sessions WHERE workdir IS NOT NULL AND workdir != ''
-        GROUP BY workdir ORDER BY last_active DESC LIMIT 30
+        GROUP BY COALESCE(git_root, workdir) ORDER BY last_active DESC LIMIT 30
       `).all();
 
       ctx.projectList = rows.map(r => r.workdir);
@@ -2093,7 +2147,7 @@ class TelegramBot extends EventEmitter {
         rows = this.db.prepare(`
           SELECT s.id, s.title, s.updated_at, COUNT(m.id) as msg_count
           FROM sessions s LEFT JOIN messages m ON m.session_id = s.id
-          WHERE s.workdir = ? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 50
+          WHERE COALESCE(s.git_root, s.workdir) = ? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 50
         `).all(workdir);
       } else {
         rows = this.db.prepare(`
@@ -2718,7 +2772,7 @@ class TelegramBot extends EventEmitter {
       let rows;
       if (workdir) {
         rows = this.db.prepare(`
-          SELECT title, status FROM tasks WHERE workdir = ?
+          SELECT title, status FROM tasks WHERE COALESCE(git_root, workdir) = ?
           ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 WHEN 'blocked' THEN 3 WHEN 'done' THEN 4 END, sort_order ASC LIMIT 25
         `).all(workdir);
       } else {
@@ -3089,6 +3143,7 @@ class TelegramBot extends EventEmitter {
           this.db.prepare(
             "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
           ).run(id, 'Telegram Session', workdir);
+          this._isolate('session', id, workdir);
           ctx.sessionId = id;
           this._saveDeviceContext(userId);
         }
@@ -3359,6 +3414,7 @@ class TelegramBot extends EventEmitter {
     this.db.prepare(
       "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
     ).run(id, 'Telegram Session', workdir);
+    this._isolate('session', id, workdir);
 
     ctx.sessionId = id;
     ctx.state = FSM_STATES.COMPOSING;
@@ -3445,6 +3501,7 @@ class TelegramBot extends EventEmitter {
     this.db.prepare(
       "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
     ).run(id, args || 'Telegram Session', workdir);
+    this._isolate('session', id, workdir);
 
     ctx.sessionId = id;
     ctx.state = FSM_STATES.COMPOSING;

@@ -195,5 +195,93 @@ check('missing template degrades to a bare cd', () => {
   });
 }
 
+// ── {model} / {effort}: present when chosen, GONE when not (#76) ───────────
+// A template that writes `--model {model}` must not become `--model ` when the
+// user picked nothing — the CLI would read the next token (the prompt) as the
+// model name. The flag has to disappear together with the value.
+const TPL76 = { template: 'claude --model {model} --effort {effort} {prompt}' };
+const body76 = (c) => c.split('&& ')[1];
+
+check('{model}/{effort} are substituted and shell-escaped', () => {
+  assert.strictEqual(body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux', { model: 'opus', effort: 'high' })),
+    "claude --model 'opus' --effort 'high' 'hi'");
+});
+
+check('nothing chosen — the FLAGS disappear, not just the placeholders', () => {
+  assert.strictEqual(body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux', {})), "claude 'hi'");
+});
+
+check('one chosen — only the other flag disappears', () => {
+  assert.strictEqual(body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux', { model: 'opus' })), "claude --model 'opus' 'hi'");
+});
+
+check('a template without placeholders is untouched', () => {
+  assert.strictEqual(body76(buildTerminalCommand({ template: 'codex {prompt}' }, '/w', 'hi', 'linux', { model: 'opus' })), "codex 'hi'");
+});
+
+// Every caller written before #76 passes no opts at all.
+check('no opts behaves exactly like nothing chosen', () => {
+  assert.strictEqual(body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux')), "claude 'hi'");
+});
+
+// Same rule as {prompt}: these arrive in an HTTP body.
+check('a hostile model name cannot break out of its quotes', () => {
+  const q = String.fromCharCode(39);
+  const out = body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux', { model: q + '; rm -rf /; ' + q }));
+  assert.ok(out.includes('rm -rf'), 'the value survives');
+  assert.ok(!/^[^']*; rm/.test(out), 'but never as an unquoted command');
+});
+
+// Every flag shape a real template uses. The first rule matched exactly ONE space,
+// so `--model  {model}` left the flag behind and it swallowed the prompt as its
+// argument — the failure this whole substitution exists to prevent.
+// A regex over the whole template got three shapes wrong at once, and one of them
+// was SILENT corruption rather than a visible break:
+//   --model "{model}"        with a value -> --model "'opus'"  (quotes reach the CLI)
+//   --model "{model}"        with none    -> --model ""        (empty flag)
+//   --model={model},{model}  with none    -> claude,           (command destroyed)
+// The substitution is token-wise now; these pin every shape both ways.
+check('the flag is dropped for every shape, not just the canonical one', () => {
+  for (const tpl of ['claude --model {model} {prompt}',
+                     'claude --model  {model} {prompt}',
+                     'claude --model={model} {prompt}',
+                     'claude -m {model} {prompt}',
+                     'claude {model} {prompt}',
+                     'claude --model "{model}" {prompt}',
+                     "claude --model '{model}' {prompt}",
+                     'claude --model={model},{model} {prompt}']) {
+    assert.strictEqual(
+      buildTerminalCommand({ template: tpl }, '/w', 'hi', 'linux', {}).split('&& ')[1],
+      "claude 'hi'", tpl);
+  }
+});
+
+check('a quoted placeholder does not nest quotes around the value', () => {
+  // The value is shell-escaped here; quoting it again would hand the CLI a model
+  // literally named "'opus'".
+  for (const tpl of ['claude --model "{model}" {prompt}', "claude --model '{model}' {prompt}"]) {
+    assert.strictEqual(
+      buildTerminalCommand({ template: tpl }, '/w', 'hi', 'linux', { model: 'opus' }).split('&& ')[1],
+      "claude --model 'opus' 'hi'", tpl);
+  }
+});
+
+// The first token-wise version squeezed ALL whitespace after substituting, which
+// rewrites spacing a template author meant to keep. The drop path already inserts
+// exactly one space where a token was removed, so the squeeze was never needed.
+check('spacing elsewhere in the template survives', () => {
+  assert.strictEqual(
+    buildTerminalCommand({ template: 'claude --system "a  b" --model {model} {prompt}' },
+      '/w', 'hi', 'linux', { model: 'opus' }).split('&& ')[1],
+    "claude --system \"a  b\" --model 'opus' 'hi'");
+});
+
+check('dropping one placeholder leaves the others intact', () => {
+  const tpl = 'claude --model {model} --effort {effort} -p {prompt}';
+  assert.strictEqual(
+    buildTerminalCommand({ template: tpl }, '/w', 'hi', 'linux', { effort: 'high' }).split('&& ')[1],
+    "claude --effort 'high' -p 'hi'");
+});
+
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
 console.log('\nAll delegate-terminal tests passed');
