@@ -8,6 +8,12 @@ RUN apt-get update && apt-get install -y \
 # Install Claude Code CLI globally
 RUN npm install -g @anthropic-ai/claude-code
 
+# Install opencode CLI globally — an externalAgents engine (config.json), so it
+# must be baked into the image rather than installed live: /app is an image
+# layer and a container recreate (redeploy, image update) wipes anything
+# installed after build. The bin is `opencode`; the npm package is `opencode-ai`.
+RUN npm install -g opencode-ai
+
 WORKDIR /app
 
 COPY package.json ./
