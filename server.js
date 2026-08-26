@@ -9414,7 +9414,7 @@ app.get('/api/browse-dirs', (req, res) => {
     }
     return res.json({ path: '__drives__', parent: null, items: drives });
   }
-  const dir = path.resolve(qstr(req.query.path) || os.homedir());
+  const dir = path.resolve(qstr(req.query.path) || WORKDIR);
   if (!isPathAllowed(dir)) return res.status(403).json({ error: 'path not allowed' });
   try {
     if (!fs.statSync(dir).isDirectory()) return res.status(400).json({ error: 'Not a directory' });
