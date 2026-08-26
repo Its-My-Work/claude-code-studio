@@ -46,6 +46,19 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    # Host is a single-core 2.9GB VPS shared with other services (n8n, vaultwarden,
+    # traefik, the Easypanel panel itself). A runaway subprocess spawned through the
+    # externalAgents engine (e.g. opencode) previously pegged the host hard enough
+    # that only a full reboot recovered it. Capping here means the kernel OOM-kills
+    # inside this container's cgroup instead of starving the whole host.
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 2G
+        reservations:
+          memory: 512M
+    pids_limit: 1024
     networks:
       - easypanel
 
