@@ -112,6 +112,7 @@ const editorLinks = require('./editor-links');
 const UNATTENDED_MAX_TURNS = 30;
 
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
+const { detectAuthError, authErrorNotice } = require('./auth-errors');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
 const {
@@ -1032,10 +1033,18 @@ const stmts = {
   getInterrupted: db.prepare(`SELECT id, title, last_user_msg FROM sessions WHERE last_user_msg IS NOT NULL`),
   incrementRetry: db.prepare(`UPDATE sessions SET retry_count = COALESCE(retry_count, 0) + 1 WHERE id=?`),
   // Tasks (Kanban)
+  // `bot_model` is joined for the board's run-settings badge (#84): the runner
+  // resolves a task's model as `taskBot?.model || session?.model || task.model`
+  // (see startTask), so a card that reports only `sess_model` names the wrong model
+  // on every task assigned to a bot. The `deleted_at IS NULL` filter is not
+  // cosmetic — it is the same filter `stmts.getBot` applies, and without it a card
+  // would advertise the model of a bot the runner will refuse to load.
   getTasks: db.prepare(`
     SELECT t.*, s.title as sess_title, s.claude_session_id, s.model as sess_model,
-           s.updated_at as sess_updated_at, COALESCE(s.retry_count, 0) as retry_count
+           s.updated_at as sess_updated_at, COALESCE(s.retry_count, 0) as retry_count,
+           b.model as bot_model
     FROM tasks t LEFT JOIN sessions s ON t.session_id = s.id
+                 LEFT JOIN bots b ON t.bot_id = b.id AND b.deleted_at IS NULL
     WHERE (@w IS NULL OR COALESCE(t.git_root, t.workdir) = @w)
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
@@ -1178,7 +1187,21 @@ const stmts = {
   archHourlyDist: db.prepare(`SELECT CAST(key AS INTEGER) AS hour, count FROM stats_archived_detail WHERE category='hourly' ORDER BY hour`),
   archWeeklyTrend: db.prepare(`SELECT key AS week, count, tool_count FROM stats_archived_detail WHERE category='weekly' AND key >= strftime('%Y-W%W', date('now', '-84 days')) ORDER BY key ASC`),
   // Task Manager MCP prepared statements
-  countChildTasks: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=?`),
+  // Board rows are counted separately from runnable children: only 'todo' is ever
+  // picked up by processQueue, so a 'backlog' or 'done' card cannot recurse and the
+  // runaway-execution budget MAX_TASK_CHILDREN_PER_RUN is guarding against something
+  // it does not do (see the create_task case).
+  //
+  // The predicate is a status read after the fact, so a real child that reached
+  // 'done' moves from the first count to the second and frees a runnable slot. A
+  // 'cancelled' child does NOT — it is in neither list, so it stays charged against
+  // the runnable budget for the rest of the parent's run. That asymmetry is
+  // deliberate: a child that failed is the case where a parent is most likely to
+  // retry in a loop. The 'done' leak is known and bounded, and not worth a column:
+  // the child has to finish while its parent is still running, the parent has to
+  // spend a turn on each extra call, and its own max_turns is the backstop.
+  countChildTasksRunnable: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=? AND status NOT IN ('backlog','done')`),
+  countChildTasksBoard: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=? AND status IN ('backlog','done')`),
   getParentTaskId: db.prepare(`SELECT parent_task_id FROM tasks WHERE id=?`),
   setTaskContext: db.prepare(`UPDATE tasks SET context=?, parent_task_id=?, updated_at=datetime('now') WHERE id=?`),
   setTaskOutput: db.prepare(`UPDATE tasks SET task_output=?, updated_at=datetime('now') WHERE id=?`),
@@ -1476,7 +1499,109 @@ const NOTIFY_SECRET = require('crypto').randomBytes(16).toString('hex');
 const SET_UI_STATE_SECRET = require('crypto').randomBytes(16).toString('hex');
 
 // ─── Task Manager (Internal MCP) ─────────────────────────────────────────
-const TASK_MANAGER_SECRET = require('crypto').randomBytes(16).toString('hex');
+// The env override exists so a test can drive /api/internal/task-manager the way the
+// MCP helper does — same class of hook as CCS_REMOTE_EXEC_HOOK. It is opt-in and the
+// default stays a fresh 16-byte random per process; nothing reads it from disk.
+//
+// The strength floor is CONDITIONAL ON THE BINDING, because this app is a local
+// desktop tool first and a server second, and the two deserve different answers:
+//
+//   loopback (the default, and forced in desktop mode) — the value is HONOURED
+//     whatever it is, with a warning if it is short. Nothing on 127.0.0.1 is reachable
+//     by anyone who is not already executing code on this machine, and the product
+//     itself spawns `claude --dangerously-skip-permissions`: a local attacker who
+//     could hit this port already has everything the endpoint would give them. A
+//     developer who exports a short secret to drive a test is making a decision about
+//     their own machine, and silently ignoring it just breaks their test with a 401.
+//
+//   non-loopback (HOST=0.0.0.0, docker-compose, a homelab box behind a tunnel) — a
+//     value under 32 chars is REFUSED and a random one is used instead. Here the
+//     endpoint really is pre-auth on a reachable interface: it is registered before
+//     auth.authMiddleware and mints tasks that run `claude` with an arbitrary prompt,
+//     so `secret` or `test123` would be an unauthenticated execution primitive. The
+//     server posture is the one that has something to defend.
+//
+// The floor is not an entropy check either way and does not pretend to be one:
+// `'a'.repeat(32)` passes. It cannot be one — no cheap test tells a weak 32-char string
+// from a strong one — so it closes the plausible-typo case and nothing more. The
+// supported configuration remains to leave the var unset.
+//
+// "Loopback" here is a NUMERIC LITERAL, not auth.isLoopbackAddress(). That helper
+// classifies a REQUEST's remote address, which is always an IP; HOST is a config
+// string that server.listen() will resolve, so its `/^127\./` would accept
+// `127.attacker.example` and its `localhost` accepts whatever the resolver says
+// today. A carve-out may not rest on a name someone else controls.
+const _tmHostIsLoopbackLiteral =
+  /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(HOST) || HOST === '::1' || HOST === '[::1]';
+const _tmSecretEnv = process.env.CCS_TASK_MANAGER_SECRET || '';
+const _tmSecretWeak = !!_tmSecretEnv && _tmSecretEnv.length < 32;
+const _tmSecretRefused = _tmSecretWeak && !_tmHostIsLoopbackLiteral;
+const TASK_MANAGER_SECRET = (_tmSecretEnv && !_tmSecretRefused)
+  ? _tmSecretEnv
+  : require('crypto').randomBytes(16).toString('hex');
+// True only while the secret actually in use is the short one. When the override was
+// refused, TASK_MANAGER_SECRET is a fresh 16-byte random and none of the extra gates
+// below apply — there is nothing weak left to protect.
+const TM_SECRET_IS_WEAK = _tmSecretWeak && !_tmSecretRefused;
+let _tmWeakRevokedByTunnel = false;
+
+// A loopback BIND is not the same thing as being unreachable, and two things this app
+// does itself break that equivalence. So a weak secret is re-checked PER REQUEST:
+//
+//   * `tunnel-manager.js` starts cloudflared against `http://localhost:PORT` — the
+//     studio publishes its own loopback port to the internet on a button press, long
+//     after this constant was computed. A tunnel (or TRUST_PROXY, which says an
+//     operator put something in front on purpose) means remote traffic arrives from
+//     127.0.0.1 and the premise no longer holds.
+//   * A page on the internet can reach a loopback port through DNS rebinding. The
+//     cross-origin guard compares Origin against the request's own Host, and after a
+//     rebind both are the attacker's name, so it passes by construction. A weak secret
+//     is therefore spendable only by a client that sends NO Origin at all — a CLI, a
+//     test, the MCP child — or a loopback one. A browser always sends Origin on a
+//     JSON POST, so no page can spend it, rebound or not.
+//
+// KNOWN LIMIT, stated rather than papered over: a raw TCP relay — `ssh -R`, `socat`,
+// any port forwarder — carries an internet client to this loopback listener with no HTTP
+// headers at all, a loopback peer address and no Origin. Nothing at the HTTP layer can
+// tell that apart from a local curl, so a SHORT secret is spendable through one. This is
+// the ceiling of loopback trust in general, not something this gate introduced:
+// `setupCallerIsLocal()` guards account claim on a fresh install — which hands out a
+// shell — on exactly the same evidence. Setting up such a relay AND choosing a guessable
+// secret are two deliberate acts; the supported configuration is to leave the var unset,
+// and a 32-char value is immune because it is guessed rather than reached.
+//
+// A 32-char-or-longer secret is unaffected by all of this: it is guessed, not reached.
+function taskManagerWeakSecretAllowed(req) {
+  // A LATCH, not a live read. tunnelManager.isRunning() only turns true when cloudflared
+  // prints its URL, which lags the spawn by up to 30s — and during that window the proxy
+  // is already accepting connections. It is also two doors (HTTP and Telegram), only one
+  // of which holds _tunnelStartLock. Once a tunnel has been ASKED FOR in this process the
+  // weak secret is gone until restart: monotonic, so there is no window to race.
+  if (_tmWeakRevokedByTunnel || tunnelManager?.isRunning?.()) return false;
+  if (TRUST_PROXY_ENV) return false;
+  // The mere PRESENCE of a forwarding header is proof a hop happened, whatever
+  // TRUST_PROXY says — the same rule setupCallerIsLocal() already applies, and for the
+  // same reason: an nginx/Caddy/ssh -L in front makes every visitor look like 127.0.0.1.
+  // A genuinely local CLI or MCP child sends none of them, so this only fails closed.
+  if ('x-forwarded-for' in req.headers || 'x-real-ip' in req.headers || 'forwarded' in req.headers) return false;
+  if (!auth.isLoopbackAddress(req.socket?.remoteAddress)) return false;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  let h;
+  try { h = new URL(origin).hostname; } catch { return false; }
+  // NOT auth.isLoopbackAddress(): an Origin hostname is a NAME, and that helper's
+  // `/^127\./` would accept `127.attacker.example` — a name anyone can register with an
+  // A record of 127.0.0.1, which is exactly how a rebinding page is built. Literals only.
+  // `localhost` is safe to allow because a page cannot be served from a name it does not
+  // control, and nobody controls `localhost`.
+  return h === 'localhost' || h === '[::1]' || h === '::1' ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+}
+if (_tmSecretRefused) {
+  console.warn(`[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars and HOST is ${HOST} (not a loopback literal) — ignored, using a random per-process secret`);
+} else if (_tmSecretWeak) {
+  console.warn('[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars — honoured because the server is bound to loopback; it stops working if a public tunnel is started, and never authorises a request from a browser');
+}
 
 // ─── Bot-to-bot dispatch (Internal MCP) ─────────────────────────────────
 const BOTS_SECRET = require('crypto').randomBytes(16).toString('hex');
@@ -1676,6 +1801,18 @@ const stoppingTasks = new Set();      // task IDs being manually stopped (onDone
 // `session_id IS NULL` count on the very next processQueue tick (the old bug let
 // the cap reset each tick → unbounded parallel `claude` subprocesses).
 const independentRunning = new Set();
+// Tasks already reported as waiting on a BOARD dependency — see the depends_on gate
+// in processQueue. The gate runs on every tick; without this the same task would warn
+// on every pass for as long as it stays parked.
+//
+// It is rebuilt from the queue on EVERY pass rather than deleted from at each exit.
+// Clearing it at the deletion sites instead would mean finding all of them — cancel,
+// cascade-cancel, task delete, session delete, chain delete, a PUT that rewrites
+// depends_on — and each one missed is both a leaked id AND a suppressed warning, because
+// a task that returns to the blocked state would find its own id already latched. The
+// queue is the single place that knows which tasks are blocked RIGHT NOW, so the pass
+// that decides that is the pass that owns the set.
+const blockedOnBoardWarned = new Set();
 
 async function startTask(task) {
   if (taskRunning.has(task.id)) return;
@@ -1836,6 +1973,9 @@ async function startTask(task) {
     // Auto-continue loop: keep resuming until agent completes or budget exhausted
     let taskContinueCount = 0;
     let taskOverloadRetryCount = 0;
+    // #86 — set when a turn stopped on an authentication failure. Survives the loop so
+    // the card is failed with a reason that names the cause instead of a generic stop.
+    let taskAuthStop = null;
     let clarifyTurns = 0; // follow-up turns spent on undelivered clarifications — see MAX_CLARIFY_TURNS
     let currentTaskPrompt = prompt;
     let currentTaskCid = claudeSessionId;
@@ -2063,6 +2203,22 @@ async function startTask(task) {
             continue; // retry; do not increment taskContinueCount
           }
           // Retries exhausted — fall through to normal handling (will be classified rate_limited).
+        }
+      }
+
+      // 🔐 Authentication failure (#86) — never auto-continued. An expired OAuth session
+      // needs a human, so the remaining budget would buy nothing but identical failures.
+      {
+        const _lastTurn = fullText.slice(_ftBefore);
+        const _resultText = typeof lastTaskResult?.result === 'string' ? lastTaskResult.result : '';
+        taskAuthStop = detectAuthError({ texts: [_lastTurn, _resultText], subtype: lastTaskResult?.subtype, isError: lastTaskResult?.is_error });
+        if (taskAuthStop) {
+          log.error('[taskWorker] auth failure', { taskId: task.id, kind: taskAuthStop.kind, message: taskAuthStop.message });
+          const _n = authErrorNotice(taskAuthStop);
+          fullText += _n;
+          { const _tb = (taskBuffers.get(task.id) || '') + _n; taskBuffers.set(task.id, _tb.length > MAX_CHAT_BUFFER ? _tb.slice(-MAX_CHAT_BUFFER) : _tb); }
+          broadcastToSession(sessionId, { type: 'text', text: _n, tabId: sessionId });
+          break;
         }
       }
 
@@ -2296,7 +2452,7 @@ async function startTask(task) {
               botId: task.bot_id || null,
             }).catch(() => {});
           }
-        } else if (task.chain_id && !usageLimitExhausted && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
+        } else if (task.chain_id && !usageLimitExhausted && !taskAuthStop && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
           _retryBackoffMs = isRateLimited ? Math.min(60000 * ((task.task_retry_count || 0) + 1), 300000) : 3000;
@@ -2316,7 +2472,13 @@ async function startTask(task) {
           }
         } else {
           // ❌ Failed — retries exhausted or not a chain task
-          const reason = usageLimitExhausted ? 'usage_limit_exhausted' : isRateLimited ? 'rate_limited' : 'agent_incomplete';
+          // #86: an auth stop is reported as itself. It is neither "incomplete work" nor
+          // a rate limit, and naming it is the whole point — the card is the only place a
+          // user sees WHY unattended work stopped. Format "auth_error:<kind> <line>"
+          // mirrors the parseable "usage_limit:<unix> …" prefix above.
+          const reason = taskAuthStop
+            ? `auth_error:${taskAuthStop.kind} ${taskAuthStop.message || ''}`.trim().substring(0, 300)
+            : usageLimitExhausted ? 'usage_limit_exhausted' : isRateLimited ? 'rate_limited' : 'agent_incomplete';
           db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
           log.error(`[taskWorker] task ${task.id}: cancelled (${reason}, subtype: ${lastTaskResult?.subtype || 'unknown'})`);
@@ -2500,8 +2662,14 @@ function scheduleNextChainRun(chain, oldTasks) {
 }
 
 function processQueue() {
+  // Every task found blocked on a backlog dependency during THIS pass. Swapped into
+  // blockedOnBoardWarned at the end, so an id survives only while it is still blocked:
+  // a task that is cancelled, deleted, unblocked or has its depends_on rewritten simply
+  // stops appearing here and drops out on the next tick.
+  const blockedStillParked = new Set();
   const todo = stmts.getTodoTasks.all();
-  if (!todo.length) return;
+  // No queue means nothing is blocked on anything.
+  if (!todo.length) { blockedOnBoardWarned.clear(); return; }
   const inProg = stmts.getInProgressTasks.all();
   // Sessions currently occupied (in_progress or just started by taskRunning)
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
@@ -2544,7 +2712,34 @@ function processQueue() {
             const dep = stmts.getTask.get(depId);
             return !dep || dep.status === 'done'; // deleted dep = satisfied
           });
-          if (!allDone) continue; // deps not ready yet
+          if (!allDone) {
+            // A dependency sitting on the BOARD will never satisfy this gate on its
+            // own: processQueue selects only 'todo', so nothing advances a 'backlog'
+            // card and the dependent waits for an event that cannot happen until a
+            // human triages it. Waiting is still the right behaviour — the card may
+            // be moved tomorrow, and cancelling it would throw away real work — so
+            // this only makes the state OBSERVABLE. Silence was the whole defect:
+            // the row was skipped on every tick with no log and no notification.
+            // #83 made the shape easy to reach in one call, where before it needed
+            // the REST/Kanban door: an imported plan lands as backlog cards that
+            // already carry depends_on.
+            const parked = deps.filter(depId => stmts.getTask.get(depId)?.status === 'backlog');
+            if (parked.length) blockedStillParked.add(task.id);
+            if (parked.length && !blockedOnBoardWarned.has(task.id)) {
+              log.warn('Task blocked by a dependency parked on the board', { taskId: task.id, parked });
+              if (task.source_session_id) {
+                const _ctx = getNotificationContext(task.source_session_id);
+                broadcastToSession(task.source_session_id, {
+                  type: 'notification', level: 'warn',
+                  title: `Task waiting: "${task.title}"`,
+                  detail: `Depends on ${parked.length} card(s) still in Backlog — move them to To Do to start`,
+                  tabId: task.source_session_id,
+                  sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+                });
+              }
+            }
+            continue; // deps not ready yet
+          }
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
@@ -2569,6 +2764,11 @@ function processQueue() {
       }
     }
   }
+  // Reconcile the latch with what this pass actually saw. Note the loop `continue`s
+  // above this line for reasons other than deps (a workdir lock, a busy session), which
+  // is exactly why the set is filled at the GATE and not here.
+  blockedOnBoardWarned.clear();
+  for (const id of blockedStillParked) blockedOnBoardWarned.add(id);
 }
 // Run every 15s (fast enough to pick up unblocked tasks promptly,
 // light enough to be negligible — just two SELECT queries on SQLite)
@@ -3317,7 +3517,7 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
 const TASK_MANAGER_INSTRUCTION = `\n\nYou have access to task management tools (via MCP server "_ccs_task_manager"):
-- **create_task**: Create a new task for follow-up work. Pass curated context so the child task knows what to do.
+- **create_task**: Create a new task for follow-up work. Pass curated context so the child task knows what to do. It is QUEUED AND RUNS by default; pass status:"backlog" to add a card to the Kanban board without starting anything, or status:"done" for an item an imported plan already marks finished (a "- [x]" line). Use the board statuses when you are turning an existing plan, roadmap, tasks/ folder or checklist into cards for a human to triage — check list_tasks first so a re-run does not duplicate cards, and put the source file path in the description so each card says where it came from.
 - **create_chain**: Create multiple sequential tasks in one call. Tasks run in order with shared session.
 - **list_tasks**: Check existing tasks (useful to avoid duplicates before creating new ones).
 - **get_current_task**: Read YOUR task details including context passed by the parent. Call this FIRST if you were created by another task.
@@ -4099,6 +4299,23 @@ async function runCliSingle(p) {
       continue;
     }
 
+    // 🔐 Authentication failure (#86) — stop NOW, before the auto-continue below.
+    // Unlike an overload or a quota stop, this one never clears by itself: the CLI's
+    // OAuth session cannot be refreshed without a human. Auto-continuing just repeats
+    // the same instant failure until the budget is gone, which is what hid the cause.
+    {
+      const lastTurnText = fullText.slice(fullTextBefore);
+      const resultText = typeof resultData?.result === 'string' ? resultData.result : '';
+      const authStop = detectAuthError({ texts: [errorText, resultText, lastTurnText], subtype: resultData?.subtype, isError: resultData?.is_error });
+      if (authStop) {
+        log.error('auth-failure', { sessionId, kind: authStop.kind, message: authStop.message });
+        const notice = authErrorNotice(authStop);
+        fullText += notice;
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
+        break;
+      }
+    }
+
     // ✅ Success — agent finished naturally, unless it left a background task behind
     // that even the harvest run did not collect. Saying "Done" there is the bug.
     if (resultData?.subtype === 'success') {
@@ -4425,6 +4642,21 @@ async function runSshSingle(p) {
       currentPrompt = runContinuation.BACKGROUND_WAIT_PROMPT;
       currentContentBlocks = null;
       continue;
+    }
+
+    // 🔐 Authentication failure (#86) — see the CLI loop above; mirrored for SSH.
+    // The credentials live on the REMOTE host, so the fix is `claude login` there.
+    {
+      const lastTurnText = fullText.slice(fullTextBefore);
+      const resultText = typeof resultData?.result === 'string' ? resultData.result : '';
+      const authStop = detectAuthError({ texts: [errorText, resultText, lastTurnText], subtype: resultData?.subtype, isError: resultData?.is_error });
+      if (authStop) {
+        log.error('ssh-auth-failure', { sessionId, kind: authStop.kind, message: authStop.message });
+        const notice = authErrorNotice(authStop);
+        fullText += notice;
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
+        break;
+      }
     }
 
     if (resultData?.subtype === 'success') {
@@ -5613,11 +5845,59 @@ app.post('/api/internal/set-ui-state', express.json(), (req, res) => {
 // ─── Task Manager endpoint (internal MCP — autonomous task creation) ─────────
 // Safety limits: prevent runaway task creation by a single task execution
 const MAX_TASK_CHILDREN_PER_RUN = 10;
+// A 'backlog' or 'done' child is a board row, not a queued run: processQueue selects
+// only 'todo', so it can never create children of its own and the recursion the cap
+// above exists to bound does not start. Populating a board from an existing plan
+// (`tasks/`, `.planning/`, a roadmap) is the case that needs more than ten, and ten
+// runnable tasks is still the budget for anything that will actually spawn a `claude`.
+// The separate bound is what keeps a confused agent from writing rows without end.
+const MAX_BOARD_CHILDREN_PER_RUN = 100;
 const MAX_CHAIN_DEPTH = 5;
+
+// Board-card notifications are coalesced per CALLER task. An import writes one card
+// per plan item in a tight burst, so the timer is restarted by each new card and fires
+// once the burst stops, carrying the total. One pending timer per caller, deleted when
+// it fires, and unref'd — a pending notice must never hold the process open.
+const BOARD_NOTICE_DEBOUNCE_MS = 1500;
+const boardCardNotices = new Map();
+
+function queueBoardCardNotice(callerTask, title, status) {
+  const key = callerTask.id;
+  let n = boardCardNotices.get(key);
+  if (!n) {
+    n = { timer: null, count: 0, first: title, firstStatus: status,
+          sid: callerTask.source_session_id, callerTitle: callerTask.title };
+    boardCardNotices.set(key, n);
+  }
+  n.count++;
+  if (n.timer) clearTimeout(n.timer);
+  n.timer = setTimeout(() => {
+    boardCardNotices.delete(key);
+    try {
+      const _ctx = getNotificationContext(n.sid);
+      broadcastToSession(n.sid, {
+        type: 'notification', level: 'info',
+        title: n.count === 1
+          ? `Board card added (${n.firstStatus}): "${n.first.substring(0, 60)}"`
+          : `${n.count} board cards added`,
+        detail: `Created by task "${n.callerTitle}"`,
+        tabId: n.sid,
+        sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+      });
+    } catch (e) { log.warn('board card notice failed', { error: e.message }); }
+  }, BOARD_NOTICE_DEBOUNCE_MS);
+  if (typeof n.timer.unref === 'function') n.timer.unref();
+}
 
 app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res) => {
   const authHeader = req.headers.authorization || '';
-  if (authHeader !== `Bearer ${TASK_MANAGER_SECRET}`) {
+  if (!timingSafeStrEq(authHeader, `Bearer ${TASK_MANAGER_SECRET}`)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  // The token matched, but a SHORT one is only spendable from a purely local posture
+  // (see taskManagerWeakSecretAllowed — no tunnel, no proxy, no browser).
+  if (TM_SECRET_IS_WEAK && !taskManagerWeakSecretAllowed(req)) {
+    log.warn('[task-manager] short CCS_TASK_MANAGER_SECRET refused — the request did not come from a purely local client', { origin: req.headers.origin || null });
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -5638,14 +5918,39 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
       // ── create_task ────────────────────────────────────────────────────
       case 'create_task': {
         const { title, description = '', context = null, model, mode, agent_mode,
-                depends_on, chain_id, scheduled_at, max_turns } = req.body;
+                depends_on, chain_id, scheduled_at, max_turns, status: reqStatus } = req.body;
         if (!title) return res.status(400).json({ error: 'Missing title' });
 
-        // Safety: count how many children this task has already created
+        // 'todo' is the default because that is what this tool has always done — every
+        // caller that omits the key still queues a run. The other two are board states
+        // an import needs: 'backlog' for "put this on the board, do not start it", and
+        // 'done' because a plan being imported carries `- [x]` items whose whole point
+        // is that they are already finished.
+        //
+        // Whitelisted against three literals, never taken verbatim. 'in_progress' is
+        // the one deliberately missing: it would hand the board a row that no worker
+        // owns and that processQueue will never select — a card that looks live and is
+        // not. A run that wants work started asks for 'todo' and lets the queue own it.
+        const BOARD_STATUSES = ['backlog', 'done'];
+        if (reqStatus !== undefined && reqStatus !== 'todo' && !BOARD_STATUSES.includes(reqStatus)) {
+          return res.status(400).json({ error: `Invalid status: ${reqStatus}. Use "todo" (queue it), "backlog" (board only) or "done" (already-finished item from an imported plan).` });
+        }
+        const newStatus = BOARD_STATUSES.includes(reqStatus) ? reqStatus : 'todo';
+        const willRun = newStatus === 'todo';
+
+        // Safety: count how many children this task has already created.
+        // The two budgets are separate — see MAX_BOARD_CHILDREN_PER_RUN.
         if (callerTaskId) {
-          const childCount = stmts.countChildTasks.get(callerTaskId);
-          if (childCount.cnt >= MAX_TASK_CHILDREN_PER_RUN) {
-            return res.status(429).json({ error: `Child task limit reached (${MAX_TASK_CHILDREN_PER_RUN}). Cannot create more tasks in this run.` });
+          if (willRun) {
+            const childCount = stmts.countChildTasksRunnable.get(callerTaskId);
+            if (childCount.cnt >= MAX_TASK_CHILDREN_PER_RUN) {
+              return res.status(429).json({ error: `Child task limit reached (${MAX_TASK_CHILDREN_PER_RUN}). Cannot create more tasks in this run.` });
+            }
+          } else {
+            const boardCount = stmts.countChildTasksBoard.get(callerTaskId);
+            if (boardCount.cnt >= MAX_BOARD_CHILDREN_PER_RUN) {
+              return res.status(429).json({ error: `Board card limit reached (${MAX_BOARD_CHILDREN_PER_RUN}). Cannot create more cards in this run.` });
+            }
           }
         }
 
@@ -5687,7 +5992,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         stmts.createTask.run(
           id, String(title).substring(0, 200), String(description).substring(0, 2000),
           '', // notes
-          'todo', // status — immediately eligible for processQueue
+          newStatus, // 'todo' → immediately eligible for processQueue; the rest are board rows
           0,  // sort_order
           (chain_id ? callerTask?.session_id : null) || null, // session_id — only inherit for chain tasks
           workdir,
@@ -5711,23 +6016,33 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         // Set new columns that aren't in createTask prepared statement
         stmts.setTaskContext.run(contextJson, callerTaskId || null, id);
 
-        // Trigger queue to pick up new task
-        setImmediate(processQueue);
+        // Trigger queue to pick up new task. Skipped for a board row: processQueue
+        // selects only 'todo', so waking it would walk the queue for nothing — and an
+        // import writing 80 cards would wake it 80 times.
+        if (willRun) setImmediate(processQueue);
 
-        // Notify UI
+        // Notify UI. A queued task is an EVENT and is announced immediately; a board
+        // row is a passive artifact and an import writes them in a burst, so they are
+        // coalesced into one toast per caller. Announcing each one turned an 80-card
+        // import into 80 stacked notifications — the same burst the queue wake above
+        // is already guarded against.
         if (callerTask?.source_session_id) {
-          const _ctx = getNotificationContext(callerTask.source_session_id);
-          broadcastToSession(callerTask.source_session_id, {
-            type: 'notification', level: 'info',
-            title: `New task created: "${String(title).substring(0, 60)}"`,
-            detail: `Created by task "${callerTask.title}"`,
-            tabId: callerTask.source_session_id,
-            sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
-          });
+          if (willRun) {
+            const _ctx = getNotificationContext(callerTask.source_session_id);
+            broadcastToSession(callerTask.source_session_id, {
+              type: 'notification', level: 'info',
+              title: `New task created: "${String(title).substring(0, 60)}"`,
+              detail: `Created by task "${callerTask.title}"`,
+              tabId: callerTask.source_session_id,
+              sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+            });
+          } else {
+            queueBoardCardNotice(callerTask, String(title), newStatus);
+          }
         }
 
         const task = stmts.getTask.get(id);
-        log.info('[task-manager] create_task', { id, title, parentId: callerTaskId });
+        log.info('[task-manager] create_task', { id, title, status: newStatus, parentId: callerTaskId });
         return res.json({ task_id: id, status: task.status, title: task.title });
       }
 
@@ -5861,8 +6176,21 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         if (filterStatus) { query += ' AND status=?'; params.push(filterStatus); }
         if (filterChain) { query += ' AND chain_id=?'; params.push(filterChain); }
 
+        // Capped at the BOARD budget, not below it: MAX_BOARD_CHILDREN_PER_RUN lets one
+        // run write 100 cards, and a 50-row answer would hide the older half from the
+        // dedup check create_task's own description tells an agent to make first.
+        //
+        // Math.min ALONE is not a maximum, which is the trap here: SQLite reads a
+        // negative LIMIT as unbounded, so `limit: -1` would return the whole table
+        // through a cap that looks like it is doing its job. The value arrives from a
+        // model filling in a JSON schema, so a nonsense one is ordinary input, not an
+        // attack — it is clamped into [1, MAX] and a non-number falls back to the
+        // documented default rather than reaching the driver as NaN.
+        const _lim = Number(limit);
         query += ' ORDER BY created_at DESC LIMIT ?';
-        params.push(Math.min(limit, 50));
+        params.push(Number.isFinite(_lim)
+          ? Math.max(1, Math.min(Math.trunc(_lim), MAX_BOARD_CHILDREN_PER_RUN))
+          : 20);
 
         const tasks = db.prepare(query).all(...params);
         return res.json({ tasks });
@@ -9960,6 +10288,7 @@ function _attachTelegramListeners(bot) {
       const provider = c.tunnel?.provider || 'cloudflared';
       const config = { ngrokAuthtoken: c.tunnel?.ngrokAuthtoken };
       await bot.sendMessage(chatId, `⏳ Starting ${bot.escHtml(provider)}...`);
+      _tmWeakRevokedByTunnel = true;
       const { publicUrl } = await tunnelManager.start(provider, config);
       await bot.sendMessage(chatId, `🟢 Remote Access active!\n\n🔗 ${bot.escHtml(publicUrl)}`);
     } catch (err) {
@@ -10207,6 +10536,7 @@ app.post('/api/tunnel/start', async (req, res) => {
   if (!tunnelManager) initTunnelManager();
 
   _tunnelStartLock = true;
+  _tmWeakRevokedByTunnel = true;
   try {
     const { publicUrl } = await tunnelManager.start(prov, {
       ngrokAuthtoken: ngrokAuthtoken || c.tunnel.ngrokAuthtoken,

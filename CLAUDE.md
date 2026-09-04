@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 70 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 52 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the SSH run's termination guarantee (`ssh-termination.test.js` drives `ClaudeSSH.send()` through a fake ssh2 `Client` in `require.cache` and asserts `onDone` fires EXACTLY once on every ending — a missed one hangs the chat forever, a doubled one re-emits stderr) and the recovery contract of "Restart Session" (`session-restart.test.js` boots a real server against a fake `claude` that never exits, then pins that a restart ABORTS that turn and releases the session instead of refusing), the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the five tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 77 test files under `test/`: 19 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 58 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, the Kanban card's run-settings badges (`kanban-run-badges.test.js` pins the card's model/effort/engine chain against the one `startTask` actually resolves — the two live in different files and the card silently lies when they drift), the board-only `create_task` status (`task-backlog.test.js`), i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, authentication-failure classification (`auth-errors.test.js`, which pins that the detector runs BEFORE the auto-continue in all three agent loops — a reorder there silently restores #86), the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the SSH run's termination guarantee (`ssh-termination.test.js` drives `ClaudeSSH.send()` through a fake ssh2 `Client` in `require.cache` and asserts `onDone` fires EXACTLY once on every ending — a missed one hangs the chat forever, a doubled one re-emits stderr) and the recovery contract of "Restart Session" (`session-restart.test.js` boots a real server against a fake `claude` that never exits, then pins that a restart ABORTS that turn and releases the session instead of refusing), the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the five tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -452,6 +452,189 @@ comment**: a needle like `streaming.txt = ''` matched the prose explaining the r
 before it reached the statement. Structural pins there compare indices of the real
 statement, and the comments no longer spell it.
 
+### Populating the board without running it (issue #83)
+
+`_ccs_task_manager.create_task` hardcoded `status:'todo'`, so the only thing an agent
+could do to the Kanban board was START work on it. Turning an existing plan — a
+`tasks/` folder, `.planning/`, a roadmap, a checklist — into cards therefore launched
+one unattended `claude` per card at the moment of import, which is the opposite of an
+import. `create_task` now takes an optional `status` of `todo`, `backlog` or `done`.
+
+- **`todo` stays the default.** Every existing caller omits the key and expects the
+  follow-up work it asked for to actually start; flipping the default would silence
+  all of them.
+- **`done` is in the list because `- [x]` is.** Half of "preserve the status from the
+  checkboxes" is items the plan already marks finished; without it an import has to
+  either lie about them (`backlog`) or RUN them (`todo`). A `done` row satisfies a
+  `depends_on`, which is not an escalation: the run that creates the dependency also
+  creates the dependant.
+- **`in_progress` is the one deliberately missing.** It would put a row on the board
+  that no worker owns and `getTodoTasks` will never select — a card that looks live
+  and is not. A run that wants work started asks for `todo` and lets the queue own it.
+- **The two child budgets are separate, and that is the point.**
+  `MAX_TASK_CHILDREN_PER_RUN` (10) bounds RUNAWAY EXECUTION: a child that runs can
+  create children of its own. A board row runs nothing, so it cannot recurse, and
+  counting it against that budget is what made a ten-card import consume the run's
+  entire ability to create real follow-up work. `MAX_BOARD_CHILDREN_PER_RUN` (100)
+  bounds the rows instead. `countChildTasksRunnable` / `countChildTasksBoard` are two
+  statements for that reason; the old catch-all `countChildTasks` is gone rather than
+  left as a third answer to the same question. Both predicates read a status AFTER the
+  fact, so a real child that COMPLETED moves between them and frees a runnable slot —
+  a known, bounded leak, not worth a column: the child has to finish while its parent
+  is still running and the parent's own `max_turns` is the backstop.
+- **A board card does not wake `processQueue`.** The queue selects only `todo`, so the
+  `setImmediate` would walk it for nothing — eighty times for an eighty-card import.
+  The UI toast needed the SAME guard and did not have it: an import stacked one
+  notification per card. Board rows are coalesced through `queueBoardCardNotice()`
+  instead — one debounced notice per CALLER task carrying the total, timer `unref`'d so
+  a pending notice cannot hold the process open. A queued task is still announced
+  immediately: it is an event, where a board row is an artifact.
+- **A `backlog` dependency BLOCKS, and blocking silently was the defect.**
+  `processQueue`'s gate releases a task only when every dep is `done`, and
+  cascade-cancels only on `cancelled` — a `backlog` dep is neither, so the dependent was
+  `continue`d on every tick forever with no log and no notification. Cancelling it would
+  be wrong (the card may be triaged tomorrow) and auto-promoting the dep to `todo` would
+  run work the import deliberately did not start, so the fix is observability only: one
+  `log.warn` + one UI notice per task, latched in `blockedOnBoardWarned`. That latch is
+  RECONCILED from the queue on every pass, never deleted from at each exit: a point
+  delete would have to be repeated at cancel, cascade-cancel, task delete, session
+  delete, chain delete and a `PUT` that rewrites `depends_on`, and each site missed
+  leaks an id AND silences the next warning for that task, which would find its own id
+  already latched. `processQueue` is the one place that knows what is blocked right now,
+  so the pass that decides it owns the set. The shape predates #83 through the REST/Kanban door; what
+  #83 changed is that one `create_task` call now reaches it, because an imported plan
+  lands as backlog cards already carrying `depends_on`.
+- **The `CCS_TASK_MANAGER_SECRET` strength floor is conditional on the POSTURE.** The
+  endpoint sits ABOVE `auth.authMiddleware` and mints tasks that run `claude` with an
+  arbitrary prompt, so a short value there is an unauthenticated execution primitive on
+  any host whose port is *reachable* — and that qualifier is the whole rule. This app is
+  a local desktop tool first and a server second, and the two deserve different answers:
+  a value under 32 chars is honoured when the studio is purely local, and refused
+  otherwise. A 32-char-or-longer value is unaffected by all of it; it is guessed, not
+  reached.
+- **"Local" is four conditions, because a loopback BIND is not unreachability.** The
+  first is decided at boot, the other three PER REQUEST — the posture changes while the
+  process runs:
+  - **HOST is a numeric loopback LITERAL** (`/^127\.\d+\.\d+\.\d+$/` or `::1`), NOT
+    `auth.isLoopbackAddress(HOST)`. That helper classifies a REQUEST's remote address,
+    which is always an IP; `HOST` is a config string `server.listen()` will resolve, so
+    its `/^127\./` accepts `127.attacker.example` and its `localhost` accepts whatever
+    the resolver says today. A carve-out may not rest on a name someone else controls.
+    Refusal warns and falls back to the random per-process default, so the MCP child
+    still gets a working secret.
+  - **No tunnel has been ASKED FOR in this process** — `_tmWeakRevokedByTunnel`, a
+    monotonic latch, not a live `isRunning()`. `tunnel-manager.js` starts cloudflared
+    against `http://localhost:PORT`, so the studio publishes its own loopback port to
+    the internet on a button press, long after the secret constant was computed. But
+    `isRunning()` only turns true when cloudflared PRINTS its URL, up to 30s after the
+    proxy began accepting connections, and there are two start doors (HTTP and Telegram)
+    of which only one holds `_tunnelStartLock`. A latch set before each `start()` has no
+    window to race; stopping the tunnel does not give the secret back, which is the safe
+    direction for a dev convenience.
+  - **`TRUST_PROXY` is unset AND no forwarding header is present.** The env var only
+    helps an operator who remembered to set it; an nginx/Caddy/`ssh -L` in front makes
+    every visitor arrive from `127.0.0.1` either way. So the mere PRESENCE of
+    `X-Forwarded-For` / `X-Real-IP` / `Forwarded` is proof a hop happened — the identical
+    rule `setupCallerIsLocal()` already applies a few thousand lines down, for the
+    identical reason. A genuinely local CLI or MCP child sends none of them, so a forged
+    header can only fail closed.
+  - **The request carries no `Origin`, or a LITERAL loopback one.** A page on the
+    internet reaches a loopback port through DNS rebinding, and `isCrossOrigin()`
+    compares Origin against the request's own Host — after a rebind both are the
+    attacker's name, so it passes BY CONSTRUCTION. A browser always sends `Origin` on a
+    JSON POST, so requiring its absence makes a weak secret spendable by a CLI, a test
+    or the MCP child and by nothing that renders HTML.
+    **This check may not use `auth.isLoopbackAddress()` either, and that mistake shipped
+    once.** An Origin hostname is a NAME: `/^127\./` accepts `127.attacker.example`,
+    which anyone can register with an A record of `127.0.0.1` and then serve the page
+    from — the exact bypass the rule exists to stop. Literals only, plus `localhost`,
+    which is safe because a page cannot be served from a name nobody controls.
+    `test/task-backlog.test.js` drives these through `http.request` rather than `fetch`,
+    with Host and Origin set to the SAME attacker name; set them differently and the
+    cross-origin guard 403s first and the gate under test never runs.
+- **The residual is a raw TCP relay, and it is stated, not closed.** `ssh -R`, `socat`
+  or any port forwarder carries an internet client to this listener with a loopback peer
+  address, no forwarding header and no `Origin`. Nothing at the HTTP layer distinguishes
+  that from a local `curl`, so a SHORT secret is spendable through one. That is the
+  ceiling of loopback trust in this app rather than something this gate introduced —
+  `setupCallerIsLocal()` guards account claim on a fresh install, which hands out a
+  shell, on exactly the same evidence. Standing up such a relay AND choosing a guessable
+  secret are two deliberate acts. Note also that the forwarding-header test is
+  `'x-forwarded-for' in req.headers`, not a truthiness test: an empty header value is
+  falsy and would otherwise read as absence.
+  Refusing on loopback bought no security and cost the feature: a developer exporting a
+  short secret to drive the endpoint from a test got a silent 401, on a machine where an
+  attacker who could reach the port already had everything the endpoint would give them
+  — the product's own job is to spawn `claude --dangerously-skip-permissions`.
+  The header comparison goes through `timingSafeStrEq`, which already existed in the
+  same file for `/api/internal/ask-user`. **The floor is not an entropy check and the
+  comment says so**: `'a'.repeat(32)` passes, and no cheap test distinguishes a weak
+  32-char string from a strong one. It closes the plausible-typo case (`secret`,
+  `test123`); the supported configuration is still to leave the var unset. The refusal
+  branch is tested by booting with `HOST=localhost` — loopback in fact, so the suite
+  opens no port on any interface, and not a literal, so the boot check refuses.
+- **`list_tasks` caps at `MAX_BOARD_CHILDREN_PER_RUN`, not at 50.** One run may write
+  100 board rows; a 50-row answer hides the older half from exactly the dedup check
+  `create_task`'s description tells an agent to run first. The cap is TWO statements of
+  one number — the server's `Math.min` and the `limit` description in
+  `mcp-task-manager.js`, which is the only one the agent ever reads. Raising the server
+  alone leaves an agent obeying its own tool docs and never asking for the rows the fix
+  exists to expose; `task-backlog.test.js` pins both. And `Math.min` alone is not a
+  maximum: SQLite reads a NEGATIVE `LIMIT` as unbounded, so `limit: -1` walked the whole
+  table through a cap that looked applied. The value is clamped into `[1, MAX]`, and a
+  non-number falls back to the documented default instead of reaching the driver as NaN
+  — it arrives from a model filling in a JSON schema, where a nonsense value is ordinary
+  input rather than an attack.
+- **`CCS_TASK_MANAGER_SECRET` exists so the internal endpoint is drivable from a
+  test** — same class of hook as `CCS_REMOTE_EXEC_HOOK`. Opt-in; the default is still
+  a fresh 16-byte random per process. `test/task-backlog.test.js` schedules every
+  `todo` child a year out (`getTodoTasks` filters on `scheduled_at <= unixepoch()`) so
+  the suite cannot spawn a real `claude`.
+- **The deterministic folder→board importer in that issue was deliberately NOT
+  built.** The parent link exists in the DATA — `tasks.parent_task_id`, written by
+  this very endpoint and walked to `MAX_CHAIN_DEPTH` — but nothing DRAWS it:
+  `public/kanban.html` never reads the field, the board is columns-by-status, and
+  `list_tasks` returns the id without grouping on it. So the epic → subtask tree the
+  issue asks for is a Kanban-UI change, not an import feature, and it would also have
+  to answer to that depth cap. `POST /api/tasks` mints a git worktree per card
+  (`setupUnitWorktree`), so bulk import through the REST door would be N
+  `git worktree add` calls; and a regex over "common markdown formats" is wrong more
+  often than an agent reading the same files is. The agent path covers it, and this
+  status flag is the one thing it was missing.
+
+### What a Kanban card says it will run (issue #84)
+
+A card rendered one badge, `tk.sess_model`, and it was wrong twice: blank on a task
+that had never run — so a board of freshly created cards said nothing about dials the
+user had just picked in the modal — and silent about a bot's model, which OVERRIDES
+the session's inside the runner. `kbRunBadges()` in `public/kanban.html` replaces it.
+
+- **The card mirrors `startTask`, it does not re-derive.** Model is
+  `taskBot?.model || session?.model || task.model || 'sonnet'`; effort and engine come
+  off the TASK row (`task.effort`, `task.run_engine`), which is the #79 rule that those
+  dials drive every run regardless of which session the task uses. The two live in
+  different files, so `test/kanban-run-badges.test.js` pins the runner's expression as
+  source text as well as the helper's behaviour — a reorder there makes the card lie
+  and nothing else notices.
+- **`bot_model` is joined in `getTasks`, not looked up in `kbBots`.** The board loads
+  its bot roster only when a modal opens, so `kbBots` is `[]` at first paint and a
+  client-side lookup would render one model before the user touched anything and a
+  different one afterwards. The join carries `AND b.deleted_at IS NULL` because
+  `stmts.getBot` does: without it a card advertises the model of a bot the runner will
+  refuse to load.
+- **Effort and engine render only when they are NOT the default.** `auto` effort and
+  the `api` engine are what nearly every card carries; a badge on all of them is noise
+  in a footer already holding the project, schedule, session and retry badges. An
+  UNKNOWN effort is shown verbatim rather than dropped — a bad stored dial reaching the
+  run is exactly the thing a silent badge would hide.
+- **The chain card (`renderChainCard`) still shows `chain.model` alone.** Deliberately
+  out of scope; a chain has no bot and no per-task engine.
+- **Choosing a non-Claude PROVIDER per task is NOT this.** The Kanban worker parses
+  `claude`'s `stream-json`, and external agents (`config.externalAgents`) reach the
+  studio only through `/api/delegate` and the terminal, which is fire-and-forget with
+  no turn budget, no retry and no session resume. Wiring one into `taskWorker` is a new
+  execution backend, not a dropdown.
+
 ### Open in VS Code (issue #63)
 
 `editor-links.js` builds the links; `POST /api/editor/open` decides which of the two
@@ -610,6 +793,49 @@ would be noise on every long chat. It is applied to the FIRST retry notice as we
 exhausted one — `hit the 50-turn limit (used 3)` contradicts itself, and a user who stops
 reading after the first retry never reaches the corrected sentence.
 
+### A stop that retrying cannot fix (issue #86, auth-errors.js)
+
+`"Failed to authenticate: OAuth session expired and could not be refreshed"` is the
+THIRD way a turn stops through no fault of the agent, and the retry machinery handled
+it worst. The two in `rate-limit-utils.js` both clear on their own — an overload after a
+backoff, a quota at `resetsAt`. An auth failure never does; a human must re-authenticate
+the CLI. But it is not `subtype:'success'`, so all three agent loops AUTO-CONTINUED it:
+each retry failed instantly with the identical error, the whole `MAX_AUTO_CONTINUES`
+budget emptied in seconds, and a chain task then retried twice more — ending as a generic
+`agent_incomplete` that named nothing. The report was "work stops and I am not told why";
+the burnt budget was the part nobody could see.
+
+- **This module refreshes nothing, and cannot.** The OAuth tokens belong to the `claude`
+  CLI's own credentials store; the refresh exchange needs a refresh token and client
+  credentials this server has never held and must not hold. "Refresh automatically" is
+  the CLI's job — when it reports that the refresh FAILED, the only correct move here is
+  to stop at once and name the action. Detecting it precisely and REFUSING to retry is
+  the fix, not a lesser version of one.
+- **The clean-success guard is what keeps it usable in this repo.** These are English
+  CLI strings, and issue #86, `auth-errors.js` and its own test all contain the phrase
+  "OAuth session expired" — an agent asked to read any of them reproduces it in a turn
+  that SUCCEEDED. `detectAuthError()` returns null for `subtype:'success'` with no error
+  flag, exactly as `shouldRetryOverload()` does. A turn that ended well was not blocked
+  by authentication, whatever its text says.
+- **Anchors are CLI/API-internal wording, never keywords.** A bare `/login` or
+  `unauthorized` is excluded deliberately: this project serves its own `/login` route and
+  answers `{error:'unauthorized'}` from its own middleware, so either would fire on a run
+  that merely reads `server.js`. The set is also DISJOINT from `rate-limit-utils.js` in
+  both directions — reading a quota banner as an auth stop would strand work that would
+  have resumed by itself.
+- **The ordering is the fix, so the test pins indices.** `auth-errors.test.js` compares
+  the position of the detector against the success break and `taskContinueCount++` in
+  `server.js`. Moving the block below the auto-continue restores the bug while every
+  behavioural assertion still passes — verified by mutation.
+- **The card has to say it.** `failure_reason` carries `auth_error:<kind> <line>`, mirroring
+  the parseable `usage_limit:<unix> …` prefix, and `kbAuthStop()` renders a 🔐 badge.
+  Without it an auth stop is indistinguishable from an ordinary failure on the board,
+  which is the "nothing tells me why" half of the report.
+- **`claudeCliStatus().authenticated` does NOT cover this, by construction.** It tests
+  that `~/.claude/.credentials.json` EXISTS — an expired token's file exists too. Telling
+  a live token from a dead one needs a network round trip, so the preflight flag stays a
+  cheap "is anything configured" check and the stop is caught reactively, mid-turn.
+
 ### Composer geometry and terminal-pane control
 
 Four reports that all reduce to "the UI moved or stopped listening". Pinned by
@@ -731,7 +957,7 @@ message replays the chat's history into a fresh Claude session rather than losin
 
 ## How to Verify Changes
 
-`npm test` runs 70 test files under `test/` (18 `test/render/*.test.mjs` + 52 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 77 test files under `test/` (19 `test/render/*.test.mjs` + 58 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

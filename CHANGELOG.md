@@ -1,5 +1,234 @@
 # Changelog
 
+## 7.16.1
+
+### A stop that retrying cannot fix (#86)
+
+"Failed to authenticate: OAuth session expired and could not be refreshed" stopped
+the work and said nothing about why. The visible symptom hid a worse defect: an auth
+failure is not `subtype:'success'`, so all three agent loops auto-continued it. Each
+retry failed instantly against the identical error, the whole `MAX_AUTO_CONTINUES`
+budget emptied in seconds, and the run ended as a generic `agent_incomplete` that
+named nothing. A chain task then retried twice more on top of that.
+
+- `auth-errors.js` is the third class of "the turn stopped and it was not the agent's
+  fault", alongside the two in `rate-limit-utils.js` — and the only one that never
+  passes on its own. It refreshes nothing and cannot: the OAuth tokens belong to the
+  `claude` CLI's own credentials store, and the refresh exchange needs client
+  credentials this server has never held and must not hold. Detecting it precisely
+  and refusing to retry is the fix, not a lesser version of one.
+- Detection is anchored to CLI/API-internal wording, disjoint from the rate-limit
+  anchors, and a clean success is never classified as an auth failure.
+- A bare `/login` or `unauthorized` is deliberately not matched: the studio serves
+  its own `/login` route and answers `{error:'unauthorized'}` from its own
+  middleware.
+- The detector runs before the success break and before the auto-continue in all
+  three loops (chat, SSH, `taskWorker`); the chain retry excludes it.
+- The card shows a 🔐 badge instead of a generic failure, so an auth stop reads
+  differently from an ordinary one on the board.
+
+## 7.16.0
+
+### A Kanban card names the dials its next run will use (#84)
+
+The board rendered one badge, `tk.sess_model`, and it was wrong twice over: blank on
+a task that had never run — so a board of freshly created cards said nothing about
+settings the user had just picked in the modal — and silent about a bot's model,
+which OVERRIDES the session's inside the runner.
+
+- **The card mirrors `startTask`, it does not re-derive.** Model is
+  `bot.model || session.model || task.model || 'sonnet'`; effort and engine come off
+  the TASK row, which is the #79 rule that those dials drive every run regardless of
+  which session the task uses. A card now reads e.g. `haiku · High · Subscription`.
+- **`bot_model` is joined in `getTasks`, not looked up client-side.** The board
+  fetches its bot roster only when a modal opens, so `kbBots` is `[]` at first paint
+  and a client lookup would render one model before the user touched anything and a
+  different one afterwards. The join carries `AND b.deleted_at IS NULL` because
+  `stmts.getBot` does.
+- **Effort and engine render only when they are NOT the default.** `auto` effort and
+  the `api` engine are what nearly every card carries; a badge on all of them is
+  noise in a footer already holding the project, schedule, session and retry badges.
+  An unknown effort is shown verbatim rather than dropped.
+- No new i18n keys, no schema change: one additive `LEFT JOIN` and one extra column
+  on an existing `SELECT`. `test/kanban-run-badges.test.js` pins the runner's own
+  expression as source text, because the card and the runner live in different files.
+
+Choosing a non-Claude **provider** per task, the other half of #84, is deliberately
+not here: the Kanban worker parses `claude`'s `stream-json` for streaming, turn
+budget, retry, usage-limit pause and session resume, so an external agent is a new
+execution backend rather than a dropdown.
+
+## 7.15.4
+
+### The weak-secret gate states its residual
+
+- **The forwarding-header test reads PRESENCE, not truthiness.** `X-Forwarded-For:`
+  with an empty value is falsy and was read as absence, which is the wrong answer to
+  "did a hop happen".
+- **A raw TCP relay is a documented limit, not a closed hole.** `ssh -R`, `socat` or any
+  port forwarder carries an internet client to the loopback listener with no HTTP
+  headers, a loopback peer and no `Origin`; nothing at the HTTP layer distinguishes that
+  from a local `curl`, so a SHORT secret is spendable through one. That is the ceiling
+  of loopback trust in this app rather than anything this gate introduced —
+  `setupCallerIsLocal()` guards account claim on a fresh install, which hands out a
+  shell, on exactly the same evidence. It is now written down next to the gate and in
+  CLAUDE.md instead of being implied away. A 32-char-or-longer secret is immune: it is
+  guessed, not reached.
+
+## 7.15.3
+
+### Third pass on the task-manager secret carve-out
+
+A second independent review found three bypasses in 7.15.2. All are closed; a
+32-char-or-longer secret was never affected by any of them.
+
+- **The Origin check reproduced the very bug it was added to fix.** It called
+  `auth.isLoopbackAddress()` on an Origin HOSTNAME, and that helper tests `/^127\./`
+  against a string — so `http://127.attacker.example`, a name anyone can register with
+  an A record of `127.0.0.1`, satisfied it. A rebound page served from that name passes
+  the cross-origin guard (its Host and Origin match) and would have spent a short
+  secret. The Origin hostname is now matched as a literal.
+- **`isRunning()` lags the tunnel spawn by up to 30 seconds**, and only one of the two
+  start doors (HTTP, not Telegram) held a lock over that window. A weak secret is now
+  revoked by a monotonic latch set before each `tunnelManager.start()`, so there is no
+  window to race. Stopping the tunnel does not give it back until the process restarts.
+- **A local reverse proxy needed no `TRUST_PROXY` to launder a remote request.** The
+  presence of `X-Forwarded-For` / `X-Real-IP` / `Forwarded` now refuses a short secret
+  outright, whatever `TRUST_PROXY` says — the same rule `setupCallerIsLocal()` already
+  applied to the first-run setup gate, for the same reason.
+
+## 7.15.2
+
+### The task-manager secret carve-out is scoped to the posture, not the bind
+
+7.15.1 honoured a short `CCS_TASK_MANAGER_SECRET` whenever `HOST` was loopback. An
+independent review found that premise does not hold on its own, and it was right on
+three counts:
+
+- **The studio publishes its own loopback port.** `tunnel-manager.js` runs cloudflared
+  against `http://localhost:PORT`, so a public tunnel started from the UI makes the
+  endpoint reachable from the internet long after the boot-time decision was made. The
+  check now runs PER REQUEST and refuses a short secret while a tunnel is active, or
+  when `TRUST_PROXY` says something was put in front on purpose.
+- **DNS rebinding reaches a loopback port from a web page.** The cross-origin guard
+  compares Origin against the request's own Host, which a rebound page satisfies by
+  construction. A short secret is now spendable only by a client that sends no `Origin`
+  at all — a CLI, a test, the MCP child — or a loopback one, so no page can spend it.
+- **`HOST` is a config string, not an address.** The bind test is now a numeric loopback
+  literal; `auth.isLoopbackAddress` would have accepted `127.attacker.example` and
+  `localhost`, both resolved by something outside this process.
+
+A 32-char-or-longer secret is unaffected: none of these gates apply to it. The
+loopback-honours-a-short-secret behaviour from 7.15.1 is unchanged for the case it was
+added for — a developer driving the endpoint from a local test.
+
+## 7.15.1
+
+### The task-manager secret floor now matches the binding
+
+- **A short `CCS_TASK_MANAGER_SECRET` is honoured on loopback again.** 7.15.0 refused
+  anything under 32 characters unconditionally, which is server policy applied to a
+  desktop app. Claude Code Studio binds `127.0.0.1` by default (and is forced there by
+  `CCS_DESKTOP=1`), where the endpoint is reachable only by someone already executing
+  code on the machine — and the product's own job is to spawn
+  `claude --dangerously-skip-permissions`. So the refusal bought no security and cost a
+  real workflow: a developer exporting a short secret to drive the endpoint from a test
+  got a silent 401.
+- **On a non-loopback `HOST` the floor still applies.** `HOST=0.0.0.0`,
+  docker-compose or a homelab box behind a tunnel puts a pre-auth endpoint on an
+  interface someone else can reach; there a value under 32 characters is ignored with a
+  warning and the random per-process secret is used instead. Both branches warn, with
+  different wording, so the operator can tell which one they got.
+- The decision reads the existing `HOST_IS_LOOPBACK` (via the exported
+  `auth.isLoopbackAddress`), so it cannot drift from the address the server actually
+  binds. `timingSafeStrEq` on the bearer comparison is unchanged.
+
+## 7.15.0
+
+### Populate the Kanban board without running it (#83)
+
+- `_ccs_task_manager.create_task` hardcoded `status: 'todo'`, so the only thing an
+  agent could do to the board was START work on it. Turning an existing plan — a
+  `tasks/` folder, `.planning/`, a roadmap, a checklist — into cards therefore
+  launched one unattended `claude` per card at the moment of import, which is the
+  opposite of an import. `status` is now optional and accepts `todo` (queued and run,
+  the unchanged default), `backlog` (a card on the board, nothing runs) and `done`.
+- **`done` is in the list because `- [x]` is.** Half of "preserve the status from the
+  checkboxes" is items the plan already marks finished; without it an import has to
+  either lie about them or run them.
+- **`in_progress` is deliberately missing.** It would put a row on the board that no
+  worker owns and `getTodoTasks` will never select — a card that looks live and is not.
+  A run that wants work started asks for `todo` and lets the queue own it.
+- **The two child budgets are separate now.** `MAX_TASK_CHILDREN_PER_RUN` (10) bounds
+  runaway *execution* — a child that runs can create children of its own. A board row
+  runs nothing, so counting it there is what made a ten-card import consume the run's
+  entire ability to create real follow-up work. Board cards are bounded by
+  `MAX_BOARD_CHILDREN_PER_RUN` (100) instead.
+- A board card no longer wakes `processQueue`. The queue selects only `todo`, so an
+  eighty-card import used to walk the whole queue eighty times for nothing.
+
+### Hardening found while reviewing the above
+
+- **A dependency parked in Backlog no longer strands its dependent in silence.**
+  `processQueue`'s `depends_on` gate advances a task only when every dependency is
+  `done`; a `backlog` dependency is neither `done` nor `cancelled`, so the dependent was
+  skipped on every tick forever, with no log line and no notification. Waiting is still
+  the correct behaviour — the card may be triaged tomorrow, and cancelling would throw
+  away real work — so the fix makes the state observable: one warning and one UI notice
+  per blocked task, naming how many cards are still in Backlog. The latch that keeps it
+  to one notice is rebuilt from the queue on every pass rather than cleaned up at each
+  exit, so a task that is cancelled, deleted or has its dependencies rewritten drops out
+  on its own instead of leaking an id and silencing its own next warning. The shape was reachable
+  before through the REST/Kanban door; `status` made it reachable in a single call,
+  because an imported plan lands as backlog cards that already carry `depends_on`.
+- **Board-card notifications are coalesced per caller.** The queue wake was guarded for
+  a board row but the UI toast was not, so an eighty-card import stacked eighty
+  notifications. They now collapse into one notice carrying the total.
+- **A short `CCS_TASK_MANAGER_SECRET` override is refused rather than honoured.** The
+  endpoint is registered before `auth.authMiddleware` and creates tasks that run
+  `claude` with an arbitrary prompt, so a guessable value there is an unauthenticated
+  execution primitive. Anything under 32 characters is now ignored with a warning and a
+  random per-process secret is used instead. The comparison also goes through the
+  existing `timingSafeStrEq` rather than `!==`. A length floor is not an entropy check
+  and is not documented as one — it closes the plausible-typo case; the supported
+  configuration is to leave the variable unset.
+- **`list_tasks` caps at 100, not 50.** One run may write 100 board rows, and a 50-row
+  answer hid the older half from the duplicate check `create_task`'s own description
+  tells an agent to make first. The `limit` description in the MCP schema — the only
+  statement of the cap an agent actually reads — was raised to match. The limit is now
+  clamped from below as well: SQLite reads a negative `LIMIT` as unbounded, so `limit: -1`
+  returned the whole table through a cap that looked like it was applied.
+
+Not built, deliberately: the deterministic folder→board importer the issue also asked
+for. The parent link exists in the data (`tasks.parent_task_id`, capped at
+`MAX_CHAIN_DEPTH`) but nothing draws it — `public/kanban.html` never reads the field
+and the board is columns-by-status — so the epic → subtask tree is a Kanban-UI change,
+not an import feature. `POST /api/tasks` also mints a git worktree per card, so bulk
+import through the REST door would be N `git worktree add` calls, and a regex over
+"common markdown formats" is wrong more often than an agent reading the same files is.
+The agent path covers it, and this status flag is the one thing it was missing.
+
+## 7.14.0
+
+### A chat remembers its turn budget and reasoning effort (#81)
+
+- `sessions` persisted mode, agent and model but **not** `max_turns`/`effort`, so
+  reopening a chat fell back to the markup's `value="50"` and effort carried over from
+  whichever tab happened to be open last. Reported as "Kanban chats ignore the default"
+  — incidental: a task's chat is an ordinary chat. Two columns, with the #58 defaults
+  chain as the fallback when a chat stored none.
+- **The stored value and the CLI flag are different things.** `effort: 'auto'` means
+  "pass no `--effort`" and survives the round trip through SQLite as that literal word.
+  Store the flag instead and Auto becomes indistinguishable from unset.
+- **Every door that creates or copies a chat carries both dials** — new chat, fork,
+  compact, JSON import, plus the two replay paths, which rebuild run options from
+  scratch and were clobbering the dials the chat had just stored. Import sanitises,
+  because that JSON is a file the user picks and `max_turns: 900` arrives as easily as
+  a real export.
+- **An empty `projects` array is not "no project".** The boot fetch is fired without
+  await, so the first chat opened after a hard refresh could resolve to the GLOBAL
+  defaults row even for a project-pinned chat — once per page load.
+
 ## 7.13.1
 
 Post-release review of 7.13.0 found five defects, two of them silent.
