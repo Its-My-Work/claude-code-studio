@@ -1,5 +1,46 @@
 # Changelog
 
+## 7.17.0
+
+### Add project from a Git URL (#94)
+
+The "Add project" modal required an already-existing local folder, so using a repo
+you didn't have yet meant dropping to a terminal, running `git clone`, then coming
+back to browse to the result. `POST /api/projects/clone` folds that into one step:
+give it a URL (and optional branch) plus a parent folder browsed in the modal, and
+the server clones into `<parentDir>/<repo>` and registers the project itself.
+
+- **Transport allowlist, enforced twice.** `parseCloneUrl()` accepts only
+  `http(s)://`, `ssh://`, `git://` and `user@host:path` — `ext::` (arbitrary command
+  execution) and `file://` / a bare path (reads anything on disk) are refused. The
+  same list rides as `GIT_ALLOW_PROTOCOL` so a redirect or submodule can't widen it.
+- **Nothing user-supplied can look like a git option.** URL and target follow `--`,
+  and `authorityIsSafe()` refuses an `@`-part or host starting with `-` — closing
+  the CVE-2017-1000117 ssh-option-injection shape (`ssh://-oProxyCommand=...`).
+- **Symlink checks happen after `realpath`.** The parent folder is re-validated
+  against the allowlist post-resolution, and a dangling symlink at the target is
+  caught via `lstat` before git can follow and populate it.
+- **A hung clone is killed by process group**, not just its own pid — `git clone`
+  spawns `git-remote-https`/`ssh`/`index-pack` as children — after a 10-minute
+  timeout, and at most 2 clones run at once so this can't fill the disk.
+- Shipped with a dedicated `test/git-clone.test.js` booting a real server against a
+  fake `git` on `PATH`.
+
+### tmux spawn command no longer carries the system prompt inline (#96)
+
+A tmux command is capped at roughly 16 KB by the tmux server's own socket protocol.
+The Subscription engine (persistent `claude` session over tmux) packed the whole
+system prompt into that command, so a project with a large `AGENTS.md` (legally up
+to 64 KB) could silently fail to ever start an interactive session — the real tmux
+error, `command too long`, was discarded.
+
+- `tmuxLaunchCommand()` now writes the full launch invocation to a small script file
+  in a per-process `0700` `mkdtemp` directory and hands tmux only the ~60-byte path
+  to run it, so the ARG_MAX ceiling (~1–2 MB) applies instead of tmux's own limit.
+- Falls back to the old inline command if the script can't be written (read-only
+  tmp), and tmux's own stderr is now piped into the `error` frame instead of
+  discarded.
+
 ## 7.16.2
 
 ### Enforce MAX_TASK_WORKERS as a global concurrency limit (#90)
