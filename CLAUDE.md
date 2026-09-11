@@ -653,6 +653,27 @@ against a real server whose `PATH` holds a fake `git`.
   The directory name is one path segment (`DIR_NAME_RE`), joined onto a parent that
   passed `isPathAllowed()` — a registered workdir widens that allowlist, which is why
   the gate cannot be skipped here any more than in `POST /api/projects`.
+- **The AUTHORITY is user-supplied too, and the leading-`-` check does not see it.**
+  `ssh://-oProxyCommand=id/x` and `git@-oProxyCommand=id:a/b` are URLs whose HOST is
+  an ssh option (CVE-2017-1000117) — the option sits behind the scheme or the `@`.
+  `authorityIsSafe()` drops the `:<port>` and refuses any `@`-part opening with `-`.
+  Modern git passes `--` to ssh itself, so this is a belt on a brace; the rule that
+  nothing handed to git may look like an option may not hold only on a patched binary.
+- **The parent is re-checked after `realpath`, and the target is `lstat`ed.**
+  `isPathAllowed()` reads a STRING, so a symlink inside an allowed root is a legal
+  path pointing anywhere on disk — the same layer-2 reasoning as `pwd -P` in the
+  remote file browser. And `existsSync()` is false for a DANGLING symlink, which git
+  would happily follow and populate; `lstat` sees the link itself.
+- **The timeout kills the process GROUP, and two clones run at a time.** `git clone`
+  is a parent to `git-remote-https` / `ssh` / `index-pack`; killing the `git` pid
+  alone leaves those writing into the tree the handler is about to `rmSync`. The
+  child is `detached` on POSIX for that reason (not on Windows, where it opens a
+  console). `MAX_CONCURRENT_CLONES` is 2 — each clone holds its request open for as
+  long as it runs, so an unbounded one is a disk-filling primitive behind one button.
+- **The HOST is not filtered, deliberately.** Any reachable `http(s)`/`ssh`/`git`
+  host is clonable, including RFC1918 and loopback — cloning from an internal GitLab
+  is the feature. The endpoint sits BELOW `auth.authMiddleware`, so this is a
+  logged-in user's own fetch, not an open proxy.
 - **It must fail, not wait.** stdin is closed, `GIT_TERMINAL_PROMPT=0`, no TTY: a
   credential or host-key question fails at once (measured: a private/nonexistent GitHub
   URL answers in ~0.4 s with git's own line). `CCS_GIT_CLONE_TIMEOUT_MS` (10 min) is the
