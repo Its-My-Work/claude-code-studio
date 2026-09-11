@@ -635,6 +635,32 @@ the session's inside the runner. `kbRunBadges()` in `public/kanban.html` replace
   no turn budget, no retry and no session resume. Wiring one into `taskWorker` is a new
   execution backend, not a dropdown.
 
+### Add project from a Git URL (issue #94)
+
+`POST /api/projects/clone` runs `git clone <url>` into `<parentDir>/<repo>` and
+registers the result through the same `registerLocalProject()` the plain create uses.
+The SPA exposes it as one extra row in the New-project modal: the folder the user
+browsed to is the PARENT, and a non-empty URL turns "Add project" into a clone.
+`git-clone.js` holds the pure half; `test/git-clone.test.js` drives the endpoint
+against a real server whose `PATH` holds a fake `git`.
+
+- **Transports are an allowlist, enforced twice.** `parseCloneUrl()` accepts
+  `http(s)://`, `ssh://`, `git://` and `user@host:path` — `ext::` executes an arbitrary
+  command and `file://` / a bare path clone anything this process can read. The same
+  list rides as `GIT_ALLOW_PROTOCOL` so a redirect or submodule cannot widen it.
+- **Nothing user-supplied may look like an option.** URL and target follow `--`;
+  `--branch <b>` cannot, so a branch starting with `-` is refused before git sees it.
+  The directory name is one path segment (`DIR_NAME_RE`), joined onto a parent that
+  passed `isPathAllowed()` — a registered workdir widens that allowlist, which is why
+  the gate cannot be skipped here any more than in `POST /api/projects`.
+- **It must fail, not wait.** stdin is closed, `GIT_TERMINAL_PROMPT=0`, no TTY: a
+  credential or host-key question fails at once (measured: a private/nonexistent GitHub
+  URL answers in ~0.4 s with git's own line). `CCS_GIT_CLONE_TIMEOUT_MS` (10 min) is the
+  backstop, and a SIGKILLed clone does NOT clean up after itself the way a failed one
+  does, so the endpoint removes the target on any non-zero exit.
+- **Local projects only.** A clone on a remote host would run over SSH; the remote flow
+  already takes an existing path.
+
 ### Open in VS Code (issue #63)
 
 `editor-links.js` builds the links; `POST /api/editor/open` decides which of the two
