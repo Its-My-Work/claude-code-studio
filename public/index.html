@@ -2135,6 +2135,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .dir-footer input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
 
 /* ─── Project name input in dir modal ─── */
+.dir-clone-row { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
+.dir-clone-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .proj-name-row { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
 .proj-name-row input { flex: 1; background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 5px 9px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; }
 
@@ -3905,6 +3907,13 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="dir-list" id="dirList">
         <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Loading...</div>
       </div>
+      <!-- Clone from a Git URL (issue #94): the browsed folder is the PARENT, the
+           repository lands in <parent>/<repo> and becomes the project. -->
+      <div class="dir-clone-row">
+        <span class="dir-clone-label" data-i18n="dir.clone.label">Clone:</span>
+        <input type="text" class="dir-path-input" id="cloneUrlInput" data-i18n-ph="dir.clone.url.ph" placeholder="Git URL — cloned into the selected folder (optional)" spellcheck="false">
+        <input type="text" class="dir-path-input" id="cloneBranchInput" data-i18n-ph="dir.clone.branch.ph" placeholder="branch" spellcheck="false" style="flex:0 0 120px">
+      </div>
     </div>
 
     <!-- REMOTE section -->
@@ -3940,7 +3949,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </label>
       <div style="flex:1"></div>
       <button class="bg" onclick="closeDirModal()" style="padding:6px 14px" data-i18n="dir.cancel">Cancel</button>
-      <button class="bp" onclick="selectDir()" style="padding:6px 14px" data-i18n="proj.add">＋ Add project</button>
+      <button class="bp" id="dirAddBtn" onclick="selectDir()" style="padding:6px 14px" data-i18n="proj.add">＋ Add project</button>
     </div>
   </div>
 </div>
@@ -4905,7 +4914,7 @@ const TRANSLATIONS = {
     'mcp.import.preview.btn':'👁 Перегляд',
     'mcp.import.do':'Імпортувати',
     'dir.name.label':'Назва:',
-    'dir.git.init':'git init (якщо ще не репозиторій)',
+    'dir.git.init':'git init (якщо ще не репозиторій)','dir.clone.label':'Клонувати:','dir.clone.url.ph':'Git URL — клонується у вибрану теку (необов’язково)','dir.clone.branch.ph':'гілка','dir.clone.busy':'Клонування…','toast.clone_err':'git clone: {err}','toast.cloned':'✓ Клоновано: {dir}',
     'confirm.stop.desc':'Виконання агента буде перервано.',
     'rl.type.five_hour':'5-годинний','rl.type.seven_day':'7-денний',
     'proj.generating':'Генерація у фоні...',
@@ -5308,7 +5317,7 @@ const TRANSLATIONS = {
     'mcp.import.preview.btn':'👁 Preview',
     'mcp.import.do':'Import',
     'dir.name.label':'Name:',
-    'dir.git.init':'git init (if not already a repository)',
+    'dir.git.init':'git init (if not already a repository)','dir.clone.label':'Clone:','dir.clone.url.ph':'Git URL — cloned into the selected folder (optional)','dir.clone.branch.ph':'branch','dir.clone.busy':'Cloning…','toast.clone_err':'git clone: {err}','toast.cloned':'✓ Cloned: {dir}',
     'confirm.stop.desc':'Agent execution will be interrupted.',
     'rl.type.five_hour':'5-hour','rl.type.seven_day':'7-day',
     'proj.generating':'Generating in background...',
@@ -5711,7 +5720,7 @@ const TRANSLATIONS = {
     'mcp.import.preview.btn':'👁 Предпросмотр',
     'mcp.import.do':'Импортировать',
     'dir.name.label':'Название:',
-    'dir.git.init':'git init (если ещё не репозиторий)',
+    'dir.git.init':'git init (если ещё не репозиторий)','dir.clone.label':'Клонировать:','dir.clone.url.ph':'Git URL — клонируется в выбранную папку (необязательно)','dir.clone.branch.ph':'ветка','dir.clone.busy':'Клонирование…','toast.clone_err':'git clone: {err}','toast.cloned':'✓ Клонировано: {dir}',
     'confirm.stop.desc':'Выполнение агента будет прервано.',
     'rl.type.five_hour':'5-часовой','rl.type.seven_day':'7-дневный',
     'proj.generating':'Генерация в фоне...',
@@ -6065,7 +6074,7 @@ const TRANSLATIONS = {
     "mcp.export.title":"Exporter tous les MCP vers un fichier JSON","mcp.replace.title":"Remplacera l'existant","mcp.type.stdio":"stdio (commande)","mcp.type.sse":"SSE (flux URL)",
     "mcp.import.modal.title":"Importer des serveurs MCP","mcp.import.drop":"Glissez un fichier .json ou cliquez pour parcourir","mcp.import.or":"— ou collez le JSON manuellement —",
     "mcp.import.found":"Serveurs trouvés :","mcp.import.replace":"Remplacer les serveurs personnalisés existants (sinon — fusion)","mcp.import.preview.btn":"👁 Aperçu","mcp.import.do":"Importer",
-    "dir.name.label":"Nom :","dir.git.init":"git init (si ce n'est pas déjà un dépôt)","confirm.stop.desc":"L'exécution de l'agent sera interrompue.","rl.type.five_hour":"5 heures",
+    "dir.name.label":"Nom :","dir.git.init":"git init (si ce n'est pas déjà un dépôt)","dir.clone.label":"Cloner :","dir.clone.url.ph":"URL Git — cloné dans le dossier sélectionné (optionnel)","dir.clone.branch.ph":"branche","dir.clone.busy":"Clonage…","toast.clone_err":"git clone : {err}","toast.cloned":"✓ Cloné : {dir}","confirm.stop.desc":"L'exécution de l'agent sera interrompue.","rl.type.five_hour":"5 heures",
     "rl.type.seven_day":"7 jours","proj.generating":"Génération en arrière-plan...","mcp.parse.no_servers":"Impossible de trouver des serveurs MCP. Format attendu : {\"mcpServers\":{...}} ou compatible.",
     "mcp.parse.empty":"La liste des serveurs est vide","mcp.cfg.env_json_err":"Format JSON ENV invalide","agent.planning":"🧠 Planification...","agent.fallback_single":"⚠️ Retour au mode simple",
     "agent.done":"✅ Tous les agents ont terminé","agent.circular_deps":"⚠️ Dépendance circulaire entre agents","agent.stopped":"⏹ Arrêté","msf.working":"En cours","msf.done":"Terminé","msf.error":"Erreur",
@@ -6355,7 +6364,7 @@ const TRANSLATIONS = {
     "mcp.import.title":"ייבוא MCP מקובץ JSON (פורמט Claude Desktop)","mcp.export.btn":"ייצוא","mcp.export.title":"ייצוא כל שרתי ה-MCP לקובץ JSON","mcp.replace.title":"יחליף את הקיימים",
     "mcp.type.stdio":"stdio (פקודה)","mcp.type.sse":"SSE (זרם URL)","mcp.import.modal.title":"ייבוא שרתי MCP","mcp.import.drop":"גררו קובץ .json או לחצו לעיון","mcp.import.or":"— או הדביקו JSON ידנית —",
     "mcp.import.found":"שרתים שנמצאו:","mcp.import.replace":"החלפת שרתים מותאמים אישית קיימים (אחרת — מיזוג)","mcp.import.preview.btn":"👁 תצוגה מקדימה","mcp.import.do":"ייבוא","dir.name.label":"שם:",
-    "dir.git.init":"git init (אם עדיין לא ריפוזיטורי)","confirm.stop.desc":"ריצת ה-agent תופרע.","rl.type.five_hour":"5 שעות","rl.type.seven_day":"7 ימים","proj.generating":"יוצר ברקע...",
+    "dir.git.init":"git init (אם עדיין לא ריפוזיטורי)","dir.clone.label":"שכפול:","dir.clone.url.ph":"כתובת Git — ישוכפל לתיקייה שנבחרה (אופציונלי)","dir.clone.branch.ph":"ענף","dir.clone.busy":"משכפל…","toast.clone_err":"git clone: {err}","toast.cloned":"✓ שוכפל: {dir}","confirm.stop.desc":"ריצת ה-agent תופרע.","rl.type.five_hour":"5 שעות","rl.type.seven_day":"7 ימים","proj.generating":"יוצר ברקע...",
     "mcp.parse.no_servers":"לא נמצאו שרתי MCP. צפוי {\"mcpServers\":{...}} או פורמט תואם.","mcp.parse.empty":"רשימת השרתים ריקה","mcp.cfg.env_json_err":"פורמט ENV JSON לא תקין",
     "agent.planning":"🧠 מתכנן...","agent.fallback_single":"⚠️ עובר למצב יחיד","agent.done":"✅ כל ה-agents סיימו","agent.circular_deps":"⚠️ תלות מעגלית בין ה-agents","agent.stopped":"⏹ הופסק","msf.working":"עובד",
     "msf.done":"הושלם","msf.error":"שגיאה","msf.waiting":"ממתין","msf.thinking":"חושב","msf.tool":"רץ","msf.generating":"יוצר","ta.calls":"קריאות","ta.activity":"פעילות","msf.team":"צוות Agents",
@@ -15559,6 +15568,8 @@ function openAddProject() {
     onEscape: () => closeDirModal(),
   });
   $i('gitInitChk').checked = false;
+  $i('cloneUrlInput').value = '';
+  $i('cloneBranchInput').value = '';
   $i('projNameInput').value = '';
   $i('dirPathInput').value = '';
   $i('dirFilterInput').value = '';
@@ -15692,6 +15703,8 @@ async function selectDir() {
   }
   // Local project
   if (!dirBrowsePath) { toast(t('toast.select_dir'), true); return; }
+  const cloneUrl = ($i('cloneUrlInput')?.value || '').trim();
+  if (cloneUrl) return cloneProjectFromUrl(cloneUrl);
   const name = ($i('projNameInput').value.trim()) || dirBrowsePath.split(/[/\\]/).filter(Boolean).pop() || dirBrowsePath;
   const gitInit = $i('gitInitChk').checked;
 
@@ -15709,6 +15722,37 @@ async function selectDir() {
   if (d.id) switchProject(d.id);
   closeDirModal(true);
   if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
+}
+
+// Issue #94 — the browsed folder is the parent; the server clones into
+// <parent>/<repo> and registers that as the project. The request stays open for
+// the whole clone (server-side timeout), so the button is locked meanwhile.
+async function cloneProjectFromUrl(url) {
+  const branch = ($i('cloneBranchInput')?.value || '').trim();
+  const name = $i('projNameInput').value.trim();
+  const btn = $i('dirAddBtn');
+  const prevLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('dir.clone.busy');
+  try {
+    const r = await fetch('/api/projects/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, branch, parentDir: dirBrowsePath, name }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) { toast(t('toast.clone_err').replace('{err}', d.error || r.statusText || '?'), true, 6000); return; }
+    toast(t('toast.cloned').replace('{dir}', d.workdir));
+    await loadProjectsList();
+    if (d.id) switchProject(d.id);
+    closeDirModal(true);
+    if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
+  } catch (e) {
+    toast(t('toast.clone_err').replace('{err}', e.message), true, 6000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prevLabel;
+  }
 }
 
 function closeDirModal(preservePending = false) {

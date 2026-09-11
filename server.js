@@ -91,6 +91,7 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 // CLAUDE.md / AGENTS.md discovery + the AGENTS.md system-prompt block (issue #54).
 const agentsMd = require('./agents-md');
+const gitClone = require('./git-clone');
 // Read-only remote file browsing (issue #57). Its path guard is POSIX-only on
 // purpose — see the header of the module.
 const remoteFiles = require('./remote-files');
@@ -9579,15 +9580,77 @@ app.post('/api/projects', (req,res) => {
       try { execSync('git init', { cwd:workdir, stdio:'pipe' }); actions.push('git init'); }
       catch(e) { return res.json({ ok:true, id:null, actions, gitError:(e.stderr?.toString()||e.message).trim() }); }
     }
-    const projects = loadProjects();
-    const existing = projects.find(p => p.workdir === workdir);
-    if (existing) { existing.name = name; saveProjects(projects); return res.json({ ok:true, id:existing.id, actions, updated:true }); }
-    const id = 'proj-' + genId();
-    projects.push({ id, name, workdir, createdAt:new Date().toISOString() });
-    saveProjects(projects);
-    if (telegramBot) telegramBot.notifyProjectAdded(workdir, name).catch(() => {});
-    res.json({ ok:true, id, actions });
+    const { id, updated } = registerLocalProject(name, workdir);
+    res.json({ ok:true, id, actions, ...(updated ? { updated:true } : {}) });
   } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// Register (or rename) a LOCAL project row. Shared by the plain create above and
+// the clone below so the two cannot disagree about what a project record is.
+function registerLocalProject(name, workdir) {
+  const projects = loadProjects();
+  const existing = projects.find(p => p.workdir === workdir);
+  if (existing) { existing.name = name; saveProjects(projects); return { id: existing.id, updated: true }; }
+  const id = 'proj-' + genId();
+  projects.push({ id, name, workdir, createdAt: new Date().toISOString() });
+  saveProjects(projects);
+  if (telegramBot) telegramBot.notifyProjectAdded(workdir, name).catch(() => {});
+  return { id, updated: false };
+}
+
+// ─── Add project from a Git URL (issue #94) ──────────────────────────────────
+// Clones <url> into <parentDir>/<dirName || repo name> and registers it as a local
+// project. The parent is a directory the user browsed to in the same modal, so it
+// goes through the same isPathAllowed() gate as a plain create — a registered
+// workdir widens that allowlist, which is why the check cannot be skipped here.
+// Validation of the URL, the branch and the directory name lives in git-clone.js.
+// Local projects only: a clone on a remote host would need to run over SSH, and
+// the remote project flow already takes an existing path.
+const GIT_CLONE_TIMEOUT_MS = parseInt(process.env.CCS_GIT_CLONE_TIMEOUT_MS || '600000', 10) || 600000;
+app.post('/api/projects/clone', (req, res) => {
+  const { url, branch = '', parentDir, name = '', dirName = '', shallow = false } = req.body || {};
+  const parsed = gitClone.parseCloneUrl(url);
+  if (!parsed) return res.status(400).json({ error: 'unsupported git url (http(s), ssh, git or user@host:path)' });
+  if (branch && !gitClone.isValidBranch(branch)) return res.status(400).json({ error: 'invalid branch name' });
+  if (dirName && !gitClone.isValidDirName(dirName)) return res.status(400).json({ error: 'invalid directory name' });
+  if (!parentDir || typeof parentDir !== 'string') return res.status(400).json({ error: 'parentDir required' });
+  if (!isPathAllowed(parentDir)) return res.status(403).json({ error: 'path not allowed' });
+  const parent = path.resolve(parentDir);
+  let parentIsDir = false;
+  try { parentIsDir = fs.statSync(parent).isDirectory(); } catch {}
+  if (!parentIsDir) return res.status(400).json({ error: 'parent directory does not exist' });
+  const dir = dirName || parsed.repoName;
+  const target = path.join(parent, dir);
+  if (fs.existsSync(target)) return res.status(409).json({ error: `already exists: ${target}` });
+
+  const args = gitClone.cloneArgs({ url: parsed.url, target, branch, shallow: !!shallow });
+  let stderr = '';
+  let child;
+  try {
+    // stdin is closed, GIT_TERMINAL_PROMPT=0 and no TTY: a credential or host-key
+    // question fails at once instead of holding the request until the timeout.
+    child = spawnProc('git', args, { cwd: parent, env: gitClone.cloneEnv(), stdio: ['ignore', 'ignore', 'pipe'] });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+  child.stderr.on('data', d => { if (stderr.length < 8192) stderr += String(d); });
+  const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, GIT_CLONE_TIMEOUT_MS);
+  let settled = false;
+  const finish = (code, err) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (err || code !== 0) {
+      // git removes its own half-clone on failure; a SIGKILL from the timer does not.
+      try { fs.rmSync(target, { recursive: true, force: true }); } catch {}
+      const detail = (stderr.trim().split('\n').filter(Boolean).pop() || (err && err.message) || `git exited ${code}`).slice(0, 400);
+      log.warn('project-clone-failed', { url: parsed.url, target, code, detail });
+      return res.status(502).json({ error: detail });
+    }
+    const { id, updated } = registerLocalProject(String(name || '').trim() || dir, target);
+    log.info('project-cloned', { url: parsed.url, target, id });
+    res.json({ ok: true, id, workdir: target, actions: ['git clone'], ...(updated ? { updated: true } : {}) });
+  };
+  child.on('error', e => finish(null, e));
+  child.on('exit', code => finish(code, null));
 });
 
 app.post('/api/projects/reorder', (req, res) => {
