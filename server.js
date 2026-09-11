@@ -9607,6 +9607,11 @@ function registerLocalProject(name, workdir) {
 // Local projects only: a clone on a remote host would need to run over SSH, and
 // the remote project flow already takes an existing path.
 const GIT_CLONE_TIMEOUT_MS = parseInt(process.env.CCS_GIT_CLONE_TIMEOUT_MS || '600000', 10) || 600000;
+// A clone holds its request open for as long as it runs, writes into the filesystem
+// and costs a network fetch. Two at a time is generous for a tool one person drives;
+// without a cap, a page that fires the button in a loop fills the disk.
+const MAX_CONCURRENT_CLONES = 2;
+let clonesInFlight = 0;
 app.post('/api/projects/clone', (req, res) => {
   const { url, branch = '', parentDir, name = '', dirName = '', shallow = false } = req.body || {};
   const parsed = gitClone.parseCloneUrl(url);
@@ -9615,28 +9620,47 @@ app.post('/api/projects/clone', (req, res) => {
   if (dirName && !gitClone.isValidDirName(dirName)) return res.status(400).json({ error: 'invalid directory name' });
   if (!parentDir || typeof parentDir !== 'string') return res.status(400).json({ error: 'parentDir required' });
   if (!isPathAllowed(parentDir)) return res.status(403).json({ error: 'path not allowed' });
-  const parent = path.resolve(parentDir);
+  // The parent is resolved to its PHYSICAL path and re-checked: isPathAllowed() reads
+  // a string, so a symlink inside an allowed root otherwise points the clone anywhere
+  // on disk. Same rule the remote browser's layer 2 applies with `pwd -P`.
+  let parent;
+  try { parent = fs.realpathSync(path.resolve(parentDir)); } catch { return res.status(400).json({ error: 'parent directory does not exist' }); }
+  if (!isPathAllowed(parent)) return res.status(403).json({ error: 'path not allowed' });
   let parentIsDir = false;
   try { parentIsDir = fs.statSync(parent).isDirectory(); } catch {}
   if (!parentIsDir) return res.status(400).json({ error: 'parent directory does not exist' });
   const dir = dirName || parsed.repoName;
   const target = path.join(parent, dir);
-  if (fs.existsSync(target)) return res.status(409).json({ error: `already exists: ${target}` });
+  // lstat, not existsSync: a DANGLING symlink at the target does not "exist", and git
+  // would follow it and populate whatever it names.
+  let targetTaken = true;
+  try { fs.lstatSync(target); } catch { targetTaken = false; }
+  if (targetTaken) return res.status(409).json({ error: `already exists: ${target}` });
+  if (clonesInFlight >= MAX_CONCURRENT_CLONES) return res.status(429).json({ error: 'another clone is already running' });
 
   const args = gitClone.cloneArgs({ url: parsed.url, target, branch, shallow: !!shallow });
   let stderr = '';
   let child;
+  // `git clone` is a parent to git-remote-https / ssh / index-pack, and killing it
+  // alone leaves those writing into the tree the timeout handler is about to remove.
+  // A detached child is its own process GROUP, so one kill reaches all of them.
+  const ownGroup = process.platform !== 'win32';
   try {
     // stdin is closed, GIT_TERMINAL_PROMPT=0 and no TTY: a credential or host-key
     // question fails at once instead of holding the request until the timeout.
-    child = spawnProc('git', args, { cwd: parent, env: gitClone.cloneEnv(), stdio: ['ignore', 'ignore', 'pipe'] });
+    child = spawnProc('git', args, { cwd: parent, env: gitClone.cloneEnv(), stdio: ['ignore', 'ignore', 'pipe'], detached: ownGroup });
   } catch (e) { return res.status(500).json({ error: e.message }); }
+  clonesInFlight++;
   child.stderr.on('data', d => { if (stderr.length < 8192) stderr += String(d); });
-  const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, GIT_CLONE_TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    try { if (ownGroup) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); }
+    catch { try { child.kill('SIGKILL'); } catch {} }
+  }, GIT_CLONE_TIMEOUT_MS);
   let settled = false;
   const finish = (code, err) => {
     if (settled) return;
     settled = true;
+    clonesInFlight--;
     clearTimeout(timer);
     if (err || code !== 0) {
       // git removes its own half-clone on failure; a SIGKILL from the timer does not.

@@ -39,6 +39,13 @@ check('embedded whitespace is refused', G.parseCloneUrl('git@h:a b'), null);
 check('a repo name of `..` is refused', G.parseCloneUrl('https://h/x/..'), null);
 check('a dot-leading repo name is refused', G.parseCloneUrl('https://h/x/.git'), null);
 check('non-string input is refused', G.parseCloneUrl({ toString: () => 'https://h/a/b' }), null);
+// CVE-2017-1000117: the host itself is an ssh option. The leading `-` check on the
+// whole string does not see it — it sits behind the scheme or the `@`.
+check('an option-shaped host behind the scheme is refused', G.parseCloneUrl('ssh://-oProxyCommand=id/x/y'), null);
+check('an option-shaped host behind the @ is refused', G.parseCloneUrl('git@-oProxyCommand=id:a/b'), null);
+check('an option-shaped user is refused', G.parseCloneUrl('ssh://-u@h/a/b'), null);
+check('a port does not hide the host', G.parseCloneUrl('ssh://git@host:2222/a/b.git').repoName, 'b');
+check('a password in the userinfo is still a URL', G.parseCloneUrl('https://user:pw@h/a/b').repoName, 'b');
 
 console.log('\n— git-clone.js: argv and environment —');
 check('argv puts -- before the URL and target', G.cloneArgs({ url: 'U', target: 'T' }), ['clone', '--', 'U', 'T']);
@@ -65,6 +72,10 @@ process.on('exit', () => { for (const d of [APP_DIR, HOME_DIR, BIN_DIR, OUTSIDE]
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 const WORKSPACE = path.join(APP_DIR, 'workspace');
 fs.mkdirSync(WORKSPACE, { recursive: true });
+// The endpoint answers with the PHYSICAL parent (realpath), so on macOS, where
+// /var is a symlink to /private/var, the path it returns is not the one composed
+// here. Requests still send the unresolved WORKSPACE — that is what exercises it.
+const WS_REAL = fs.realpathSync(WORKSPACE);
 const GIT_LOG = path.join(APP_DIR, 'git-calls.log');
 
 // Fake git: one line of JSON per call — argv, cwd, the two env vars we care about.
@@ -75,6 +86,7 @@ PATH=/usr/bin:/bin:$PATH
 printf '%s\\n' "$(node -e 'console.log(JSON.stringify({argv:process.argv.slice(1),cwd:process.cwd(),prompt:process.env.GIT_TERMINAL_PROMPT,allow:process.env.GIT_ALLOW_PROTOCOL}))' -- "$@")" >> "${GIT_LOG}"
 for last; do :; done
 mkdir -p "$last/.git"
+case "$*" in *slow*) sleep 3;; esac
 case "$*" in *boom*) echo "fatal: repository 'boom' not found" >&2; exit 128;; esac
 exit 0
 `, { mode: 0o755 });
@@ -122,17 +134,24 @@ const gitCalls = () => fs.existsSync(GIT_LOG) ? fs.readFileSync(GIT_LOG, 'utf8')
   check('a parent that does not exist is 400', (await clone({ url: 'https://h/a/b', parentDir: path.join(WORKSPACE, 'nope') })).status, 400);
   fs.mkdirSync(path.join(WORKSPACE, 'taken'));
   check('an existing target is 409', (await clone({ url: 'https://h/a/taken.git', parentDir: WORKSPACE })).status, 409);
+  // A symlink inside an allowed root is a string that passes isPathAllowed() and a
+  // directory that is somewhere else — so the parent is re-checked after realpath.
+  fs.symlinkSync(OUTSIDE, path.join(WORKSPACE, 'linkout'));
+  check('a parent that is a symlink out of the allowed roots is 403', (await clone({ url: 'https://h/a/b', parentDir: path.join(WORKSPACE, 'linkout') })).status, 403);
+  // A DANGLING symlink does not "exist" — git would follow it and populate its target.
+  fs.symlinkSync(path.join(OUTSIDE, 'nowhere'), path.join(WORKSPACE, 'ghost'));
+  check('a target that is a dangling symlink is 409, not a clone', (await clone({ url: 'https://h/a/ghost.git', parentDir: WORKSPACE })).status, 409);
   check('none of the refusals reached git', gitCalls().length, 0);
 
   console.log('\n— a clone that succeeds —');
   const ok = await clone({ url: 'https://github.com/acme/widget.git', parentDir: WORKSPACE, branch: 'dev' });
   check('answers 200 ok', [ok.status, ok.json?.ok], [200, true]);
-  const target = path.join(WORKSPACE, 'widget');
+  const target = path.join(WS_REAL, 'widget');
   check('workdir is <parent>/<repo>', ok.json?.workdir, target);
   check('the directory exists', fs.existsSync(path.join(target, '.git')), true);
   const call = gitCalls()[0];
   check('git argv: clone --branch dev -- <url> <target>', call.argv, ['clone', '--branch', 'dev', '--', 'https://github.com/acme/widget.git', target]);
-  check('git ran in the parent', fs.realpathSync(call.cwd), fs.realpathSync(WORKSPACE));
+  check('git ran in the parent', fs.realpathSync(call.cwd), WS_REAL);
   check('git was told never to prompt', call.prompt, '0');
   check('git was pinned to the transport allowlist', call.allow, 'http:https:ssh:git');
   const projects = (await api('GET', '/api/projects')).json;
@@ -146,12 +165,20 @@ const gitCalls = () => fs.existsSync(GIT_LOG) ? fs.readFileSync(GIT_LOG, 'utf8')
   const bad = await clone({ url: 'https://h/a/boom.git', parentDir: WORKSPACE, name: 'named' });
   check('answers 502', bad.status, 502);
   check('with git\'s own last stderr line', bad.json?.error, "fatal: repository 'boom' not found");
-  check('the half-made directory is removed', fs.existsSync(path.join(WORKSPACE, 'boom')), false);
+  check('the half-made directory is removed', fs.existsSync(path.join(WS_REAL, 'boom')), false);
   check('and no project was registered', (await api('GET', '/api/projects')).json.some(p => p.name === 'named'), false);
+
+  console.log('\n— the concurrency cap —');
+  const slowA = clone({ url: 'https://h/a/slow1.git', parentDir: WORKSPACE });
+  const slowB = clone({ url: 'https://h/a/slow2.git', parentDir: WORKSPACE });
+  await sleep(400);
+  check('a third clone while two run is 429', (await clone({ url: 'https://h/a/slow3.git', parentDir: WORKSPACE })).status, 429);
+  check('the two that were admitted still succeed', (await Promise.all([slowA, slowB])).map(r => r.status), [200, 200]);
+  check('and the slot is given back', (await clone({ url: 'https://h/a/after.git', parentDir: WORKSPACE })).status, 200);
 
   console.log('\n— dirName and name overrides —');
   const named = await clone({ url: 'git@github.com:acme/widget.git', parentDir: WORKSPACE, dirName: 'widget2', name: 'Widget Two', shallow: true });
-  check('dirName picks the folder', named.json?.workdir, path.join(WORKSPACE, 'widget2'));
+  check('dirName picks the folder', named.json?.workdir, path.join(WS_REAL, 'widget2'));
   check('shallow adds --depth 1', gitCalls().pop().argv.slice(0, 3), ['clone', '--depth', '1']);
   check('name is the project name', (await api('GET', '/api/projects')).json.find(p => p.id === named.json.id)?.name, 'Widget Two');
 
