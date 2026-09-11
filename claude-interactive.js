@@ -250,6 +250,57 @@ function mcpConfigPath(mcpServers) {
   }
 }
 
+// ─── Spawn command delivery (issue #96) ──────────────────────────────────────
+// A tmux COMMAND travels to the tmux server over its imsg socket, which caps the
+// whole message at ~16 KB. Measured on tmux 3.7c: a 16 300-byte command starts the
+// session, 16 340 answers `failed to send command` and 20 000 `command too long`.
+// The system prompt this engine spawns with (studio prompt + mode preamble + skills
+// + AGENTS.md, which alone may be agents-md.MAX_BYTES = 64 KB) is routinely past
+// that, so the spawn command must NEVER carry it inline. The ceiling that applies to
+// the claude process itself is ARG_MAX (~1 MB macOS, ~2 MB Linux), which the prompt
+// fits inside — the 16 KB wall belongs to tmux alone.
+//
+// So the whole invocation is written to a shell script and tmux is handed
+// `sh <path>`: ~60 bytes whatever the prompt weighs.
+//
+// Why a script and not `--append-system-prompt "$(cat file)"`: tmux runs the command
+// through `default-shell`, i.e. the user's LOGIN shell. `$( )` is a syntax error in
+// csh/tcsh and strips trailing newlines everywhere else. `sh <path>` is plain words
+// in every shell, and the script's own interpreter is one we choose.
+//
+// The scripts live in a private 0700 directory created once per process. A shared
+// /tmp path would be pre-creatable by another local user, and this file is EXECUTED —
+// the content-addressed reuse below would then run their script, not ours.
+let _spawnDir = null;
+function spawnScriptDir() {
+  if (!_spawnDir) _spawnDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-spawn-'));
+  return _spawnDir;
+}
+
+// Full `claude` invocation for the interactive engine. Pure — the prompt is inline
+// here on purpose: this string becomes the script body, i.e. the child's argv.
+function buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath }) {
+  let cmd = `env -u CLAUDECODE ${shq(claudeBin)} ${idFlag} --model ${shq(modelAlias)} --dangerously-skip-permissions`;
+  if (sp) cmd += ` --append-system-prompt ${shq(sp)}`;
+  if (mcpPath) cmd += ` --mcp-config ${shq(mcpPath)}`;
+  return cmd;
+}
+
+// What tmux is actually given. Falls back to the pre-#96 inline command if the temp
+// directory cannot be written (read-only /tmp): that still works below ~16 KB, and
+// above it the tmux stderr is now surfaced instead of swallowed.
+function tmuxLaunchCommand(innerCmd) {
+  try {
+    const hash = crypto.createHash('sha256').update(innerCmd).digest('hex').slice(0, 16);
+    const p = path.join(spawnScriptDir(), `spawn-${hash}.sh`);
+    // exec: the pane's process becomes `claude` itself, as before this indirection.
+    if (!fs.existsSync(p)) fs.writeFileSync(p, `#!/bin/sh\n# claude-code-studio interactive engine (issue #96)\nexec ${innerCmd}\n`, { mode: 0o600 });
+    return `sh ${shq(p)}`;
+  } catch {
+    return innerCmd;
+  }
+}
+
 // tmux session environment — survives studio server restarts, dies with the session
 function getTmuxEnv(name, key) {
   try {
@@ -370,20 +421,23 @@ async function runInteractiveSingle(params) {
       const idFlag = resuming ? `--resume ${shq(cid)}` : `--session-id ${shq(cid)}`;
 
       const claudeBin = findClaudeBin();
-      let innerCmd = `env -u CLAUDECODE ${shq(claudeBin)} ${idFlag} --model ${shq(modelAlias)} --dangerously-skip-permissions`;
-      if (sp) innerCmd += ` --append-system-prompt ${shq(sp)}`;
-      if (mcpPath) innerCmd += ` --mcp-config ${shq(mcpPath)}`;
+      const innerCmd = buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath });
 
       const env = utf8Env();
       delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
-      const child = spawn('tmux', tmuxArgs(['new-session', '-d', '-s', name, '-x', '220', '-y', '50', '-c', workdir || process.cwd(), innerCmd]), { env, stdio: 'ignore' });
+      // stderr is PIPED, not ignored: `command too long` was the whole content of
+      // issue #96 and it used to be discarded, leaving only the generic line below.
+      let tmuxErr = '';
+      const child = spawn('tmux', tmuxArgs(['new-session', '-d', '-s', name, '-x', '220', '-y', '50', '-c', workdir || process.cwd(), tmuxLaunchCommand(innerCmd)]), { env, stdio: ['ignore', 'ignore', 'pipe'] });
+      if (child.stderr) child.stderr.on('data', (d) => { if (tmuxErr.length < 2000) tmuxErr += String(d); });
       await new Promise((resolve) => {
         child.on('exit', resolve);
-        child.on('error', resolve);
+        child.on('error', (e) => { tmuxErr += String(e && e.message || e); resolve(); });
       });
 
       if (!tmuxHasSession(name)) {
-        wsSend({ type: 'error', error: 'failed to start tmux session for interactive engine' });
+        const detail = tmuxErr.trim().split('\n')[0].trim();
+        wsSend({ type: 'error', error: 'failed to start tmux session for interactive engine' + (detail ? `: ${detail}` : '') });
         return { cid, completed: false, resultMeta: null, fullText: '', fullThinking: '', toolEvents: [] };
       }
 
@@ -846,4 +900,4 @@ function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
   return out;
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, promptExcerpt };
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand };
