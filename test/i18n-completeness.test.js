@@ -5,6 +5,7 @@
 //   2. public/index.html     — the SPA's inline TRANSLATIONS object
 //   3. public/kanban.html    — the board's inline TR object
 //   4. public/schedule.html  — the scheduler's inline TR object
+//   5. public/dashboard.html — the analytics dashboard's inline TR object
 // and every key the UI actually asks for (`t('key')`, `data-i18n`,
 // `data-i18n-title`, `data-i18n-ph`, `data-i18n-aria`, `data-i18n-tip`,
 // `data-i18n-html`) must exist in ALL of them, or that language silently renders
@@ -114,13 +115,15 @@ console.log('\nplaceholder parity against the base language:');
   }
 }
 
-// ── 5. Secondary page dictionaries (kanban / schedule) ──────────────────────
-// Both pages ship their own inline `TR` object and their own `t()`. They used to
-// carry uk/en/ru only and fall back to uk, so a French or Hebrew user got a
-// Ukrainian board — the concrete complaint in issue #26.
-console.log('\nsecondary page dictionaries (kanban / schedule):');
+// ── 5. Secondary page dictionaries (kanban / schedule / dashboard) ──────────
+// These pages ship their own inline `TR` object and their own `t()`. Kanban and
+// schedule used to carry uk/en/ru only and fall back to uk, so a French or
+// Hebrew user got a Ukrainian board — the concrete complaint in issue #26.
+// The dashboard shipped with no i18n at all until it was given the same
+// contract as the other two.
+console.log('\nsecondary page dictionaries (kanban / schedule / dashboard):');
 const PAGE_DICTS = {};
-for (const file of ['kanban.html', 'schedule.html']) {
+for (const file of ['kanban.html', 'schedule.html', 'dashboard.html']) {
   const src = fs.readFileSync(path.join(ROOT, 'public', file), 'utf8');
   const start = src.indexOf('const TR = {');
   assert.ok(start !== -1, `could not locate the TR object in public/${file}`);
@@ -200,6 +203,7 @@ console.log('\nno hardcoded user-facing strings:');
     'Claude Code Studio — AI Chat & Agents', // <title>, product name
     'Kanban — Claude Code Studio',           // <title>, product name
     'Schedule — Claude Code Studio',         // <title>, product name
+    'Dashboard — Claude Code Studio',        // <title>, product name
     'CCS',                                   // the logo mark, product initials
     'GitHub',                                // company name
     'Claude Desktop',                        // Anthropic product name
@@ -314,7 +318,7 @@ console.log('\nno hardcoded user-facing strings:');
     check('scanCalls ignores t() calls and non-user-facing calls', chits.length, 2);
   }
 
-  for (const file of ['index.html', 'kanban.html', 'schedule.html']) {
+  for (const file of ['index.html', 'kanban.html', 'schedule.html', 'dashboard.html']) {
     const src = PAGE_DICTS[file] ? PAGE_DICTS[file].src
       : fs.readFileSync(path.join(ROOT, 'public', file), 'utf8');
     check(`${file}: no untranslated text or attribute in the markup`, scanMarkup(file, src), []);

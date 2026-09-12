@@ -197,27 +197,27 @@ body::after{
 <header class="hdr">
   <div class="hdr-l">
     <div class="logo">CCS</div>
-    <nav class="nav-sw" aria-label="Navigation">
-      <a class="nav-sw-btn" href="/" data-tip="Chat">
+    <nav class="nav-sw" aria-label="Navigation" data-i18n-aria="nav.aria">
+      <a class="nav-sw-btn" href="/" data-tip="Chat" data-i18n-tip="nav.chat">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        <span>Chat</span>
+        <span data-i18n="nav.chat">Chat</span>
       </a>
-      <a class="nav-sw-btn" href="/kanban" data-tip="Kanban">
+      <a class="nav-sw-btn" href="/kanban" data-tip="Kanban" data-i18n-tip="nav.kanban">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
-        <span>Kanban</span>
+        <span data-i18n="nav.kanban">Kanban</span>
       </a>
-      <a class="nav-sw-btn" href="/schedule" data-tip="Schedule">
+      <a class="nav-sw-btn" href="/schedule" data-tip="Schedule" data-i18n-tip="nav.schedule">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <span>Schedule</span>
+        <span data-i18n="nav.schedule">Schedule</span>
       </a>
-      <a class="nav-sw-btn active" href="/dashboard" data-tip="Dashboard">
+      <a class="nav-sw-btn active" href="/dashboard" data-tip="Dashboard" data-i18n-tip="nav.dashboard">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-        <span>Dashboard</span>
+        <span data-i18n="nav.dashboard">Dashboard</span>
       </a>
     </nav>
   </div>
   <div class="hdr-btns">
-    <button class="hb" onclick="loadData()" title="Refresh">
+    <button class="hb" onclick="loadData()" title="Refresh" data-i18n-title="hdr.refresh">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
     </button>
   </div>
@@ -235,14 +235,14 @@ body::after{
     <div class="card" id="heatmapCard">
       <div class="card-title">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-        Activity
+        <span data-i18n="card.activity">Activity</span>
       </div>
       <div class="heatmap-months" id="heatmapMonths"></div>
       <div class="heatmap-wrap"><div class="heatmap" id="heatmap"></div></div>
       <div class="heatmap-legend">
-        <span>Less</span>
+        <span data-i18n="heatmap.less">Less</span>
         <div class="hm-cell hm-0"></div><div class="hm-cell hm-1"></div><div class="hm-cell hm-2"></div><div class="hm-cell hm-3"></div><div class="hm-cell hm-4"></div>
-        <span>More</span>
+        <span data-i18n="heatmap.more">More</span>
       </div>
     </div>
 
@@ -251,14 +251,14 @@ body::after{
       <div class="card" id="toolsCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-          Tool Usage
+          <span data-i18n="card.tools">Tool Usage</span>
         </div>
         <div id="toolBars"></div>
       </div>
       <div class="card" id="gaugeCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Automation Index
+          <span data-i18n="card.automation">Automation Index</span>
         </div>
         <div class="gauge-wrap" id="gaugeWrap"></div>
       </div>
@@ -269,21 +269,21 @@ body::after{
       <div class="card" id="modelCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-          Models
+          <span data-i18n="card.models">Models</span>
         </div>
         <div id="modelDonut"></div>
       </div>
       <div class="card" id="agentCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-          Agent Modes
+          <span data-i18n="card.agentmodes">Agent Modes</span>
         </div>
         <div id="agentBars"></div>
       </div>
       <div class="card" id="hourCard">
         <div class="card-title">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Peak Hours
+          <span data-i18n="card.peakhours">Peak Hours</span>
         </div>
         <div class="hourly-bars" id="hourlyBars"></div>
         <div class="hour-labels" id="hourLabels"></div>
@@ -294,7 +294,7 @@ body::after{
     <div class="card" id="sessionsCard">
       <div class="card-title">
         <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        Top Sessions
+        <span data-i18n="card.topsessions">Top Sessions</span>
       </div>
       <div class="timeline" id="timeline"></div>
     </div>
@@ -323,6 +323,125 @@ function h(tag, attrs={}, children=[]){
 const COLORS = ['#7c6aef','#3fb950','#58a6ff','#e5a435','#f85149','#a371f7','#f778ba','#79c0ff','#d2a8ff','#ffa657'];
 const MODEL_COLORS = { opus:'#f85149', sonnet:'#7c6aef', haiku:'#3fb950' };
 
+// ─── i18n ──────────────────────────────────────────────────────────────────
+// Declarative i18n — same attribute contract as index.html/kanban.html/schedule.html:
+// the markup carries the key, applyI18nAttrs() fills in text/attributes for the
+// active language. Every user-facing literal must be routed through t(); see
+// test/i18n-completeness.test.js.
+let lang = localStorage.getItem('lang') || 'en';
+document.documentElement.lang = lang;
+document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
+
+const LOCALE_MAP = { uk:'uk-UA', en:'en-US', ru:'ru-RU', fr:'fr-FR', he:'he-IL' };
+function locale(){ return LOCALE_MAP[lang] || 'en-US'; }
+
+const TR = {
+  uk: {
+    'nav.aria':'Навігація між розділами','nav.chat':'Чат','nav.kanban':'Kanban дошка','nav.schedule':'Розклад','nav.dashboard':'Панель','hdr.refresh':'Оновити',
+    'page.title':'Панель — Claude Code Studio',
+    'card.activity':'Активність','card.tools':'Використання інструментів','card.automation':'Індекс автоматизації',
+    'card.models':'Моделі','card.agentmodes':'Режими агента','card.peakhours':'Пікові години','card.topsessions':'Топ сесій',
+    'heatmap.less':'Менше','heatmap.more':'Більше','heatmap.tip':'{date}: {n} повідомл.',
+    'hero.sessions.label':'Сесії','hero.sessions.sub':'усього розмов',
+    'hero.toolcalls.label':'Виклики інструментів','hero.messages.label':'Повідомлення',
+    'hero.timesaved.label':'Заощаджений час','hero.timesaved.sub':'орієнтовна економія від автоматизації',
+    'stat.avgPerSession':'{n} у середньому за сесію',
+    'tools.empty':'Немає даних про інструменти','common.nodata':'Немає даних','sessions.empty':'Немає сесій','session.untitled':'Без назви',
+    'gauge.toolautomation':'Автоматизація інструментів: {n} викликів',
+    'gauge.multiagent':'Мультиагентні сесії: {n}% використання інструментів',
+    'agent.single':'Один агент','agent.multi':'Мультиагент',
+    'hourly.tip':'{time} — {n} повідомл.','error.loadfailed':'Не вдалося завантажити аналітику',
+  },
+  en: {
+    'nav.aria':'Navigation','nav.chat':'Chat','nav.kanban':'Kanban board','nav.schedule':'Schedule','nav.dashboard':'Dashboard','hdr.refresh':'Refresh',
+    'page.title':'Dashboard — Claude Code Studio',
+    'card.activity':'Activity','card.tools':'Tool Usage','card.automation':'Automation Index',
+    'card.models':'Models','card.agentmodes':'Agent Modes','card.peakhours':'Peak Hours','card.topsessions':'Top Sessions',
+    'heatmap.less':'Less','heatmap.more':'More','heatmap.tip':'{date}: {n} msgs',
+    'hero.sessions.label':'Sessions','hero.sessions.sub':'conversations total',
+    'hero.toolcalls.label':'Tool Calls','hero.messages.label':'Messages',
+    'hero.timesaved.label':'Time Saved','hero.timesaved.sub':'estimated automation savings',
+    'stat.avgPerSession':'{n} avg per session',
+    'tools.empty':'No tool data','common.nodata':'No data','sessions.empty':'No sessions','session.untitled':'Untitled',
+    'gauge.toolautomation':'Tool automation: {n} calls',
+    'gauge.multiagent':'Multi-agent sessions: {n}% tool ratio',
+    'agent.single':'Single Agent','agent.multi':'Multi-Agent',
+    'hourly.tip':'{time} — {n} msgs','error.loadfailed':'Failed to load analytics',
+  },
+  ru: {
+    'nav.aria':'Навигация','nav.chat':'Чат','nav.kanban':'Kanban доска','nav.schedule':'Расписание','nav.dashboard':'Панель','hdr.refresh':'Обновить',
+    'page.title':'Панель — Claude Code Studio',
+    'card.activity':'Активность','card.tools':'Использование инструментов','card.automation':'Индекс автоматизации',
+    'card.models':'Модели','card.agentmodes':'Режимы агента','card.peakhours':'Пиковые часы','card.topsessions':'Топ сессий',
+    'heatmap.less':'Меньше','heatmap.more':'Больше','heatmap.tip':'{date}: {n} сообщ.',
+    'hero.sessions.label':'Сессии','hero.sessions.sub':'всего разговоров',
+    'hero.toolcalls.label':'Вызовы инструментов','hero.messages.label':'Сообщения',
+    'hero.timesaved.label':'Сэкономленное время','hero.timesaved.sub':'ориентировочная экономия от автоматизации',
+    'stat.avgPerSession':'{n} в среднем за сессию',
+    'tools.empty':'Нет данных об инструментах','common.nodata':'Нет данных','sessions.empty':'Нет сессий','session.untitled':'Без названия',
+    'gauge.toolautomation':'Автоматизация инструментов: {n} вызовов',
+    'gauge.multiagent':'Мультиагентные сессии: {n}% использования инструментов',
+    'agent.single':'Один агент','agent.multi':'Мультиагент',
+    'hourly.tip':'{time} — {n} сообщ.','error.loadfailed':'Не удалось загрузить аналитику',
+  },
+  fr: {
+    'nav.aria':'Navigation','nav.chat':'Discussion','nav.kanban':'Tableau Kanban','nav.schedule':'Planning','nav.dashboard':'Tableau de bord','hdr.refresh':'Actualiser',
+    'page.title':'Tableau de bord — Claude Code Studio',
+    'card.activity':'Activité','card.tools':'Utilisation des outils','card.automation':'Indice d’automatisation',
+    'card.models':'Modèles','card.agentmodes':'Modes agent','card.peakhours':'Heures de pointe','card.topsessions':'Meilleures sessions',
+    'heatmap.less':'Moins','heatmap.more':'Plus','heatmap.tip':'{date} : {n} messages',
+    'hero.sessions.label':'Sessions','hero.sessions.sub':'conversations au total',
+    'hero.toolcalls.label':'Appels d’outils','hero.messages.label':'Messages',
+    'hero.timesaved.label':'Temps économisé','hero.timesaved.sub':'économies estimées grâce à l’automatisation',
+    'stat.avgPerSession':'{n} en moyenne par session',
+    'tools.empty':'Aucune donnée sur les outils','common.nodata':'Aucune donnée','sessions.empty':'Aucune session','session.untitled':'Sans titre',
+    'gauge.toolautomation':'Automatisation des outils : {n} appels',
+    'gauge.multiagent':'Sessions multi-agents : {n} % de recours aux outils',
+    'agent.single':'Agent unique','agent.multi':'Multi-agent',
+    'hourly.tip':'{time} — {n} messages','error.loadfailed':'Échec du chargement des statistiques',
+  },
+  he: {
+    'nav.aria':'ניווט','nav.chat':'צ׳אט','nav.kanban':'לוח קנבן','nav.schedule':'לוח זמנים','nav.dashboard':'לוח מחוונים','hdr.refresh':'רענון',
+    'page.title':'לוח מחוונים — Claude Code Studio',
+    'card.activity':'פעילות','card.tools':'שימוש בכלים','card.automation':'מדד האוטומציה',
+    'card.models':'מודלים','card.agentmodes':'מצבי סוכן','card.peakhours':'שעות שיא','card.topsessions':'הסשנים המובילים',
+    'heatmap.less':'פחות','heatmap.more':'יותר','heatmap.tip':'{date}: {n} הודעות',
+    'hero.sessions.label':'סשנים','hero.sessions.sub':'סה"כ שיחות',
+    'hero.toolcalls.label':'קריאות לכלים','hero.messages.label':'הודעות',
+    'hero.timesaved.label':'זמן שנחסך','hero.timesaved.sub':'חיסכון משוער מאוטומציה',
+    'stat.avgPerSession':'{n} בממוצע לסשן',
+    'tools.empty':'אין נתוני כלים','common.nodata':'אין נתונים','sessions.empty':'אין סשנים','session.untitled':'ללא כותרת',
+    'gauge.toolautomation':'אוטומציית כלים: {n} קריאות',
+    'gauge.multiagent':'סשנים רב-סוכניים: {n}% שימוש בכלים',
+    'agent.single':'סוכן יחיד','agent.multi':'רב-סוכני',
+    'hourly.tip':'{time} — {n} הודעות','error.loadfailed':'טעינת הנתונים נכשלה',
+  },
+};
+function t(k){ return (TR[lang]||TR.en)[k] || k; }
+
+function applyI18nAttrs(root){
+  const r = root || document;
+  r.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  for(const [attr, target] of [['data-i18n-ph','placeholder'], ['data-i18n-title','title'],
+                                ['data-i18n-aria','aria-label'], ['data-i18n-tip','data-tip']]){
+    r.querySelectorAll('[' + attr + ']').forEach(el => { el.setAttribute(target, t(el.getAttribute(attr))); });
+  }
+}
+function applyStaticI18n(){
+  document.title = t('page.title');
+  applyI18nAttrs();
+}
+// /api/config carries `lang` set from the main app; adopt it so this page
+// matches whatever language the user picked there, not just localStorage.
+function adoptServerLang(srvLang){
+  if(!srvLang || srvLang === lang || !TR[srvLang]) return;
+  lang = srvLang;
+  localStorage.setItem('lang', lang);
+  document.documentElement.lang = lang;
+  document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
+  applyI18nAttrs();
+}
+
 // --- Data loading ---
 async function loadData(){
   const loader = $('#loader');
@@ -336,7 +455,7 @@ async function loadData(){
     render(d);
     content.style.display = '';
   } catch(e){
-    content.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>Failed to load analytics</p><small>${e.message}</small></div>`;
+    content.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>${t('error.loadfailed')}</p><small>${e.message}</small></div>`;
     content.style.display = '';
   } finally {
     loader.style.display = 'none';
@@ -359,10 +478,10 @@ function render(d){
 function renderHero(d){
   const s = d.summary;
   const cards = [
-    { label:'Sessions', value:s.total_sessions, sub:'conversations total', icon:'<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>' },
-    { label:'Tool Calls', value:fmtNum(s.total_tool_calls), sub:`${Math.round(s.total_tool_calls/Math.max(1,s.total_sessions))} avg per session`, icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>' },
-    { label:'Messages', value:fmtNum(s.total_messages), sub:`${d.sessionStats?.avg_messages_per_session || 0} avg per session`, icon:'<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>' },
-    { label:'Time Saved', value:`~${s.estimated_hours_saved}h`, sub:'estimated automation savings', icon:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { label:t('hero.sessions.label'), value:s.total_sessions, sub:t('hero.sessions.sub'), icon:'<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>' },
+    { label:t('hero.toolcalls.label'), value:fmtNum(s.total_tool_calls), sub:t('stat.avgPerSession').replace('{n}', Math.round(s.total_tool_calls/Math.max(1,s.total_sessions))), icon:'<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>' },
+    { label:t('hero.messages.label'), value:fmtNum(s.total_messages), sub:t('stat.avgPerSession').replace('{n}', d.sessionStats?.avg_messages_per_session || 0), icon:'<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>' },
+    { label:t('hero.timesaved.label'), value:`~${s.estimated_hours_saved}h`, sub:t('hero.timesaved.sub'), icon:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
   ];
   const row = $('#heroRow');
   row.innerHTML = '';
@@ -404,13 +523,14 @@ function renderHeatmap(daily){
   const maxCount = Math.max(1, ...cells.map(c=>c.count));
   cells.forEach(c => {
     const level = c.count === 0 ? 0 : Math.min(4, Math.ceil(c.count / maxCount * 4));
-    const el = h('div',{class:`hm-cell hm-${level}`, 'data-tip':`${c.date}: ${c.count} msgs`});
+    const el = h('div',{class:`hm-cell hm-${level}`, 'data-tip':t('heatmap.tip').replace('{date}', c.date).replace('{n}', c.count)});
     hm.appendChild(el);
   });
 
   // Month labels
   const weeks = Math.ceil((firstDow + cells.length) / 7);
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthFmt = new Intl.DateTimeFormat(locale(), { month:'short' });
+  const monthNames = [...Array(12).keys()].map(m => monthFmt.format(new Date(2024, m, 1)));
   let lastMonth = -1;
   const monthSpans = [];
   for(let w = 0; w < weeks; w++){
@@ -431,7 +551,7 @@ function renderHeatmap(daily){
 function renderTools(tools){
   const wrap = $('#toolBars');
   wrap.innerHTML = '';
-  if(!tools.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No tool data</div>'; return; }
+  if(!tools.length){ wrap.innerHTML=`<div style="color:var(--muted);font-size:13px">${t('tools.empty')}</div>`; return; }
   const max = tools[0].count;
   const colorClasses = ['c1','c2','c3','c4','c5','c6'];
   tools.slice(0,10).forEach((t,i) => {
@@ -467,8 +587,8 @@ function renderGauge(score, summary){
     </svg>
     <div class="gauge-score">${score}</div>
     <div class="gauge-label">
-      Tool automation: ${summary.total_tool_calls} calls<br>
-      Multi-agent sessions: ${Math.round((summary.total_messages > 0 ? summary.total_tool_calls/summary.total_messages : 0)*100)}% tool ratio
+      ${t('gauge.toolautomation').replace('{n}', summary.total_tool_calls)}<br>
+      ${t('gauge.multiagent').replace('{n}', Math.round((summary.total_messages > 0 ? summary.total_tool_calls/summary.total_messages : 0)*100))}
     </div>`;
 }
 
@@ -476,7 +596,7 @@ function renderGauge(score, summary){
 function renderModelDonut(models){
   const wrap = $('#modelDonut');
   const total = models.reduce((a,m)=>a+m.count,0);
-  if(!total){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No data</div>'; return; }
+  if(!total){ wrap.innerHTML=`<div style="color:var(--muted);font-size:13px">${t('common.nodata')}</div>`; return; }
 
   const r = 40, cx = 55, cy = 55, sw = 16;
   const circ = 2 * Math.PI * r;
@@ -509,8 +629,8 @@ function renderAgentBars(modes){
   const wrap = $('#agentBars');
   wrap.innerHTML = '';
   const total = modes.reduce((a,m)=>a+m.count,0);
-  if(!total){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No data</div>'; return; }
-  const labels = { single:'Single Agent', multi:'Multi-Agent' };
+  if(!total){ wrap.innerHTML=`<div style="color:var(--muted);font-size:13px">${t('common.nodata')}</div>`; return; }
+  const labels = { single:t('agent.single'), multi:t('agent.multi') };
   const colors = { single:'c3', multi:'c1' };
   modes.forEach(m => {
     const pct = Math.max(5, m.count/total*100);
@@ -539,7 +659,8 @@ function renderHourly(hourly){
 
   byHour.forEach((count, hour) => {
     const pct = Math.max(2, count/max*100);
-    bars.innerHTML += `<div class="hourly-bar" style="height:${pct}%" data-tip="${String(hour).padStart(2,'0')}:00 — ${count} msgs"></div>`;
+    const tip = t('hourly.tip').replace('{time}', String(hour).padStart(2,'0')+':00').replace('{n}', count);
+    bars.innerHTML += `<div class="hourly-bar" style="height:${pct}%" data-tip="${escHtml(tip)}"></div>`;
     if(hour % 3 === 0) labels.innerHTML += `<span>${String(hour).padStart(2,'0')}</span>`;
     else labels.innerHTML += `<span></span>`;
   });
@@ -549,18 +670,20 @@ function renderHourly(hourly){
 function renderTimeline(sessions){
   const wrap = $('#timeline');
   wrap.innerHTML = '';
-  if(!sessions.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No sessions</div>'; return; }
+  if(!sessions.length){ wrap.innerHTML=`<div style="color:var(--muted);font-size:13px">${t('sessions.empty')}</div>`; return; }
+  const modeLabels = { single:t('agent.single'), multi:t('agent.multi') };
   sessions.forEach((s,i) => {
     const model = s.model || 'sonnet';
-    const date = s.created_at ? new Date(s.created_at).toLocaleDateString('uk-UA',{day:'numeric',month:'short'}) : '';
-    const title = s.title || 'Untitled';
+    const date = s.created_at ? new Date(s.created_at).toLocaleDateString(locale(),{day:'numeric',month:'short'}) : '';
+    const title = s.title || t('session.untitled');
     const proj = s.workdir ? s.workdir.split('/').pop() : '';
+    const mode = modeLabels[s.agent_mode] || escHtml(s.agent_mode || 'single');
     wrap.innerHTML += `
       <div class="tl-item" onclick="window.location='/?open_session=${encodeURIComponent(s.id)}'">
         <div class="tl-rank">${i+1}</div>
         <div class="tl-info">
           <div class="tl-title">${escHtml(title)}</div>
-          <div class="tl-meta">${proj ? '<span class="tl-proj">'+escHtml(proj)+'</span> &middot; ' : ''}${date} &middot; ${s.msg_count} msgs &middot; ${s.tool_count} tools &middot; ${escHtml(s.agent_mode||'single')}</div>
+          <div class="tl-meta">${proj ? '<span class="tl-proj">'+escHtml(proj)+'</span> &middot; ' : ''}${date} &middot; ${s.msg_count} msgs &middot; ${s.tool_count} tools &middot; ${mode}</div>
         </div>
         <div class="tl-badge ${escHtml(model)}">${escHtml(model)}</div>
       </div>`;
@@ -571,6 +694,13 @@ function renderTimeline(sessions){
 function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // --- Init ---
+applyStaticI18n();
+(async () => {
+  try {
+    const rc = await fetch('/api/config', { credentials:'include' });
+    if(rc.ok){ const config = await rc.json(); adoptServerLang(config && config.lang); }
+  } catch {}
+})();
 loadData();
 </script>
 </body>
