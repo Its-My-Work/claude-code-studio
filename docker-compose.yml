@@ -56,9 +56,9 @@ services:
         limits:
           cpus: '0.8'
           memory: 2G
+          pids: 1024
         reservations:
           memory: 512M
-    pids_limit: 1024
     networks:
       - easypanel
 
