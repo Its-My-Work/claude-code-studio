@@ -28,7 +28,13 @@ const INSTRUCTION_FILES = ['CLAUDE.md', 'AGENTS.md'];
 
 // A runaway AGENTS.md ends up in the argv of every spawn. 64 KB is far above any
 // hand-written conventions file and well under the platform argv ceilings the rest
-// of the prompt also has to fit inside (~256 KB on macOS, ~2 MB on Linux).
+// of the prompt also has to fit inside (~1 MB on macOS, ~2 MB on Linux).
+//
+// This is an ARGV budget and nothing else. The subscription engine used to hand the
+// same prompt to tmux as part of a `new-session` COMMAND, which its imsg transport
+// caps at ~16 KB — a 25 KB AGENTS.md was legal here and still could not start a
+// session (issue #96). That path now writes the invocation to a script and passes a
+// path, so this limit is once again the only one that applies.
 const MAX_BYTES = 65536;
 
 function isFile(p) {

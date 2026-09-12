@@ -91,6 +91,7 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 // CLAUDE.md / AGENTS.md discovery + the AGENTS.md system-prompt block (issue #54).
 const agentsMd = require('./agents-md');
+const gitClone = require('./git-clone');
 // Read-only remote file browsing (issue #57). Its path guard is POSIX-only on
 // purpose — see the header of the module.
 const remoteFiles = require('./remote-files');
@@ -1792,14 +1793,18 @@ function markActivityDirty() {
 
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
 const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5', 10));
+// `taskRunning` is the authoritative count for the MAX_TASK_WORKERS cap: startTask()
+// adds an id synchronously on entry and its finally removes it, so the set is exactly
+// "task subprocesses this process has alive". The DB cannot answer that question — a
+// `session_id IS NULL` count vanished as soon as startTask() assigned a session (the
+// cap reset each tick → unbounded parallel `claude`), and an `in_progress` count also
+// includes rows stranded by a crashed worker.
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
-// task IDs started via the independent-worker path. Authoritative count for the
-// MAX_TASK_WORKERS cap — DB session_id can't be used, because startTask() assigns
-// a session to every independent task on launch, so they'd vanish from a
-// `session_id IS NULL` count on the very next processQueue tick (the old bug let
-// the cap reset each tick → unbounded parallel `claude` subprocesses).
+// task IDs started via the independent-worker path. Not a cap counter — the cap is
+// global (see processQueue) — this only tells /api/running-sessions whether a task row
+// still has a worker behind it.
 const independentRunning = new Set();
 // Tasks already reported as waiting on a BOARD dependency — see the depends_on gate
 // in processQueue. The gate runs on every tick; without this the same task would warn
@@ -2675,8 +2680,8 @@ function processQueue() {
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
   // Workdir-level lock: prevents parallel chain tasks from writing to the same directory concurrently
   const occupiedWorkdirs = new Set(inProg.filter(t => t.workdir).map(t => t.workdir));
-  // Count independent running tasks via the in-memory registry (see independentRunning decl)
-  let indepRunning = independentRunning.size;
+  // Live worker count for the MAX_TASK_WORKERS cap — see the gate below.
+  let running = taskRunning.size;
   const startedSids = new Set();
   const startedWorkdirs = new Set();
   for (const task of todo) {
@@ -2746,22 +2751,32 @@ function processQueue() {
     // Workdir lock: only for chain tasks — prevents parallel chains from conflicting in the same directory.
     // Independent tasks (no chain_id) can run in parallel per workdir; the user explicitly chose concurrency.
     if (task.chain_id && task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
+    // MAX_TASK_WORKERS is a GLOBAL cap on `claude` subprocesses started by this queue,
+    // which is what .env.example and the settings row have always promised ("max
+    // parallel Claude Code processes for Kanban tasks"). It used to guard the
+    // independent branch ONLY, so any task carrying a session_id — every chain member,
+    // and every task the create modal attached to an existing chat — started outside
+    // the cap: the per-session and (chain-only) per-workdir locks were the sole limit,
+    // so N chains ran N subprocesses at MAX_TASK_WORKERS=1 (issue #90).
+    //
+    // The gate sits AFTER the dependency gate on purpose: blockedStillParked is filled
+    // there, and skipping it at the cap would drop the latch and re-warn every tick.
+    // `continue`, not `break`, for the same reason.
+    if (running >= MAX_TASK_WORKERS) continue;
     if (task.session_id) {
       // Shared session: one at a time per session
       if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id) && !isSessionLive(task.session_id)) {
         occupiedSids.add(task.session_id);
         startedSids.add(task.session_id);
         if (task.workdir) startedWorkdirs.add(task.workdir);
+        running++;
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     } else {
-      // Independent: up to MAX_TASK_WORKERS concurrent
-      if (indepRunning < MAX_TASK_WORKERS) {
-        indepRunning++;
-        independentRunning.add(task.id);
-        if (task.workdir) startedWorkdirs.add(task.workdir);
-        startTask(task).catch(e => { independentRunning.delete(task.id); console.error('[taskWorker]', e); });
-      }
+      independentRunning.add(task.id);
+      if (task.workdir) startedWorkdirs.add(task.workdir);
+      running++;
+      startTask(task).catch(e => { independentRunning.delete(task.id); console.error('[taskWorker]', e); });
     }
   }
   // Reconcile the latch with what this pass actually saw. Note the loop `continue`s
@@ -9565,15 +9580,101 @@ app.post('/api/projects', (req,res) => {
       try { execSync('git init', { cwd:workdir, stdio:'pipe' }); actions.push('git init'); }
       catch(e) { return res.json({ ok:true, id:null, actions, gitError:(e.stderr?.toString()||e.message).trim() }); }
     }
-    const projects = loadProjects();
-    const existing = projects.find(p => p.workdir === workdir);
-    if (existing) { existing.name = name; saveProjects(projects); return res.json({ ok:true, id:existing.id, actions, updated:true }); }
-    const id = 'proj-' + genId();
-    projects.push({ id, name, workdir, createdAt:new Date().toISOString() });
-    saveProjects(projects);
-    if (telegramBot) telegramBot.notifyProjectAdded(workdir, name).catch(() => {});
-    res.json({ ok:true, id, actions });
+    const { id, updated } = registerLocalProject(name, workdir);
+    res.json({ ok:true, id, actions, ...(updated ? { updated:true } : {}) });
   } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// Register (or rename) a LOCAL project row. Shared by the plain create above and
+// the clone below so the two cannot disagree about what a project record is.
+function registerLocalProject(name, workdir) {
+  const projects = loadProjects();
+  const existing = projects.find(p => p.workdir === workdir);
+  if (existing) { existing.name = name; saveProjects(projects); return { id: existing.id, updated: true }; }
+  const id = 'proj-' + genId();
+  projects.push({ id, name, workdir, createdAt: new Date().toISOString() });
+  saveProjects(projects);
+  if (telegramBot) telegramBot.notifyProjectAdded(workdir, name).catch(() => {});
+  return { id, updated: false };
+}
+
+// ─── Add project from a Git URL (issue #94) ──────────────────────────────────
+// Clones <url> into <parentDir>/<dirName || repo name> and registers it as a local
+// project. The parent is a directory the user browsed to in the same modal, so it
+// goes through the same isPathAllowed() gate as a plain create — a registered
+// workdir widens that allowlist, which is why the check cannot be skipped here.
+// Validation of the URL, the branch and the directory name lives in git-clone.js.
+// Local projects only: a clone on a remote host would need to run over SSH, and
+// the remote project flow already takes an existing path.
+const GIT_CLONE_TIMEOUT_MS = parseInt(process.env.CCS_GIT_CLONE_TIMEOUT_MS || '600000', 10) || 600000;
+// A clone holds its request open for as long as it runs, writes into the filesystem
+// and costs a network fetch. Two at a time is generous for a tool one person drives;
+// without a cap, a page that fires the button in a loop fills the disk.
+const MAX_CONCURRENT_CLONES = 2;
+let clonesInFlight = 0;
+app.post('/api/projects/clone', (req, res) => {
+  const { url, branch = '', parentDir, name = '', dirName = '', shallow = false } = req.body || {};
+  const parsed = gitClone.parseCloneUrl(url);
+  if (!parsed) return res.status(400).json({ error: 'unsupported git url (http(s), ssh, git or user@host:path)' });
+  if (branch && !gitClone.isValidBranch(branch)) return res.status(400).json({ error: 'invalid branch name' });
+  if (dirName && !gitClone.isValidDirName(dirName)) return res.status(400).json({ error: 'invalid directory name' });
+  if (!parentDir || typeof parentDir !== 'string') return res.status(400).json({ error: 'parentDir required' });
+  if (!isPathAllowed(parentDir)) return res.status(403).json({ error: 'path not allowed' });
+  // The parent is resolved to its PHYSICAL path and re-checked: isPathAllowed() reads
+  // a string, so a symlink inside an allowed root otherwise points the clone anywhere
+  // on disk. Same rule the remote browser's layer 2 applies with `pwd -P`.
+  let parent;
+  try { parent = fs.realpathSync(path.resolve(parentDir)); } catch { return res.status(400).json({ error: 'parent directory does not exist' }); }
+  if (!isPathAllowed(parent)) return res.status(403).json({ error: 'path not allowed' });
+  let parentIsDir = false;
+  try { parentIsDir = fs.statSync(parent).isDirectory(); } catch {}
+  if (!parentIsDir) return res.status(400).json({ error: 'parent directory does not exist' });
+  const dir = dirName || parsed.repoName;
+  const target = path.join(parent, dir);
+  // lstat, not existsSync: a DANGLING symlink at the target does not "exist", and git
+  // would follow it and populate whatever it names.
+  let targetTaken = true;
+  try { fs.lstatSync(target); } catch { targetTaken = false; }
+  if (targetTaken) return res.status(409).json({ error: `already exists: ${target}` });
+  if (clonesInFlight >= MAX_CONCURRENT_CLONES) return res.status(429).json({ error: 'another clone is already running' });
+
+  const args = gitClone.cloneArgs({ url: parsed.url, target, branch, shallow: !!shallow });
+  let stderr = '';
+  let child;
+  // `git clone` is a parent to git-remote-https / ssh / index-pack, and killing it
+  // alone leaves those writing into the tree the timeout handler is about to remove.
+  // A detached child is its own process GROUP, so one kill reaches all of them.
+  const ownGroup = process.platform !== 'win32';
+  try {
+    // stdin is closed, GIT_TERMINAL_PROMPT=0 and no TTY: a credential or host-key
+    // question fails at once instead of holding the request until the timeout.
+    child = spawnProc('git', args, { cwd: parent, env: gitClone.cloneEnv(), stdio: ['ignore', 'ignore', 'pipe'], detached: ownGroup });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+  clonesInFlight++;
+  child.stderr.on('data', d => { if (stderr.length < 8192) stderr += String(d); });
+  const timer = setTimeout(() => {
+    try { if (ownGroup) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); }
+    catch { try { child.kill('SIGKILL'); } catch {} }
+  }, GIT_CLONE_TIMEOUT_MS);
+  let settled = false;
+  const finish = (code, err) => {
+    if (settled) return;
+    settled = true;
+    clonesInFlight--;
+    clearTimeout(timer);
+    if (err || code !== 0) {
+      // git removes its own half-clone on failure; a SIGKILL from the timer does not.
+      try { fs.rmSync(target, { recursive: true, force: true }); } catch {}
+      const detail = (stderr.trim().split('\n').filter(Boolean).pop() || (err && err.message) || `git exited ${code}`).slice(0, 400);
+      log.warn('project-clone-failed', { url: parsed.url, target, code, detail });
+      return res.status(502).json({ error: detail });
+    }
+    const { id, updated } = registerLocalProject(String(name || '').trim() || dir, target);
+    log.info('project-cloned', { url: parsed.url, target, id });
+    res.json({ ok: true, id, workdir: target, actions: ['git clone'], ...(updated ? { updated: true } : {}) });
+  };
+  child.on('error', e => finish(null, e));
+  child.on('exit', code => finish(code, null));
 });
 
 app.post('/api/projects/reorder', (req, res) => {
@@ -13348,6 +13449,10 @@ server.listen(PORT, HOST, () => {
     port:      PORT,
     url:       `http://localhost:${PORT}`,
     workdir:   WORKDIR,
+    // Resolved, not raw: MAX_TASK_WORKERS goes through Math.max(1, parseInt(…)), so a
+    // typo ("one", "1 ") silently becomes the default and the operator had no way to
+    // see it. Asked for in issue #90.
+    taskWorkers: MAX_TASK_WORKERS,
     setup:     auth.isSetupDone() ? 'done' : 'required',
     nodeEnv:   process.env.NODE_ENV || 'development',
     logLevel:  process.env.LOG_LEVEL || 'info',
