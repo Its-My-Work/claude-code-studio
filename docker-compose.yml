@@ -15,6 +15,18 @@ services:
       - workspace:/app/workspace
       - skills:/app/skills
       - claude-home:/home/node/.claude
+      # The hh project used to be a git-less snapshot dropped into the workspace
+      # volume (no remote, one auto-commit, silently drifting from the real
+      # deploy). Bind-mount the actual git checkout Easypanel builds `hh` from
+      # instead, so edits here land in the real source and a redeploy of hh
+      # picks them up directly — chowned to uid/gid 1000 (this container's
+      # `node` user) so it's actually writable, not just readable.
+      - /etc/easypanel/projects/hh/hh/code:/app/workspace/hh
+      # hh's live runtime data (hh.ru sessions/tokens, resumes, etc.) — read-only:
+      # letting an unrelated container write into it risks corrupting whatever
+      # hh itself is concurrently reading/writing (e.g. a sqlite file), and
+      # there's no reason this side needs write access to see it.
+      - /etc/easypanel/projects/hh/hh/volumes/hh-data:/app/workspace/hh-data:ro
     environment:
       - PORT=3000
       # Inside the container the app must listen on all interfaces, otherwise the
