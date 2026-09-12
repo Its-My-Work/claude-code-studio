@@ -18183,6 +18183,15 @@ function _createTerminal(sessionId) {
     if (term.hasSelection && term.hasSelection()) return;
     try { term.focus(); } catch {}
   });
+  // xterm has no built-in copy-on-select (that was an xterm v4 option, removed
+  // upstream); a right-click here also can't fall back to the browser's native
+  // "Copy" because xterm's own selection handling clears the selection on the
+  // right mousedown before the context menu opens. Do the copy ourselves the
+  // moment a selection is made, same UX as most terminal apps offer.
+  term.onSelectionChange(() => {
+    if (!term.hasSelection()) return;
+    copyText(term.getSelection()).catch(() => {});
+  });
   _connectTerminalWs(sessionId);
   return entry;
 }
