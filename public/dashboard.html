@@ -439,7 +439,7 @@ function adoptServerLang(srvLang){
   localStorage.setItem('lang', lang);
   document.documentElement.lang = lang;
   document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
-  applyI18nAttrs();
+  applyStaticI18n();
 }
 
 // --- Data loading ---
@@ -694,14 +694,18 @@ function renderTimeline(sessions){
 function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // --- Init ---
-applyStaticI18n();
+// Adopt the server's language BEFORE the first render, the way kanban.html does:
+// loadData() bakes t() into the dynamic markup (hero cards, gauges, tooltips), so
+// a language that lands after it leaves those in one language and the static
+// labels in another.
 (async () => {
   try {
     const rc = await fetch('/api/config', { credentials:'include' });
     if(rc.ok){ const config = await rc.json(); adoptServerLang(config && config.lang); }
   } catch {}
+  applyStaticI18n();
+  loadData();
 })();
-loadData();
 </script>
 </body>
 </html>
