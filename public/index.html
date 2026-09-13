@@ -18179,8 +18179,20 @@ function _createTerminal(sessionId) {
   // browser restoring focus after an alt-tab — leaves the pane visually active but
   // deaf. A click on it is an unambiguous "I am typing here"; don't steal focus back
   // when the user is dragging out a selection.
+  //
+  // Copy-on-select rides the same mouseup. xterm has no built-in option for it
+  // (that was an xterm v4 option, removed upstream), and a right-click can't
+  // fall back to the browser's native "Copy" because xterm clears the selection
+  // on the right mousedown before the context menu opens. It is NOT wired to
+  // `term.onSelectionChange`: that fires from the selection service's refresh on
+  // every animation frame while the mouse is still dragging, which is a
+  // clipboard write per frame — and over plain http `copyText()` falls back to a
+  // focused off-screen textarea, so it would also steal focus mid-drag.
   host.addEventListener('mouseup', () => {
-    if (term.hasSelection && term.hasSelection()) return;
+    if (term.hasSelection && term.hasSelection()) {
+      copyText(term.getSelection()).catch(() => {});
+      return;
+    }
     try { term.focus(); } catch {}
   });
   _connectTerminalWs(sessionId);
