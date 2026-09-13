@@ -203,8 +203,13 @@ check('a reconnect refocuses the pane',
   /ws\.onopen = \(\) => \{[\s\S]{0,700}?requestAnimationFrame\(\(\) => \{ try \{ term\.focus\(\); \} catch \{\} \}\);/.test(TB), true);
 check('clicking the pane refocuses it',
   /host\.addEventListener\('mouseup'[\s\S]{0,260}?term\.focus\(\)/.test(TB), true);
-check('but not while a selection is being dragged out',
-  /host\.addEventListener\('mouseup'[\s\S]{0,160}?if \(term\.hasSelection && term\.hasSelection\(\)\) return;/.test(TB), true);
+check('but not while a selection is being dragged out — that mouseup copies the selection instead',
+  /host\.addEventListener\('mouseup'[\s\S]{0,160}?if \(term\.hasSelection && term\.hasSelection\(\)\) \{\s*copyText\(term\.getSelection\(\)\)[^\n]*\n\s*return;/.test(TB), true);
+// xterm fires onSelectionChange from the selection service's refresh on every
+// animation frame while the mouse is still dragging — a clipboard write per frame,
+// and over plain http copyText()'s textarea fallback steals focus mid-drag.
+check('copy-on-select is not wired to term.onSelectionChange',
+  /term\.onSelectionChange\(/.test(TB), false);
 
 console.log('\n— i18n: the three new keys exist in all five locales —');
 
