@@ -11838,6 +11838,17 @@ inEl.addEventListener('paste', e => {
 function sendChat(text) { inEl.value = text; send(); }
 
 async function send() {
+  // _globalDefaultEngine starts hardcoded 'api' and only becomes the real
+  // configured default once checkVersion()'s /api/version fetch resolves
+  // (see resolveEngineForView()). A message sent before that fetch lands —
+  // e.g. the very first message of a fresh page load — used to go out with
+  // curEngine still on that placeholder 'api', and the server bakes whatever
+  // `engine` arrives into the session's run_engine permanently (server.js
+  // ~11914). That silently routed billing through the API key instead of the
+  // user's actually-configured Subscription default, and stuck that way for
+  // the life of the chat. Awaiting an already-settled promise is a no-op, so
+  // this costs nothing once the page has been open for more than an instant.
+  if (typeof _versionCheckDone !== 'undefined') { try { await _versionCheckDone; } catch {} }
   if (!ws || ws.readyState !== 1) { toast(t('toast.no_connection'), true); return; }
 
   const txt = inEl.value.trim();
@@ -17571,7 +17582,7 @@ loadCfg();
 _projectsReady = loadProjectsList();
 loadRemoteHosts();
 connect();
-checkVersion();
+let _versionCheckDone = checkVersion();
 // ─── Image chip hover preview ───
 {
   const _prev = $i('imgChipPreview');
