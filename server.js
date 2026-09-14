@@ -885,6 +885,13 @@ try { db.exec(`ALTER TABLE bots ADD COLUMN deleted_at TEXT`); } catch {}
 // bots that only make sense somewhere specific. Default 0 — existing bots keep the
 // availability they already have.
 try { db.exec(`ALTER TABLE bots ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0`); } catch {}
+// room_priority: seating order for `conversation` mode (bots.js:planRoom takes the
+// first ROOM_MAX after this sort). Plain alphabetical-by-label sorting always seats
+// the same handful and never the rest, no matter how relevant they are to what's
+// actually being discussed — a security-heavy chat still never seats the security
+// bot if her label sorts past position 6. NULL (unset) keeps today's alphabetical
+// order; a lower number sorts earlier.
+try { db.exec(`ALTER TABLE bots ADD COLUMN room_priority INTEGER`); } catch {}
 // A task can be assigned to a bot: it then runs with that bot's system prompt and
 // model, and its output is attributed to the bot. Combined with the scheduling
 // columns already here (scheduled_at / recurrence) this is what makes a recurring
@@ -956,7 +963,7 @@ const stmts = {
   // restart replayed the message the user had already corrected.
   updQueuedMsg: db.prepare(`UPDATE queued_messages SET payload=? WHERE id=?`),
   allQueuedMsgs: db.prepare(`SELECT * FROM queued_messages ORDER BY id`),
-  listBots: db.prepare(`SELECT * FROM bots WHERE deleted_at IS NULL ORDER BY label COLLATE NOCASE`),
+  listBots: db.prepare(`SELECT * FROM bots WHERE deleted_at IS NULL ORDER BY COALESCE(room_priority, 999), label COLLATE NOCASE`),
   getBot: db.prepare(`SELECT * FROM bots WHERE id=? AND deleted_at IS NULL`),
   // Includes soft-deleted rows: used to reserve handles and to attribute old messages.
   getBotAny: db.prepare(`SELECT * FROM bots WHERE id=?`),
@@ -966,7 +973,7 @@ const stmts = {
   listProjectBots: db.prepare(`SELECT b.* FROM bots b
     LEFT JOIN project_bots pb ON pb.bot_id=b.id AND pb.project_id=?
     WHERE b.deleted_at IS NULL AND (b.is_global=1 OR pb.bot_id IS NOT NULL)
-    ORDER BY b.label COLLATE NOCASE`),
+    ORDER BY COALESCE(b.room_priority, 999), b.label COLLATE NOCASE`),
   addBotToProject: db.prepare(`INSERT INTO project_bots (project_id,bot_id) VALUES (?,?)
     ON CONFLICT(project_id,bot_id) DO NOTHING`),
   removeBotFromProject: db.prepare(`DELETE FROM project_bots WHERE project_id=? AND bot_id=?`),
@@ -989,13 +996,14 @@ const stmts = {
   // node:sqlite (Node >= 22.5), whose named-parameter binding differs from
   // better-sqlite3's and rejects `@name` objects with "column index out of range".
   // `excluded.` lets the upsert reuse the same nine values without repeating them.
-  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar,is_global)
-    VALUES (?,?,?,?,?,?,?,?,?,?)
+  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar,is_global,room_priority)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET
       label=excluded.label, description=excluded.description, engine=excluded.engine,
       model=excluded.model, system_prompt=excluded.system_prompt,
       active_skills=excluded.active_skills, active_mcp=excluded.active_mcp,
-      avatar=excluded.avatar, is_global=excluded.is_global, updated_at=datetime('now')`),
+      avatar=excluded.avatar, is_global=excluded.is_global, room_priority=excluded.room_priority,
+      updated_at=datetime('now')`),
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
@@ -11016,6 +11024,7 @@ function saveBot(req, res, mode) {
       // sequence is many, so slicing by unit can cut a surrogate pair in half.
       Array.from(String(keep('avatar', prev.avatar || ''))).slice(0, 8).join(''),
       (body.isGlobal === undefined ? (prev.is_global ? 1 : 0) : (body.isGlobal ? 1 : 0)),
+      (body.roomPriority === undefined ? (prev.room_priority ?? null) : (Number.isInteger(body.roomPriority) ? body.roomPriority : null)),
     );
   } catch (e) {
     log.error('bot save failed', { handle, err: e.message });
