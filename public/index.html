@@ -4464,7 +4464,7 @@ const streaming = {
 };
 let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
-let autoSkillsMode = true; // ON by default; user can disable
+let autoSkillsMode = false; // OFF by default — the classifier is greedy about attaching skill content to every message's token cost; user can enable
 let cfgFiles = {}, activeCfgTab = null;
 // Settings form (issue #40): last /api/config/resolved payload + collapsed sections.
 let cfgResolved = null;
