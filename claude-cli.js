@@ -266,7 +266,22 @@ class ClaudeCLI {
 
     // --tools: control which built-in tools are available.
     // "" disables all tools, "default" enables all, or specify names (e.g. "Bash,Edit,Read").
-    if (typeof tools === 'string') args.push('--tools', tools);
+    if (typeof tools === 'string') {
+      args.push('--tools', tools);
+    } else if (allowedTools?.length) {
+      // --allowedTools alone is a permission FILTER on top of whatever tools the
+      // CLI makes available by default — it does not shrink what gets sent to the
+      // API. Every caller here passes a short, fixed built-in tool list (9 or
+      // fewer), but the CLI's actual default built-in set is bigger, so its full
+      // schemas were being generated and cached on every session regardless of
+      // this list (measured: ~18.5k tokens default vs ~7k restricted via --tools
+      // for the same 9 names — real API usage, not a guess). MCP tools
+      // (mcp__server__tool) aren't part of "the built-in set" --tools restricts;
+      // they stay governed by mcpServers + allowedTools alone, so filtering them
+      // out here doesn't touch ask_user/notify_user/etc. availability.
+      const builtins = allowedTools.filter(t => !/^mcp__/.test(t));
+      if (builtins.length) args.push('--tools', builtins.join(','));
+    }
 
     // allowedTools: pass each tool as separate arg (variadic)
     if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
