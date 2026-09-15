@@ -439,8 +439,18 @@ function planInboxDelivery({ letters, now, max, ttlMs } = {}) {
 // artifact, which is what keeps "exactly one budget object per turn" true.
 const ROOM_MIN = 2;
 const ROOM_MAX = 6;
-const ROOM_MAX_MESSAGES = 10;
-const ROOM_MAX_ROUNDS = 3;
+// Overridable via env (ROOM_MAX_MESSAGES / ROOM_MAX_ROUNDS, see docker-compose.yml) so an
+// admin can raise the budget without a code change. A tool-heavy room — research + file
+// edits + a QA verification pass, not just talk — burns through the message cap faster
+// than pure discussion, and can hit it mid-fix rather than after: seen live 2026-09-15,
+// where the cap cut the room right after a bot flagged a security contradiction and
+// before anyone could act on the fix. Invalid or unset falls back to the design default.
+function envInt(name, def) {
+  const n = parseInt(process.env[name], 10);
+  return Number.isInteger(n) && n > 0 ? n : def;
+}
+const ROOM_MAX_MESSAGES = envInt('ROOM_MAX_MESSAGES', 10);
+const ROOM_MAX_ROUNDS = envInt('ROOM_MAX_ROUNDS', 3);
 
 // Who sits in the room. Over the cap the extras are NAMED rather than dropped quietly —
 // a room that silently ignored half the roster would look like a bug in the roster.

@@ -68,6 +68,15 @@ services:
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
       - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
       - CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS:-}
+      # Room ("comната") budget — how many bot contributions / rounds before it force-closes,
+      # regardless of whether the work is actually finished. Code defaults are 10 messages /
+      # 3 rounds; a tool-heavy room (research + file edits + a QA verification pass, not just
+      # talk) burns through 10 fast and can hit the cap mid-fix rather than after — seen live
+      # 2026-09-15, where it cut the room right after a bot flagged a security contradiction
+      # and before anyone could act on the fix. Raised the message cap here; read once at
+      # startup like the other run-limit vars above, so a change needs a restart.
+      - ROOM_MAX_MESSAGES=${ROOM_MAX_MESSAGES:-50}
+      - ROOM_MAX_ROUNDS=${ROOM_MAX_ROUNDS:-3}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
