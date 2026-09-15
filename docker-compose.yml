@@ -15,6 +15,21 @@ services:
       - workspace:/app/workspace
       - skills:/app/skills
       - claude-home:/home/node/.claude
+      # ~/.claude.json is a SIBLING of ~/.claude/, not inside it — the volume
+      # above never covered it. It's where the `claude` CLI keeps firstStartTime/
+      # migration flags/onboarding state, so every redeploy reset it to a blank
+      # slate and the interactive (Subscription/tmux) engine re-ran first-run
+      # setup — theme picker, trust dialog — as if freshly installed, blocking
+      # the chat until someone answered it in the live pane. Same class of gap
+      # already fixed for cdesktop's /root/.claude equivalent.
+      #
+      # A named volume can't be used here: its root is always a directory, and
+      # this target is a single file — Docker would silently turn ~/.claude.json
+      # into a directory, which the CLI cannot read as JSON. A host bind mount
+      # to an existing file doesn't have that problem, same as the hh mounts
+      # below; the host file must already exist (seeded once, chowned to this
+      # container's uid/gid 1000) before the first deploy that uses this line.
+      - /etc/easypanel/projects/main/code/claude-json/claude.json:/home/node/.claude.json
       # The hh project used to be a git-less snapshot dropped into the workspace
       # volume (no remote, one auto-commit, silently drifting from the real
       # deploy). Bind-mount the actual git checkout Easypanel builds `hh` from
