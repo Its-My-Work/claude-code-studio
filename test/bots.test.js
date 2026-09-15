@@ -619,7 +619,7 @@ check('escalation outranks the other stops',
   // TWO slices, deliberately: the call site sits ~6000 lines AFTER the function body,
   // so slicing forward from the call never reaches the implementation. Slicing from
   // the wrong one reported a correct artifact template as missing.
-  const head = SRV.slice(SRV.indexOf('runConversationRoom(params'), SRV.indexOf('runConversationRoom(params') + 300);
+  const head = SRV.slice(SRV.indexOf('runConversationRoom({ ...params'), SRV.indexOf('runConversationRoom({ ...params') + 300);
   const body = SRV.slice(SRV.indexOf('async function runConversationRoom'),
                          SRV.indexOf('async function runBotTurns'));
   console.log('\nconversation room — wiring:');

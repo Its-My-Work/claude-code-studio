@@ -353,10 +353,14 @@ function killInteractiveTmux(localSessionId) {
 // mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId; ignores the rest.
 // Returns { cid, completed, resultMeta, fullText, fullThinking, toolEvents }.
 async function runInteractiveSingle(params) {
-  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, markInterruptsDelivered, requeueInterrupts, fanout } = params;
+  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, markInterruptsDelivered, requeueInterrupts, fanout, agent } = params;
   const start = Date.now();
+  // `agent` tags every frame with which bot produced it — set only when this call is one
+  // seat in a bots room/multi turn, not a plain single-agent chat. Without it the UI has
+  // no way to attribute streamed text/tool events to a specific bot, same field the
+  // headless bot path already sends (server.js runBotTurns/runConversationRoom).
   const wsSend = (obj) => {
-    try { ws.send(JSON.stringify({ ...obj, ...(tabId ? { tabId } : {}) })); } catch {}
+    try { ws.send(JSON.stringify({ ...obj, ...(tabId ? { tabId } : {}), ...(agent ? { agent } : {}) })); } catch {}
   };
   // input_needed / input_resolved are the only frames a SECOND window watching the
   // same chat must also receive: they are the difference between "the turn is running"
@@ -425,6 +429,17 @@ async function runInteractiveSingle(params) {
 
       const env = utf8Env();
       delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
+      // This engine's entire point is billing through the user's Claude Max
+      // subscription (OAuth login), not a token. But `claude` treats an explicit
+      // ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN as higher-priority than the stored
+      // OAuth session, so inheriting them from process.env (e.g. a proxy token
+      // configured for the separate 'api' engine, see claude-cli.js) silently
+      // routes every "Subscription" turn through that token instead — same
+      // symptom as no subscription selection existing at all, just with an extra
+      // layer of "why is this billing wrong" on top.
+      delete env.ANTHROPIC_API_KEY;
+      delete env.ANTHROPIC_AUTH_TOKEN;
+      delete env.ANTHROPIC_BASE_URL;
       // stderr is PIPED, not ignored: `command too long` was the whole content of
       // issue #96 and it used to be discarded, leaving only the generic line below.
       let tmuxErr = '';

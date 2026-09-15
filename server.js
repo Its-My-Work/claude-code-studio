@@ -4909,7 +4909,7 @@ function drainInbox(sessionId, botId) {
 //   - It never nests inside a multi-agent wave. It is a leaf that emits one artifact,
 //     which is what keeps "exactly one budget object per turn" true.
 async function runConversationRoom(p, { bots, prompt, rosterBots }) {
-  const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent } = p;
+  const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent, engine } = p;
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   const send = (o) => { try { ws.send(JSON.stringify({ ...o, ...(tabId ? { tabId } : {}) })); } catch {} };
   const save = (text, agentId) => { try { stmts.addMsg.run(sessionId, 'assistant', 'text', text, null, agentId, null, null); } catch {} };
@@ -4979,6 +4979,47 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         // session here would splice the room's rounds into the thread it uses when
         // mentioned normally, so a later @@mention would answer as if mid-conversation.
         let text = '', result = null, errored = false;
+        if (engine === 'subscription') {
+          // Subscription billing has no headless call at all — one interactive tmux
+          // pane per bot, seat re-used only within THIS one turn, torn down right after
+          // (see kill below). Room turns are stateless per round already (comment above),
+          // so there is no cross-round session to resume — same one-shot semantics as
+          // the headless branch, just routed through the Claude Max login instead of a
+          // token/key.
+          const roomTmuxId = `${sessionId}::room::${bot.id}`;
+          let ir;
+          try {
+            ir = await runInteractiveSingle({
+              prompt: botPrompt,
+              systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots),
+              model: bot.model || model,
+              ws,
+              sessionId: roomTmuxId,
+              abortController,
+              claudeSessionId: null,
+              workdir,
+              tabId,
+              mcpServers,
+              userContent: (transcript.length === 0 ? userContent : null),
+              agent: bot.id,
+            });
+          } finally {
+            // Always kill, success or failure — leaving the pane up would keep piling
+            // one resident `claude` process per bot that has ever spoken, on a 1-core/
+            // 2.9GB host shared with other services. Sequential + torn-down-immediately
+            // keeps peak memory at one interactive process at a time, at the cost of a
+            // fresh cold start for every bot's every turn.
+            try { killInteractiveTmux(roomTmuxId); } catch {}
+          }
+          text = ir.fullText;
+          // errored stays false: runInteractiveSingle never throws, it reports failure
+          // through result.subtype instead (undefined when !ir.completed), same signal
+          // isAgentSuccess()/agentStopReason() already read for the headless branch.
+          result = { subtype: ir.completed ? 'success' : undefined, session_id: ir.cid };
+          for (const ev of ir.toolEvents) {
+            try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (ev.input || '').substring(0, 500), ev.name, bot.id, null, null); } catch {}
+          }
+        } else {
         await new Promise(res => {
           let settled = false;
           const done = () => { if (!settled) { settled = true; res(); } };
@@ -5009,6 +5050,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
             .onError(() => { errored = true; done(); })
             .onDone(done);
         });
+        }
 
         const ok = !errored && isAgentSuccess(result);
         if (!ok) {
@@ -5065,7 +5107,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
 }
 
 async function runBotTurns(p, { bots, prompt, rosterBots }) {
-  const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent } = p;
+  const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent, engine } = p;
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   // Same tool set as a normal turn, plus the internal MCP tools — without
   // check_user_messages a bot cannot see a clarification the user sends mid-run.
@@ -5214,6 +5256,46 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     ws.send(JSON.stringify({ type: 'agent_status', agent: bot.id, status: `${bot.avatar || '🤖'} ${bot.label}`, ...(tabId ? { tabId } : {}) }));
 
     let botText = '', botResult = null, botErrored = false;
+    if (engine === 'subscription') {
+      // Same one-process-at-a-time discipline as the room path: a dedicated tmux
+      // identity per bot (so an @@mention keeps resuming ITS OWN transcript via cid,
+      // same continuity the headless branch gets from `sessionId: botSession`), killed
+      // right after this turn so mentioning several bots in a row never holds more
+      // than one interactive `claude` process resident at once.
+      const botTmuxId = `${sessionId}::${bot.id}`;
+      let ir;
+      try {
+        ir = await runInteractiveSingle({
+          prompt: botPrompt + standing,
+          systemPrompt: botSp,
+          model: bot.model || model,
+          ws,
+          sessionId: botTmuxId,
+          abortController,
+          claudeSessionId: botSession,
+          workdir,
+          tabId,
+          mcpServers: botMcpServers,
+          userContent: (isFirst && Array.isArray(userContent))
+            ? userContent.filter(b => !(b?.type === 'text' && b.text === botPrompt))
+            : null,
+          agent: bot.id,
+          // No drainInterrupts/hooks here: mid-turn clarifications for a bot mention
+          // are out of scope for this engine for now — same as room mode, which never
+          // had interrupt support in its headless form either.
+        });
+      } finally {
+        try { killInteractiveTmux(botTmuxId); } catch {}
+      }
+      botText = ir.fullText;
+      botErrored = false;
+      botResult = { subtype: ir.completed ? 'success' : undefined, session_id: ir.cid };
+      const _cb = (chatBuffers.get(sessionId) || '') + botText;
+      chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb);
+      for (const ev of ir.toolEvents) {
+        try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (ev.input || '').substring(0, 500), ev.name, bot.id, null, null); } catch {}
+      }
+    } else {
     await new Promise(res => {
       let _settled = false;
       const _res = () => { if (!_settled) { _settled = true; res(); } };
@@ -5272,6 +5354,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
         })
         .onDone(() => _res());
     });
+    }
 
     // Remember this bot's session so the next mention resumes the same thread. The id
     // can arrive either from .onSessionId (first run) or in the result frame (resume) —
@@ -12059,16 +12142,22 @@ wss.on('connection', (ws) => {
         resultMeta = sshResult.resultMeta;
         // Track remote host on session for UI indicators
         try { db.prepare(`UPDATE sessions SET remote_host=? WHERE id=?`).run(_activeProj.remoteHost, localSessionId); } catch {}
-      } else if (engine === 'subscription') {
+      } else if (engine === 'subscription' && agentMode !== 'conversation' && !mentionedBots.length) {
         // Interactive tmux engine (Claude Max subscription billing) — module collects
         // output without touching SQLite; persistence mirrors runCliSingle's save phase.
         // Checked BEFORE multi-agent: multi runs through API-billed headless calls and
         // would silently override the user's explicit billing choice.
-        if (agentMode === 'multi' || agentMode === 'conversation') {
-          // Both spawn headless API-billed runs, which would silently override the
-          // user's explicit subscription billing choice.
-          const _modeName = agentMode === 'multi' ? 'Multi-agent mode' : 'Conversation mode';
-          try { proxy.send(JSON.stringify({ type: 'text', text: `ℹ️ ${_modeName} uses the API engine — running in single-agent interactive mode instead.\n\n`, tabId: effectiveTabId })); } catch {}
+        //
+        // Room (conversation) and @@mentions are NOT covered by this fallback: both
+        // route into runConversationRoom/runBotTurns below, which now know how to run
+        // each bot's seat through this same subscription engine themselves — one
+        // interactive tmux pane at a time, killed between bots. `agentMode === 'multi'`
+        // (runMultiAgent — generic parallel sub-agents via the Task tool, unrelated to
+        // the bot-persona roster) still falls back here: it is Claude's own in-process
+        // parallelism, not something this server spawns copies of, so there's no
+        // per-seat tmux pane to route.
+        if (agentMode === 'multi') {
+          try { proxy.send(JSON.stringify({ type: 'text', text: `ℹ️ Multi-agent mode uses the API engine — running in single-agent interactive mode instead.\n\n`, tabId: effectiveTabId })); } catch {}
         }
         // Arm the catch-up cursor BEFORE the turn, not only after it.
         // The subscription engine keeps its output in memory and writes SQLite only once
@@ -12145,7 +12234,7 @@ wss.on('connection', (ws) => {
         // passing the raw block next to the cleaned `botPrompt` would duplicate the
         // message (same class of bug fixed for the Telegram bot path).
         const botUserContent = buildUserContent(botPrompt, enrichedAttachments);
-        newCid = await runBotTurns({ ...params, userContent: botUserContent }, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
+        newCid = await runBotTurns({ ...params, userContent: botUserContent, engine }, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
       } else if (agentMode === 'conversation') {
         // A room seats the PROJECT's bots — a conversation mode is a property of the
         // chat, not something the user re-picks per message. Mentions are handled above,
@@ -12155,7 +12244,7 @@ wss.on('connection', (ws) => {
         // and the real question lives in the content blocks. Handing that preamble to the
         // room made every bot answer "I don't see a user request", correctly: there was
         // none. runBotTurns has always used the raw text for the same reason.
-        newCid = await runConversationRoom(params, { bots: projectBots, prompt: botPrompt, rosterBots: projectBots });
+        newCid = await runConversationRoom({ ...params, engine }, { bots: projectBots, prompt: botPrompt, rosterBots: projectBots });
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {
