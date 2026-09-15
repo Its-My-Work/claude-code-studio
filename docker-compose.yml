@@ -77,6 +77,13 @@ services:
       # startup like the other run-limit vars above, so a change needs a restart.
       - ROOM_MAX_MESSAGES=${ROOM_MAX_MESSAGES:-50}
       - ROOM_MAX_ROUNDS=${ROOM_MAX_ROUNDS:-3}
+      # Multi-agent ("Мульти") mode: same idea as the room caps above, but for the
+      # dependency-wave orchestrator (runMultiAgent/agent-dag.js). A wave is one batch of
+      # agents whose deps are satisfied; MULTI_AGENT_MAX_PLAN only bounds this indirectly
+      # (worst case one wave per agent if the plan chains linearly) — this is a direct
+      # ceiling so a plan with unexpectedly deep chained dependencies fails fast instead of
+      # running indefinitely one wave at a time.
+      - MULTI_AGENT_MAX_WAVES=${MULTI_AGENT_MAX_WAVES:-5}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s

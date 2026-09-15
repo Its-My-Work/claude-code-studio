@@ -4852,6 +4852,13 @@ const MULTI_AGENT_MAX_PLAN = parseInt(process.env.MULTI_AGENT_MAX_PLAN || '8', 1
 // zero override made every wave complete instantly with no agent having run — and the
 // summarizer then reported on an empty result set.
 const MULTI_AGENT_CONCURRENCY = Math.max(1, parseInt(process.env.MULTI_AGENT_CONCURRENCY || '3', 10) || 3);
+// A wave is one iteration of the while(remaining.length) loop below — every agent whose
+// deps are satisfied runs together, then the next wave picks up whoever's unblocked now.
+// MULTI_AGENT_MAX_PLAN only bounds it indirectly (worst case one wave per agent, if the
+// plan is a straight chain); this is a direct ceiling, same reasoning as the room's
+// message/round caps — a plan with unexpectedly deep chained dependencies runs
+// indefinitely otherwise, one wave at a time, instead of failing fast and telling the user.
+const MULTI_AGENT_MAX_WAVES = parseInt(process.env.MULTI_AGENT_MAX_WAVES || '5', 10) || 5;
 
 
 // ─── Bot dispatch ────────────────────────────────────────────────────────────
@@ -5548,6 +5555,7 @@ async function runMultiAgent(p) {
 
   const completed = new Set(), results = {};
   const remaining = [...plan.agents];
+  let wave = 0;
 
   // Run agents with session context
   while (remaining.length) {
@@ -5555,6 +5563,14 @@ async function runMultiAgent(p) {
     // abort (claude-cli.js:473-478), so a process spawned with an already-aborted signal
     // would run on uncancellable to its idle timeout.
     if (abortController?.signal?.aborted) break;
+    wave++;
+    if (wave > MULTI_AGENT_MAX_WAVES) {
+      // Named, not silent: whoever is still in `remaining` never ran, and without this
+      // the orchestrator's summary would read as if the plan simply finished.
+      const stuckIds = remaining.map(a => a.id).join(', ');
+      ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:`Wave cap reached (${MULTI_AGENT_MAX_WAVES}) — not run: ${stuckIds}`, statusKey:'agent.wave_cap', ...(tabId ? { tabId } : {}) }));
+      break;
+    }
     const runnable = pickRunnable(remaining, completed);
     if (!runnable.length) { ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Circular deps', statusKey:'agent.circular_deps', ...(tabId ? { tabId } : {}) })); break; }
 
