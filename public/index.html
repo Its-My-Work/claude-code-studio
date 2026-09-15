@@ -16869,6 +16869,7 @@ function syncMobSheetFromDesktop() {
     if (group === 'mode') cur = curMode;
     else if (group === 'agent') cur = curAgent;
     else if (group === 'model') cur = curModel;
+    else if (group === 'engine') cur = curEngine;
     chip.classList.toggle('on', v === cur);
   });
   // Sync turns
