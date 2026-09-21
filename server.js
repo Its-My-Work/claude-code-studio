@@ -675,6 +675,9 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN engine TEXT`); } catch {}
 // run_engine: api/subscription choice for the web UI — DISTINCT from `engine` (owned by telegram-bot.js, value 'cli')
 try { db.exec(`ALTER TABLE sessions ADD COLUMN run_engine TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN partial_text TEXT`); } catch {}
+// room_roster: JSON array of the bot handles seated in this chat's conversation room, chosen for
+// the task (ROOM_SEATING=auto). Kept so a short follow-up ("да, согласен") does not re-seat the room.
+try { db.exec(`ALTER TABLE sessions ADD COLUMN room_roster TEXT`); } catch {}
 // Task Dispatch: chain dependencies + auto-recovery columns
 try { db.exec(`ALTER TABLE tasks ADD COLUMN depends_on TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT`); } catch {}
@@ -1022,6 +1025,8 @@ const stmts = {
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE COALESCE(git_root, workdir)=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
+  getRoomRoster: db.prepare(`SELECT room_roster FROM sessions WHERE id=?`),
+  setRoomRoster: db.prepare(`UPDATE sessions SET room_roster=? WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
   addTelegramMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,source) VALUES (?,?,?,?,?,?,?,?,'telegram')`),
@@ -4928,19 +4933,100 @@ function roomBuiltinTools(mode) { return [...(mode === 'planning' ? BOT_READ_TOO
 //     nobody can follow, and the room's whole value is that it reads as a conversation.
 //   - It never nests inside a multi-agent wave. It is a leaf that emits one artifact,
 //     which is what keeps "exactly one budget object per turn" true.
+// Who sits in the room. `auto` (default): one short model call picks the specialists the task needs
+// and the order they speak; `priority`: the roster order (room_priority, then alphabetical), which
+// seats the same handful whatever the task. Read once at startup, like the other ROOM_* vars.
+const ROOM_SEATING = String(process.env.ROOM_SEATING || 'auto').toLowerCase() === 'priority' ? 'priority' : 'auto';
+const ROOM_SEATING_TIMEOUT_MS = 60000;
+
+// One tool-less call that proposes the seating. Same shape as the multi-agent planner above:
+// --json-schema delivers the answer through the synthetic StructuredOutput tool, and tools=''
+// / settingSources='' keep it from spending its only turn on a tool or a skill. Uses the chat's
+// own model (not haiku: the gateway may not serve it). Never throws: any failure — timeout,
+// bad JSON, fewer than two valid handles — is a null and the caller seats by roster order.
+async function pickRoomSeating({ cwd, model, prompt, mode, bots, abortController }) {
+  const ac = new AbortController();
+  const onAbort = () => ac.abort();
+  abortController?.signal?.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => ac.abort(), ROOM_SEATING_TIMEOUT_MS);
+  let out = '';
+  try {
+    await new Promise(res => {
+      new ClaudeCLI({ cwd })
+        .send({
+          prompt: botsLogic.seatingPrompt({ prompt, mode, bots }),
+          model, maxTurns: 1, allowedTools: [], tools: '', settingSources: '',
+          abortController: ac, jsonSchema: botsLogic.SEATING_SCHEMA,
+        })
+        .onText(t => { out += t; })
+        .onTool((name, input) => { if (name === 'StructuredOutput' && input) out = typeof input === 'string' ? input : JSON.stringify(input); })
+        .onError(() => res())
+        .onDone(() => res());
+    });
+  } catch (e) {
+    log.warn('room seating call failed', { err: e.message });
+  } finally {
+    clearTimeout(timer);
+    abortController?.signal?.removeEventListener('abort', onAbort);
+  }
+  return botsLogic.parseSeating(out, bots);
+}
+
+// The chat note announcing who was seated. It shows each bot's own description, not the model's
+// reason for picking it: a small model writes those unevenly in Russian, the description is text a
+// person wrote. The handles are '@@…', the form a user types to summon a bot, so the ones left out
+// can be called in by hand.
+function seatingNote({ room, skipped }) {
+  const ru = getUserLang() === 'ru';
+  const seated = room.map(b => `- @@${b.id}${b.description ? ' — ' + String(b.description).replace(/[\r\n]+/g, ' ').slice(0, 120) : ''}`).join('\n');
+  const out = skipped.length ? `${ru ? 'Не участвуют' : 'Not seated'}: ${skipped.map(h => '@@' + h).join(', ')}.\n` : '';
+  return `🎯 ${ru ? 'Подобрал участников под задачу' : 'Seated for this task'}:\n\n${seated}\n\n${out}\n`;
+}
+
 async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent, engine, mode } = p;
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   const send = (o) => { try { ws.send(JSON.stringify({ ...o, ...(tabId ? { tabId } : {}) })); } catch {} };
   const save = (text, agentId) => { try { stmts.addMsg.run(sessionId, 'assistant', 'text', text, null, agentId, null, null); } catch {} };
 
-  const { room, skipped, reason } = botsLogic.planRoom({ bots });
+  // Who sits: chosen for this task unless switched off (ROOM_SEATING=priority) or unavailable
+  // (subscription engine has no headless call). A chat keeps its seating across short replies.
+  let picks = null, announce = false, seatingFailed = false;
+  if (ROOM_SEATING === 'auto' && engine !== 'subscription' && bots.length > botsLogic.ROOM_MIN) {
+    let previous = null;
+    try { previous = JSON.parse(stmts.getRoomRoster.get(sessionId)?.room_roster || 'null'); } catch {}
+    const hasAttachments = Array.isArray(userContent) && userContent.some(b => b && b.type !== 'text');
+    if (!botsLogic.shouldReseat({ prompt, hasAttachments, previous, bots })) {
+      picks = previous;
+    } else {
+      send({ type: 'agent_status', agent: 'orchestrator', status: getUserLang() === 'ru' ? 'Подбираю участников…' : 'Choosing who joins…' });
+      const chosen = await pickRoomSeating({ cwd: workdir || WORKDIR, model, prompt, mode: p.mode, bots, abortController });
+      if (abortController?.signal?.aborted) return null;
+      if (chosen) {
+        picks = chosen.handles; announce = true;
+        try { stmts.setRoomRoster.run(JSON.stringify(picks), sessionId); } catch {}
+      } else {
+        seatingFailed = true;
+      }
+    }
+  }
+
+  const { room, skipped, reason } = botsLogic.planRoom({ bots, picks });
   if (reason === 'too-few') {
     const note = `⚠️ A conversation needs at least ${botsLogic.ROOM_MIN} bots in this project. Add another, or switch this chat off conversation mode.\n\n`;
     save(note, null); send({ type: 'text', text: note });
     return null;
   }
-  if (skipped.length) {
+  if (announce) {
+    const note = seatingNote({ room, skipped });
+    save(note, null); send({ type: 'text', text: note });
+  } else if (seatingFailed) {
+    const note = getUserLang() === 'ru'
+      ? 'ℹ️ Не удалось подобрать участников под задачу — сажаю по порядку списка.\n\n'
+      : 'ℹ️ Could not pick who joins for this task — seating by roster order.\n\n';
+    save(note, null); send({ type: 'text', text: note });
+  }
+  if (skipped.length && !picks) {
     // Named, never silently dropped: a room that ignored half the roster would read as a
     // roster bug rather than a cap.
     const note = `ℹ️ A room seats ${botsLogic.ROOM_MAX} bots — sitting this one out: ${skipped.map(h => '@@' + h).join(', ')}.\n\n`;
