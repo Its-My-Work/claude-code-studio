@@ -5101,12 +5101,16 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   // What a bot may spend and is shown (see the block above roomTurnCap in bots.js). The chat's Steps
   // is a floor-lifted budget here: a bot that runs out of turns while researching says nothing at all.
   const turnCap = botsLogic.roomTurnCap({ maxTurns, cap: MULTI_AGENT_MAX_TURNS_CAP });
-  // The closing step is written work (a plan package is a dozen files), so it gets twice the steps of a discussion turn.
-  const closeCap = Math.min(turnCap * 2, MULTI_AGENT_MAX_TURNS_CAP);
+  // The closing step is written work (a plan package is a dozen or two files, each written and checked), so it gets three times
+  // the steps of a discussion turn.
+  const closeCap = Math.min(turnCap * 3, MULTI_AGENT_MAX_TURNS_CAP);
   // The bot that will write the files AFTER the discussion: the last seated one that may write. Its discussion turn is a
   // contribution, not the work: a planner that starts writing its package inside the discussion runs out of steps before it reports.
   const closer = [...room].reverse().find(b => botsLogic.roomToolScope(b) === 'work') || null;
   const closingPlanned = ROOM_CLOSING && mode !== 'planning' && engine !== 'subscription';
+  // What a bot may do to files in THIS turn. The closer's discussion turn is read-only, by the tool list and not by a request in the
+  // prompt: a planner told "do not change files" wrote its package anyway and used up its steps before the closing step began.
+  const scopeFor = (bot, deliverable) => (!deliverable && closingPlanned && closer && closer.id === bot.id ? 'read' : botsLogic.roomToolScope(bot));
   // The chat before this message, given to EVERY bot of the turn (it used to be replayed to the first
   // speaker only), and only the files that belong to THIS message (the replay re-attached old ones).
   let history = '';
@@ -5217,7 +5221,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
           systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName(), { discussion: !deliverable }),
           // No _ccs_bots: the room is the dispatcher. See the invariants above.
           mcpServers: botMcp,
-          allowedTools: roomBuiltinTools(mode, botsLogic.roomToolScope(bot)),
+          allowedTools: roomBuiltinTools(mode, scopeFor(bot, deliverable)),
           abortController,
           effort,
           name: bot.label,

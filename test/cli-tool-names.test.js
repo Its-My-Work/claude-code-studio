@@ -63,7 +63,7 @@ console.log('the conversation room has a real tool list:');
     check('@-bots and multi-agent workers use the same base list',
       /const botTools = \[\.\.\.BOT_WORK_TOOLS,/.test(src) && /const agentTools = \[\.\.\.BOT_WORK_TOOLS,/.test(src), true);
   }
-  check('the room hands the CLI that list (not a literal)', /allowedTools: roomBuiltinTools\(mode, botsLogic\.roomToolScope\(bot\)\),/.test(src), true);
+  check('the room hands the CLI that list (not a literal)', /allowedTools: roomBuiltinTools\(mode, scopeFor\(bot, deliverable\)\),/.test(src), true);
   check('the room gets the mode from its params', /engine, mode \} = p;/.test(src), true);
   const rules = src.slice(src.indexOf('const ROOM_RULES = '), src.indexOf('const ROOM_RULES = ') + 3600);
   check('the room rules tell bots what they may do in planning mode', rules.includes("Planning mode: read and analyse, but do not modify any file"), true);
