@@ -1,7 +1,7 @@
 // One-off verification for multi-agent-result (no test framework wired in this project).
 // Run: node test/multi-agent-result.test.js
 const assert = require('assert');
-const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('../multi-agent-result');
+const { isAgentSuccess, shouldAutoContinue, agentStopReason, roomStopReason } = require('../multi-agent-result');
 
 let pass = 0, fail = 0;
 function check(label, actual, expected) {
@@ -45,6 +45,17 @@ check('max_turns after continues', agentStopReason(MAXT, false, 50, 3),
   'still hit the 50-turn limit after 3 auto-continues');
 check('other subtype', agentStopReason(CRASH, false, 50), 'stopped early (error_during_execution)');
 check('missing frame', agentStopReason(null, false, 50), 'was stopped before it reported completion');
+
+// A room bot that ran out of turns exits non-zero, which the CLI wrapper also reports as an error. The
+// note then said "failed — see the error above" with nothing above it; the result frame has the reason.
+console.log('roomStopReason — the result frame wins over the generic error:');
+check('turn limit + an error flag -> the turn limit', roomStopReason(MAXT, true, 20), 'hit the 20-turn limit');
+check('turn limit alone', roomStopReason(MAXT, false, 20), 'hit the 20-turn limit');
+check('another subtype + error flag -> that subtype', roomStopReason(CRASH, true, 20), 'stopped early (error_during_execution)');
+check('no frame + error -> the error', roomStopReason(null, true, 20), 'failed — see the error above');
+check('no frame, no error -> stopped before completion', roomStopReason(null, false, 20), 'was stopped before it reported completion');
+check('a success frame with an error flag is still the error', roomStopReason(OK, true, 20), 'failed — see the error above');
+check('undefined result', roomStopReason(undefined, true, 20), 'failed — see the error above');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -5,6 +5,7 @@ const {
   isValidHandle, handleFromLabel, uniqueHandle,
   parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, EVIDENCE_CLAUSE, ROSTER_MAX,
   seatingPrompt, parseSeating, shouldReseat, SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS,
+  roomTurnCap, renderTranscript, buildRoomHistory, currentTurnAttachments, closingRules, ROOM_BOT_MIN_TURNS,
 } = require('../bots');
 
 let pass = 0, fail = 0;
@@ -783,6 +784,128 @@ console.log('auto seating:');
     try { compose = _fs3.readFileSync(_path3.join(__dirname, '..', 'docker-compose.yml'), 'utf8'); } catch {}
     if (compose !== null) check('compose exposes the switch', /ROOM_SEATING=\$\{ROOM_SEATING:-auto\}/.test(compose), true);
   }
+}
+
+// A real room run (2026-09-21, "finish the spec"): 8 of 20 bot replies ended on `max_turns_reached`
+// because the chat's Steps was 5 and the bots research with tools; prompts grew from 1.4K to 71K
+// characters over three rounds; on the follow-up turn only the first speaker got the replayed chat
+// (84K characters); nobody was told to write the result into a file. These pin the fixes.
+console.log('room: what a bot may spend, and what it is shown:');
+{
+  check('the default floor is 20 steps', ROOM_BOT_MIN_TURNS, 20);
+  check('Steps 5 is lifted to the floor (the run that lost 40% of its replies)', roomTurnCap({ maxTurns: 5, cap: 200 }), 20);
+  check('a bigger Steps is kept', roomTurnCap({ maxTurns: 60, cap: 200 }), 60);
+  check('unset -> the old default of 30', roomTurnCap({ cap: 200 }), 30);
+  check('the global cap still wins', roomTurnCap({ maxTurns: 500, cap: 100 }), 100);
+  check('…even below the floor', roomTurnCap({ maxTurns: 5, cap: 10 }), 10);
+  check('junk Steps falls back to 30', [roomTurnCap({ maxTurns: 0, cap: 200 }), roomTurnCap({ maxTurns: -3, cap: 200 }), roomTurnCap({ maxTurns: 'x', cap: 200 })], [30, 30, 30]);
+  check('an explicit floor', roomTurnCap({ maxTurns: 5, cap: 200, min: 12 }), 12);
+
+  // renderTranscript
+  const T = (n, len) => Array.from({ length: n }, (_, i) => ({ handle: `b${i}`, text: `t${i}:` + 'x'.repeat(len) }));
+  check('no entries -> nothing', renderTranscript([]), '');
+  check('junk entries are skipped', renderTranscript([null, {}, { handle: 'a' }, { text: 'x' }, { handle: 'a', text: '' }]), '');
+  check('entries keep their order and handle',
+    renderTranscript([{ handle: 'a', text: 'one' }, { handle: 'b', text: 'two' }]), '[@a]: one\n\n[@b]: two');
+  {
+    const cut = renderTranscript([{ handle: 'a', text: 'y'.repeat(5000) }], { perEntry: 100, total: 10000 });
+    check('a long contribution is cut, with how much and where the rest is', cut.startsWith('[@a]: ' + 'y'.repeat(100)) && cut.includes('cut: 4900 more characters') && cut.includes('in the chat'), true);
+  }
+  {
+    const many = T(20, 1000);
+    const out = renderTranscript(many, { perEntry: 3500, total: 5000 });
+    check('over the total the OLDEST are left out, and it says how many', out.startsWith('[… 16 earlier contributions left out]') && out.includes('[@b19]') && !out.includes('[@b0]'), true);
+    check('the result is bounded', out.length < 5000 + 200, true);
+    check('one left out reads in the singular', renderTranscript(T(2, 60), { total: 100 }).startsWith('[… 1 earlier contribution left out]'), true);
+    check('a single contribution larger than the total is still shown', renderTranscript(T(1, 9000), { perEntry: 20000, total: 100 }).startsWith('[@b0]'), true);
+  }
+  check('a three-round room stays bounded (it was 71K characters per bot before)',
+    renderTranscript(T(14, 11000)).length < 30000, true);
+
+  // buildRoomHistory
+  const H = [
+    { role: 'user', type: 'text', content: 'Доработайте ТЗ' },
+    { role: 'assistant', type: 'text', agent_id: null, content: '🎯 Подобрал участников под задачу:\n- @@a' },
+    { role: 'assistant', type: 'text', agent_id: 'katya', content: 'План: этап 0' },
+    { role: 'assistant', type: 'tool', agent_id: 'katya', content: '' },
+    { role: 'assistant', type: 'thinking', agent_id: 'katya', content: 'secret thoughts' },
+    { role: 'assistant', type: 'text', agent_id: 'hanna', content: '⚠️ @hanna did not finish (hit the 5-turn limit).' },
+    { role: 'assistant', type: 'text', agent_id: 'taras', content: '⏭️ @taras passed.' },
+    { role: 'assistant', type: 'text', agent_id: null, content: '📋 **Room closed** — 3 contributions' },
+    { role: 'assistant', type: 'text', agent_id: null, content: '🙋 **@katya needs you.** The room stopped here' },
+    { role: 'assistant', type: 'text', agent_id: 'ryta', content: '📁 **Files changed**' },
+    { role: 'user', type: 'text', content: 'какой результат?' },
+    { role: 'assistant', type: 'text', agent_id: null, content: '🎯 seating for turn 2' },
+  ];
+  {
+    const h = buildRoomHistory(H);
+    check('earlier turns are given, oldest first, labelled', h.includes('[You]: Доработайте ТЗ\n\n[@katya]: План: этап 0'), true);
+    check('the current user message and everything after it are left out', !h.includes('какой результат') && !h.includes('seating for turn 2'), true);
+    check('tool rows, thinking and room bookkeeping (failed / passed / seating / closed / needs you / files) are left out',
+      !h.includes('secret thoughts') && !h.includes('did not finish') && !h.includes('passed') && !h.includes('Подобрал') && !h.includes('Room closed') && !h.includes('needs you') && !h.includes('Files changed'), true);
+    check('it starts with a header and ends with a blank line', h.startsWith('Earlier in this chat (oldest first; long messages are cut):\n') && h.endsWith('\n\n'), true);
+  }
+  check('the first message of a chat has no history', buildRoomHistory([{ role: 'user', type: 'text', content: 'hi' }]), '');
+  check('no rows -> nothing', [buildRoomHistory([]), buildRoomHistory(null), buildRoomHistory(undefined)], ['', '', '']);
+  {
+    const long = [{ role: 'user', content: 'q' }, { role: 'assistant', agent_id: 'a', content: 'z'.repeat(5000) }, { role: 'user', content: 'now' }];
+    const h = buildRoomHistory(long, { perMsg: 200 });
+    check('a long message is cut', h.includes('z'.repeat(200) + ' [… cut]') && !h.includes('z'.repeat(201)), true);
+    const rows = Array.from({ length: 30 }, (_, i) => ({ role: 'assistant', agent_id: 'a', content: `m${i} ` + 'w'.repeat(400) }));
+    const h2 = buildRoomHistory([...rows, { role: 'user', content: 'now' }], { maxChars: 2000, perMsg: 1500 });
+    check('over the budget the newest are kept and the omission is stated', h2.includes('m29') && !h2.includes('m0 ') && /\[… \d+ earlier messages left out\]/.test(h2), true);
+  }
+  check('a reply left by a bot without an agent id (room summaries) is skipped', !buildRoomHistory([{ role: 'assistant', content: 'plain summary' }, { role: 'user', content: 'x' }]).includes('plain summary'), true);
+
+  // currentTurnAttachments
+  const F = (n) => ({ type: 'file', source: { name: n } });
+  check('a plain message keeps all its attachments and drops the text',
+    currentTurnAttachments([F('a.md'), { type: 'text', text: 'hello' }, F('b.png')]), [F('a.md'), F('b.png')]);
+  check('a string message has none', currentTurnAttachments('just text'), []);
+  check('junk -> none', [currentTurnAttachments(null), currentTurnAttachments(undefined), currentTurnAttachments(5)], [[], [], []]);
+  {
+    const replay = [
+      { type: 'text', text: '[Session recovery]\nThe previous Claude session was unavailable.' },
+      { type: 'text', text: '[User turn 1]' }, { type: 'text', text: '[Attachments from user turn 1]' }, F('TZ.md'), { type: 'text', text: 'first message' },
+      { type: 'text', text: '[Assistant turn 1]\nan answer' },
+      { type: 'text', text: '[User turn 2]' }, { type: 'text', text: 'какой результат?' },
+    ];
+    check('on a follow-up turn the earlier turns\' files are NOT attached again (the replay re-attached them)', currentTurnAttachments(replay), []);
+    const withNew = [...replay.slice(0, 6), { type: 'text', text: '[User turn 2]' }, { type: 'text', text: '[Attachments from user turn 2]' }, F('new.md'), { type: 'text', text: 'see this' }];
+    check('…but the files of the current message are', currentTurnAttachments(withNew), [F('new.md')]);
+  }
+
+  // closingRules
+  const cr = closingRules('@katya', 'Russian');
+  check('the closing bot is named and told the discussion is over', cr.startsWith('You are @katya and you close this conversation.'), true);
+  check('it is told to write the file, read it back and report path and change', cr.includes('put the agreed result into the right file') && cr.includes('read the file back') && cr.includes('the file path, what changed'), true);
+  check('it prefers updating the file the user named', cr.includes('update the file the user names or attached rather than starting a new one'), true);
+  check('it may decline with the English PASS when no file was asked for', cr.includes('reply with exactly the English word PASS — never translate it'), true);
+  check('it is told the app checks the files, so a false claim is pointless', cr.includes('the app compares the files before and after'), true);
+  check('the language is the UI language', cr.includes('Write in Russian.') && closingRules('@x').includes('Write in English.'), true);
+
+  // the room uses all of it
+  const _fs4 = require('fs'), _path4 = require('path');
+  const SRV4 = _fs4.readFileSync(_path4.join(__dirname, '..', 'server.js'), 'utf8');
+  const room = SRV4.slice(SRV4.indexOf('async function runConversationRoom('), SRV4.indexOf('async function runBotTurns('));
+  check('the room takes its turn cap from roomTurnCap, not the raw Steps', room.includes('botsLogic.roomTurnCap({ maxTurns, cap: MULTI_AGENT_MAX_TURNS_CAP })') && room.includes('maxTurns: turnCap,') && !/maxTurns: Math\.min\(maxTurns/.test(room), true);
+  check('the bots are told their step budget', /You have about \$\{turnCap\} steps/.test(room), true);
+  check('a failed bot is explained by the result frame (roomStopReason), not "see the error above"', room.includes('roomStopReason(result, errored, turnCap)') && !room.includes('agentStopReason(result, errored)'), true);
+  check('every bot gets the chat history and this turn\'s trimmed transcript',
+    room.includes('buildRoomHistory(stmts.getMsgsLite.all(sessionId))') && room.includes('botsLogic.renderTranscript(transcript)') && /\$\{ROOM_RULES\('@' \+ bot\.id\)\}\\n\\n\$\{history\}/.test(room), true);
+  check('only the files of this message go to the first speaker, in both engines',
+    room.includes('currentTurnAttachments(userContent)') && (room.match(/first && attachments\.length \? attachments : null/g) || []).length === 2 && !room.includes('userContent.filter('), true);
+  check('one speak() serves the discussion and the closing step', (room.match(/await speak\(/g) || []).length === 2, true);
+  check('the closing step is skipped in planning mode, for the subscription engine, while waiting for the user, and when stopped',
+    /mode !== 'planning' && engine !== 'subscription' && !escalatedBy && stopReason !== 'stopped'/.test(room), true);
+  check('the closer is the last seated bot', room.includes('const closer = room[room.length - 1];'), true);
+  check('the closing step can be switched off (ROOM_CLOSING=off) and its compose var exists', /const ROOM_CLOSING = String\(process\.env\.ROOM_CLOSING \|\| 'on'\)/.test(SRV4) && room.includes('if (ROOM_CLOSING && mode !== ') && /ROOM_CLOSING=\$\{ROOM_CLOSING:-on\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')) && /ROOM_BOT_MIN_TURNS=\$\{ROOM_BOT_MIN_TURNS:-20\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')), true);
+  check('a PASS from the closer is silent, an answer is saved under its name', /if \(!reply\.pass\) \{ save\(r\.text, closer\.id\); closerAnswered = true; \}/.test(room), true);
+  check('the files are snapshotted before the discussion (not in planning) and compared after',
+    /const filesBefore = mode === 'planning' \? null : await roomFiles\.snapshotDir/.test(room) && room.includes('roomFiles.diffSnapshots(filesBefore.files, after.files)'), true);
+  check('a truncated snapshot gives no verdict', room.includes('filesBefore && !filesBefore.truncated') && room.includes('!after.truncated'), true);
+  check('a claimed result with no file change is said outright', room.includes('!note && closerAnswered') && /Файлы не менялись/.test(room) && /No files changed/.test(room), true);
+  check('the verdict comes before the closing summary', room.indexOf('roomFiles.diffSnapshots') < room.indexOf('const summary = escalatedBy'), true);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
