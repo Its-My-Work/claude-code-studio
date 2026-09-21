@@ -5050,7 +5050,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     + `How to take part:\n`
     + `- Add what only you can add. Do not restate what someone already said.\n`
     + `- Disagree explicitly when you disagree, and say what you would do instead.\n`
-    + `- If you have nothing to add, reply with exactly: PASS\n`
+    + `- If you have nothing to add, reply with exactly the English word PASS — never translate it.\n`
     + `- If the room cannot proceed without a decision only the user can make, write @user `
     + `followed by the single question. Use it sparingly — it ends the conversation.\n`
     + `- Do not address peers with @@handles to hand work over; in this room everyone speaks in turn.\n`

@@ -577,6 +577,23 @@ check('a normal reply is neither',
   parseRoomReply('I think the parser is the problem'),
   { pass: false, escalate: false, text: 'I think the parser is the problem' });
 
+// Told to answer in Russian, bots translated the word: "ПРОПУСК" was saved as a contribution
+// and the round never counted as settled.
+check('the Russian form is a pass', parseRoomReply('ПРОПУСК').pass, true);
+check('…in lower case and with a dash and a reason',
+  parseRoomReply('пропуск - цели ясны'), { pass: true, escalate: false, text: 'цели ясны' });
+check('"Пропускаю" is a pass too', parseRoomReply('Пропускаю.').pass, true);
+check('bold PASS is a pass', parseRoomReply('**PASS**').pass, true);
+check('bold Russian form keeps the reason', parseRoomReply('**Пропуск** — нечего добавить').text, 'нечего добавить');
+check('PASS followed by a question to the user still escalates',
+  parseRoomReply('PASS  The room needs @user - which stage first?'), { pass: true, escalate: true, text: 'The room needs @user - which stage first?' });
+check('a word that merely starts with it is not a pass', parseRoomReply('Пропускная способность выше нормы').pass, false);
+check('nor is "passes"', parseRoomReply('passes the tests').pass, false);
+check('nor a Russian word beginning with пас', parseRoomReply('Пасмурно, но план ясен').pass, false);
+check('the word must open the reply', parseRoomReply('Я бы сказал: пропуск').pass, false);
+check('the rules tell bots the word is English and never translated',
+  /reply with exactly the English word PASS — never translate it/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'server.js'), 'utf8')), true);
+
 check('addressing @user escalates',
   parseRoomReply('We cannot decide this. @user which database?').escalate, true);
 check('escalation keeps the text so the question reaches the user',
@@ -760,7 +777,12 @@ console.log('auto seating:');
   check('it has its own timeout and follows the turn\'s abort', /setTimeout\(\(\) => ac\.abort\(\), ROOM_SEATING_TIMEOUT_MS\)/.test(picker) && picker.includes("addEventListener('abort'"), true);
   check('the note shows the bots\' own descriptions, not model text', /function seatingNote\(\{ room, skipped \}\)/.test(SRV3) && /b\.description/.test(SRV3.slice(SRV3.indexOf('function seatingNote('), SRV3.indexOf('function seatingNote(') + 600)), true);
   check('it uses the chat model, not a hard-coded haiku', /\bmodel, maxTurns: 1/.test(picker) && !/haiku/i.test(picker), true);
-  check('compose exposes the switch', /ROOM_SEATING=\$\{ROOM_SEATING:-auto\}/.test(_fs3.readFileSync(_path3.join(__dirname, '..', 'docker-compose.yml'), 'utf8')), true);
+  {
+    // Only in a checkout: the built image carries no docker-compose.yml.
+    let compose = null;
+    try { compose = _fs3.readFileSync(_path3.join(__dirname, '..', 'docker-compose.yml'), 'utf8'); } catch {}
+    if (compose !== null) check('compose exposes the switch', /ROOM_SEATING=\$\{ROOM_SEATING:-auto\}/.test(compose), true);
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

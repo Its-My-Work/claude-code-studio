@@ -597,7 +597,13 @@ function shouldReseat({ prompt, hasAttachments, previous, bots } = {}) {
 // be read as reaching the human, and a word like 'superuser' or an address such as
 // x@user.io must not either — hence the boundary on both sides and the explicit
 // exclusion of a preceding '@'.
-const ROOM_PASS_RE = /^pass\b[\s.:,—-]*/i;
+//
+// PASS is the English word, but once bots were told to answer in the user's language they
+// translated it: a Russian room wrote "ПРОПУСК" (3 of 12 passes in one session), which was
+// saved as a contribution, so the round never counted as settled. ROOM_RULES now says the word
+// is never translated; the reader also takes the local forms a model produces, and a bold or
+// backticked one. \b is ASCII-only, hence the lookahead instead.
+const ROOM_PASS_RE = /^[*_`\s]*(?:pass|пропуск|пропускаю|пас)(?![\p{L}\p{N}_])[*_`]*[\s.:,—–-]*/iu;
 const ROOM_ESCALATE_RE = /(^|[^@\w])@user(?![\w.@-])/i;
 
 function parseRoomReply(raw) {
