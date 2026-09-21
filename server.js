@@ -4904,6 +4904,14 @@ function drainInbox(sessionId, botId) {
   }
 }
 
+// Built-in tools a bot gets on a turn, by CLI names (see the comment on `tools` in
+// runCliSingle for why the pre-1.0 View/GlobTool/... are wrong). Planning only reads and,
+// as in runCliSingle, has no Bash: a shell can write, which would void "plan only". Every
+// other mode can also run commands and edit files.
+const BOT_READ_TOOLS = Object.freeze(['Read', 'Glob', 'Grep']);
+const BOT_WORK_TOOLS = Object.freeze(['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
+function roomBuiltinTools(mode) { return [...(mode === 'planning' ? BOT_READ_TOOLS : BOT_WORK_TOOLS)]; }
+
 // ─── Conversation room (agent_mode 'conversation') ───────────────────────────
 // 2-6 bots taking SERIAL turns on one user message, for a few rounds, then one artifact.
 //
@@ -4921,7 +4929,7 @@ function drainInbox(sessionId, botId) {
 //   - It never nests inside a multi-agent wave. It is a leaf that emits one artifact,
 //     which is what keeps "exactly one budget object per turn" true.
 async function runConversationRoom(p, { bots, prompt, rosterBots }) {
-  const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent, engine } = p;
+  const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent, engine, mode } = p;
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   const send = (o) => { try { ws.send(JSON.stringify({ ...o, ...(tabId ? { tabId } : {}) })); } catch {} };
   const save = (text, agentId) => { try { stmts.addMsg.run(sessionId, 'assistant', 'text', text, null, agentId, null, null); } catch {} };
@@ -4962,6 +4970,9 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     + `- Do not address peers with @@handles to hand work over; in this room everyone speaks in turn.\n`
     + `- Write in ${botLangName()}, the user's language, even when the messages before yours are in another language. `
     + `Code, commands and identifiers stay as they are.\n`
+    + (mode === 'planning'
+      ? `- Planning mode: read and analyse, but do not modify any file.\n`
+      : `- You can read and edit files in the project. If you change one, name the file and what changed; the next bot reads it as you left it.\n`)
     + `- Keep it to a few sentences. You are ${self}.`;
 
   try {
@@ -5050,7 +5061,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
             systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
             // No _ccs_bots: the room is the dispatcher. See the invariants above.
             mcpServers,
-            allowedTools: ['Bash', 'Read', 'Glob', 'Grep'],
+            allowedTools: roomBuiltinTools(mode),
             abortController,
             effort,
             name: bot.label,
@@ -5128,7 +5139,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
   const botMcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user',
                        'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages',
                        'mcp___ccs_bots__message_bot'];
-  const botTools = ['Bash','Read','Glob','Grep','Edit','Write', ...botMcpTools];
+  const botTools = [...BOT_WORK_TOOLS, ...botMcpTools];
   // Interrupt delivery, identical to runCliSingle: a PreToolUse hook fires on every
   // tool call and a Stop hook covers a text-only answer, so a message sent while a
   // bot is working reaches it during the run instead of waiting for the next turn.
@@ -5607,7 +5618,7 @@ async function runMultiAgent(p) {
       // Same standing instruction a single-agent turn gets: without it a worker does
       // not know user clarifications can arrive mid-run.
       const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION;
-      const agentTools = ['Bash','Read','Glob','Grep','Edit','Write',
+      const agentTools = [...BOT_WORK_TOOLS,
         'mcp___ccs_user_interrupt__check_user_messages'];
       // Interrupt delivery, identical to runCliSingle. Workers had neither the hooks
       // nor the tool, so a clarification sent while the team was working was silently
