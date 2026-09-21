@@ -66,15 +66,56 @@ function kb(sig) {
   return n < 1024 ? `${n} B` : `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
 }
 
+const sizeOf = (sig) => { if (sig == null || sig === '') return null; const n = Number(String(sig).split(':')[0]); return Number.isFinite(n) ? n : null; };
+const kbN = (n) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`);
+
+/**
+ * Files the room made much smaller (or removed): [{path, from, to, pct}]. A bot asked to "finish" a spec
+ * rewrote it from scratch and left half of it, and the only sign was a lower file size. Small files are
+ * ignored (a 300-byte note halving is not news).
+ */
+function shrunkFiles(diff, before, after, { ratio = 0.8, minBytes = 2048 } = {}) {
+  const out = [];
+  for (const p of diff.modified) {
+    const b = sizeOf(before && before.get(p)), a = sizeOf(after && after.get(p));
+    if (b != null && a != null && b >= minBytes && a < b * ratio) out.push({ path: p, from: b, to: a, pct: Math.round((1 - a / b) * 100) });
+  }
+  for (const p of diff.deleted) {
+    const b = sizeOf(before && before.get(p));
+    if (b != null && b >= minBytes) out.push({ path: p, from: b, to: 0, pct: 100 });
+  }
+  return out.sort((x, y) => y.from - y.to - (x.from - x.to));
+}
+
+/** The warning under the change list. `ref` = the git commit holding the state before the room, when there is one. */
+function describeShrink(shrunk, { lang = 'en', ref = null, limit = 5 } = {}) {
+  if (!shrunk || !shrunk.length) return '';
+  const ru = lang === 'ru';
+  const rows = shrunk.slice(0, limit).map(s => `- \`${s.path}\` — ${kbN(s.from)} → ${kbN(s.to)} (−${s.pct}%)`);
+  const more = shrunk.length - rows.length;
+  const restore = ref
+    ? (ru ? `Если сокращать не просили, верните прежнюю версию: \`git checkout ${ref} -- <файл>\` в папке проекта.`
+      : `If you did not ask for it to be shortened, restore the earlier version: \`git checkout ${ref} -- <file>\` in the project folder.`)
+    : (ru ? 'Версии до правки в git нет: восстановите файл из своей копии.' : 'There is no pre-edit version in git: restore the file from your own copy.');
+  return `⚠️ **${ru ? 'Документы заметно уменьшились' : 'Documents got much smaller'}:**\n\n${rows.join('\n')}`
+    + (more > 0 ? `\n- … ${ru ? 'и ещё' : 'and'} ${more}` : '') + `\n\n${restore}\n\n`;
+}
+
 /** The chat note for a diff. Empty string when nothing changed (the caller decides whether that is
- *  worth a warning). `after` (the files map) supplies sizes. */
-function describeChanges(diff, after, lang = 'en', limit = 15) {
+ *  worth a warning). `after` (the files map) supplies sizes; with `before` a changed file shows "old → new". */
+function describeChanges(diff, after, lang = 'en', limit = 15, before = null) {
   if (isEmptyDiff(diff)) return '';
   const ru = lang === 'ru';
   const verbs = ru ? { added: 'создан', modified: 'изменён', deleted: 'удалён' } : { added: 'created', modified: 'changed', deleted: 'deleted' };
   const rows = [];
+  const size = (kind, p) => {
+    if (kind === 'deleted') return '';
+    const a = sizeOf(after && after.get(p)), b = kind === 'modified' ? sizeOf(before && before.get(p)) : null;
+    if (a == null) return '';
+    return b != null && b !== a ? ` (${kbN(b)} → ${kbN(a)})` : ` (${kb(after.get(p))})`;
+  };
   for (const kind of ['modified', 'added', 'deleted']) {
-    for (const p of diff[kind]) rows.push(`- \`${p}\` — ${verbs[kind]}${kind === 'deleted' ? '' : (kb(after && after.get(p)) ? ` (${kb(after.get(p))})` : '')}`);
+    for (const p of diff[kind]) rows.push(`- \`${p}\` — ${verbs[kind]}${size(kind, p)}`);
   }
   const shown = rows.slice(0, limit);
   const more = rows.length - shown.length;
@@ -82,4 +123,4 @@ function describeChanges(diff, after, lang = 'en', limit = 15) {
     + (more > 0 ? `\n- … ${ru ? 'и ещё' : 'and'} ${more}` : '') + '\n\n';
 }
 
-module.exports = { snapshotDir, diffSnapshots, isEmptyDiff, describeChanges, IGNORE_DIRS };
+module.exports = { snapshotDir, diffSnapshots, isEmptyDiff, describeChanges, shrunkFiles, describeShrink, IGNORE_DIRS };

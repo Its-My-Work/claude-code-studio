@@ -6,7 +6,7 @@ const {
   parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, EVIDENCE_CLAUSE, ROSTER_MAX,
   seatingPrompt, parseSeating, shouldReseat, SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS,
   roomTurnCap, renderTranscript, buildRoomHistory, currentTurnAttachments, closingRules, ROOM_BOT_MIN_TURNS,
-  normalizeBotEngine, botEngine, botModel,
+  normalizeBotEngine, botEngine, botModel, seatPlanner, PLANNER_HANDLE, PLAN_INTENT_RE,
 } = require('../bots');
 
 let pass = 0, fail = 0;
@@ -766,7 +766,7 @@ console.log('auto seating:');
   const _fs3 = require('fs'), _path3 = require('path');
   const SRV3 = _fs3.readFileSync(_path3.join(__dirname, '..', 'server.js'), 'utf8');
   const room = SRV3.slice(SRV3.indexOf('async function runConversationRoom('), SRV3.indexOf('async function runConversationRoom(') + 4200);
-  check('the room seats via the chosen picks', /botsLogic\.planRoom\(\{ bots, picks \}\)/.test(room), true);
+  check('the room seats via the chosen picks', /botsLogic\.planRoom\(\{ bots, picks, prompt \}\)/.test(room), true);
   check('it can be switched off (ROOM_SEATING=priority)', /ROOM_SEATING === 'auto'/.test(room) && /ROOM_SEATING = String\(process\.env\.ROOM_SEATING \|\| 'auto'\)/.test(SRV3), true);
   check('the subscription engine (no headless call) is not asked', /engine !== 'subscription'/.test(room), true);
   check('a stopped turn during seating ends the room', /if \(abortController\?\.signal\?\.aborted\) return null;/.test(room), true);
@@ -934,6 +934,34 @@ check('an alias is kept on both engines', [botModel({ model: 'opus' }, 'api', 's
 check('a gateway model is kept on the API engine', botModel({ model: 'poolside/laguna-s-2.1:free' }, 'api', 'sonnet'), 'poolside/laguna-s-2.1:free');
 check('a gateway model means nothing on the subscription: the chat model is used (not a silent sonnet)', botModel({ model: 'poolside/laguna-s-2.1:free' }, 'subscription', 'opus'), 'opus');
 check('a full Claude id is fine on the subscription', botModel({ model: 'claude-opus-4-8' }, 'subscription', 'sonnet'), 'claude-opus-4-8');
+
+console.log('the planner is always asked when the message is about a plan or tasks:');
+check('the handle', PLANNER_HANDLE, 'planner');
+for (const yes of ['Доработайте ТЗ, сделайте из него пошаговый план реализации', 'разбей на задачи', 'занеси в канбан', 'нужна декомпозиция',
+  'make a plan', 'create tasks for the team', 'roadmap please', 'Планирование релиза', 'заведи бэклог', 'дорожная карта проекта']) {
+  check(`"${yes}" is about a plan`, PLAN_INTENT_RE.test(yes), true);
+}
+for (const no of ['привет', 'исправь ошибку в логине', 'сколько стоит сервер', 'explain this function', 'да, согласен', 'подготовь описание', 'ТЗ готово, проверь']) {
+  check(`"${no}" is not`, PLAN_INTENT_RE.test(no), false);
+}
+{
+  const { ROOM_MIN: RMIN, ROOM_MAX: RMAX } = require('../bots');
+  const B = (id) => ({ id, label: id.toUpperCase(), description: 'd' });
+  const roster = [B('a'), B('planner'), B('b'), B('c')];
+  const ids = (r) => r.room.map(b => b.id);
+  check('without a plan intent the seating is left alone', ids(planRoom({ bots: roster, prompt: 'привет' })), ['a', 'planner', 'b', 'c']);
+  check('with a plan intent the planner sits LAST (it reads the whole discussion; the closing step is its)', ids(planRoom({ bots: roster, prompt: 'сделай план' })), ['a', 'b', 'c', 'planner']);
+  check('chosen picks: the planner is added when the model forgot it', ids(planRoom({ bots: roster, picks: ['a', 'b'], prompt: 'разбей на задачи' })), ['a', 'b', 'planner']);
+  check('chosen picks: a planner the model did pick is moved to the end', ids(planRoom({ bots: roster, picks: ['planner', 'a', 'b'], prompt: 'нужен план' })), ['a', 'b', 'planner']);
+  check('no prompt (older callers) changes nothing', ids(planRoom({ bots: roster, picks: ['a', 'b'] })), ['a', 'b']);
+  check('skipped is recomputed', planRoom({ bots: roster, picks: ['a', 'b'], prompt: 'план' }).skipped, ['c']);
+  const noPlanner = [B('a'), B('b'), B('c')];
+  check('a project without the planner is unaffected', ids(planRoom({ bots: noPlanner, prompt: 'сделай план' })), ['a', 'b', 'c']);
+  const big = [B('a'), B('b'), B('c'), B('d'), B('e'), B('f'), B('planner')];
+  const full = planRoom({ bots: big, prompt: 'plan the release' });
+  check('a full room makes room for it, within the cap', [full.room.length, full.room[full.room.length - 1].id], [RMAX, 'planner']);
+  check('the room never drops below its minimum', seatPlanner([B('a'), B('b')], roster, 2, 'план').length >= RMIN, true);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
