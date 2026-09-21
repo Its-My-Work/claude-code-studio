@@ -117,6 +117,7 @@ const { detectAuthError, authErrorNotice } = require('./auth-errors');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason, roomStopReason } = require('./multi-agent-result');
 const roomFiles = require('./room-files');
+const roomGit = require('./room-git');
 const {
   resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
   tmuxNameFor, buildLaunchCommand, isReapCandidate, shouldReap, pickOverflow, TMUX_PREFIX,
@@ -4993,6 +4994,8 @@ const ROOM_SEATING_TIMEOUT_MS = 60000;
 // The closing step of a room (one more bot run per turn that puts the result into the file the user
 // asked for). `off` = the room only discusses, as before. Read once at startup.
 const ROOM_CLOSING = String(process.env.ROOM_CLOSING || 'on').toLowerCase() !== 'off';
+// Restore points: the room commits its working directory before and after a turn (only in a repo this app manages).
+const ROOM_GIT = String(process.env.ROOM_GIT || 'on').toLowerCase() !== 'off';
 
 // One tool-less call that proposes the seating. Same shape as the multi-agent planner above:
 // --json-schema delivers the answer through the synthetic StructuredOutput tool, and tools=''
@@ -5068,7 +5071,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     }
   }
 
-  const { room, skipped, reason } = botsLogic.planRoom({ bots, picks });
+  const { room, skipped, reason } = botsLogic.planRoom({ bots, picks, prompt });
   if (reason === 'too-few') {
     const note = `⚠️ A conversation needs at least ${botsLogic.ROOM_MIN} bots in this project. Add another, or switch this chat off conversation mode.\n\n`;
     save(note, null); send({ type: 'text', text: note });
@@ -5103,6 +5106,8 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   const attachments = botsLogic.currentTurnAttachments(userContent);
   // The room is judged by what it changed on disk, not by what a bot says it changed.
   const filesBefore = mode === 'planning' ? null : await roomFiles.snapshotDir(workdir || WORKDIR);
+  // ...and can be undone: the state before the discussion is committed first (a repo this app manages only).
+  const gitBefore = mode === 'planning' || !ROOM_GIT ? null : roomGit.checkpoint(workdir || WORKDIR, `room: before the discussion — ${prompt}`, WM);
 
   // The room's own record. Each entry is one bot's contribution, in the order spoken —
   // this is what every later bot reads, and what the closing artifact is built from.
@@ -5126,7 +5131,10 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     + `Code, commands and identifiers stay as they are.\n`
     + (mode === 'planning'
       ? `- Planning mode: read and analyse, but do not modify any file.\n`
-      : `- You can read and edit files in the project. If you change one, name the file and what changed; the next bot reads it as you left it.\n`)
+      : `- You can read and edit files in the project. If you change one, name the file and what changed; the next bot reads it as you left it.\n`
+        + `- Read a file before you change it. Change the parts that need changing; do not rewrite a whole document from scratch, `
+        + `and do not make one shorter unless the user asked you to.\n`)
+    + `- The project's working directory is ${workdir || WORKDIR}. Paths are relative to it; do not invent paths such as /workspace/....\n`
     + `- You have about ${turnCap} steps (tool calls). Do the research you need, then answer: a run that ends on a tool call `
     + `has no answer and is lost.\n`
     + `- Keep it to a few sentences. You are ${self}.`;
@@ -5310,7 +5318,14 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     const after = await roomFiles.snapshotDir(workdir || WORKDIR);
     if (!after.truncated) {
       const diff = roomFiles.diffSnapshots(filesBefore.files, after.files);
-      let note = roomFiles.describeChanges(diff, after.files, getUserLang());
+      let note = roomFiles.describeChanges(diff, after.files, getUserLang(), 15, filesBefore.files);
+      // A file that came out much smaller is said outright, with the way back.
+      note += roomFiles.describeShrink(roomFiles.shrunkFiles(diff, filesBefore.files, after.files), { lang: getUserLang(), ref: gitBefore && gitBefore.sha ? gitBefore.sha : null });
+      // ...and the result is committed, so the next room starts from a known state.
+      if (note && ROOM_GIT && mode !== 'planning') {
+        const done = roomGit.checkpoint(workdir || WORKDIR, `room: ${prompt} (${room.map(b => b.id).join(', ')})`, WM);
+        if (done.committed) note += getUserLang() === 'ru' ? `📌 Сохранено в git: \`${done.sha}\`.\n\n` : `📌 Saved in git: \`${done.sha}\`.\n\n`;
+      }
       if (!note && closerAnswered) {
         note = getUserLang() === 'ru'
           ? '⚠️ **Файлы не менялись.** Бот написал, что результат внесён, но в рабочей папке ничего не изменилось: считайте, что документ не обновлён.\n\n'

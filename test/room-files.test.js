@@ -90,6 +90,33 @@ const bump = (f, ms = 5000) => { const t = new Date(Date.now() + ms); fs.utimesS
     fs.rmSync(linkRoot, { recursive: true, force: true });
   }
 
+  console.log('a document that came out much smaller is called out:');
+  {
+    const B = (n) => `${n}:1000`, A = (n) => `${n}:2000`;
+    const before = new Map([['TZ.md', B(25937)], ['plan.md', B(52703)], ['small.md', B(900)], ['same.md', B(5000)], ['grown.md', B(4000)], ['gone.md', B(8000)], ['tiny-gone.md', B(100)]]);
+    const after = new Map([['TZ.md', A(13800)], ['plan.md', A(23010)], ['small.md', A(100)], ['same.md', A(4900)], ['grown.md', A(9000)], ['new.md', A(500)]]);
+    const diff = RF.diffSnapshots(before, after);
+    const shrunk = RF.shrunkFiles(diff, before, after);
+    check('the ТЗ that went 25.9 KB -> 13.8 KB is named, biggest loss (in bytes) first', shrunk.map(s => [s.path, s.pct]), [['plan.md', 56], ['TZ.md', 47], ['gone.md', 100]]);
+    check('a tiny file, a small change and a growing file are not news', shrunk.some(s => ['small.md', 'same.md', 'grown.md', 'tiny-gone.md', 'new.md'].includes(s.path)), false);
+    check('a threshold of exactly 80% is not a shrink; below is', [RF.shrunkFiles({ modified: ['x'], deleted: [] }, new Map([['x', B(1000)]]), new Map([['x', A(800)]]), { minBytes: 0 }).length,
+      RF.shrunkFiles({ modified: ['x'], deleted: [] }, new Map([['x', B(1000)]]), new Map([['x', A(799)]]), { minBytes: 0 }).length], [0, 1]);
+    check('missing maps do not throw', RF.shrunkFiles({ modified: ['x'], deleted: ['y'] }, null, null), []);
+
+    const w = RF.describeShrink(shrunk, { lang: 'ru', ref: 'abc1234' });
+    check('the warning lists sizes and percentages', w.includes('`TZ.md` — 25 KB → 13 KB (−47%)') && w.includes('`plan.md` — 51 KB → 22 KB (−56%)'), true);
+    check('...and the exact way back', w.includes('git checkout abc1234 -- <файл>'), true);
+    check('without a git version it says there is none', RF.describeShrink(shrunk, { lang: 'ru' }).includes('Версии до правки в git нет'), true);
+    check('English', RF.describeShrink(shrunk, { lang: 'en', ref: 'abc1234' }).includes('Documents got much smaller'), true);
+    check('nothing to say, nothing said', [RF.describeShrink([], { lang: 'ru' }), RF.describeShrink(null)], ['', '']);
+    check('the list is capped', RF.describeShrink(Array.from({ length: 9 }, (_, i) => ({ path: `f${i}`, from: 9000, to: 1, pct: 99 })), { limit: 5 }).includes('… and 4'), true);
+
+    const note = RF.describeChanges(diff, after, 'ru', 15, before);
+    check('a changed file shows "before → after" when the before map is given', note.includes('`TZ.md` — изменён (25 KB → 13 KB)'), true);
+    check('...and just its size without it (old callers)', RF.describeChanges(diff, after, 'ru').includes('`TZ.md` — изменён (13 KB)'), true);
+    check('a new file shows its size, a deleted one none', note.includes('`new.md` — создан (500 B)') && note.includes('`gone.md` — удалён\n'), true);
+  }
+
   fs.rmSync(root, { recursive: true, force: true });
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

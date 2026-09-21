@@ -32,12 +32,12 @@ const BOT_READ_TOOLS = ['Read', 'Glob', 'Grep'], BOT_WORK_TOOLS = ['Bash', 'Read
 
 const NAMES = ['ROOM_CLOSING', 'ClaudeCLI', 'stmts', 'ROOM_SEATING', 'botsLogic', 'getUserLang', 'pickRoomSeating', 'WORKDIR', 'seatingNote', 'botLangName',
   'roomFiles', 'MULTI_AGENT_MAX_TURNS_CAP', 'mcpServersForBot', 'runInteractiveSingle', 'killInteractiveTmux', 'isAgentSuccess',
-  'roomStopReason', 'BOT_READ_TOOLS', 'BOT_WORK_TOOLS', 'tmuxAvailable'];
+  'roomStopReason', 'BOT_READ_TOOLS', 'BOT_WORK_TOOLS', 'tmuxAvailable', 'ROOM_GIT', 'roomGit', 'WM'];
 const build = (deps) => new Function(...NAMES, `${toolsSrc}\n return ${roomSrc.trim().replace(/^async function runConversationRoom/, 'async function runConversationRoom')};`)(...NAMES.map(n => deps[n]));
 
 /** Runs one room turn. `script(call)` decides what each CLI run does: { text, subtype, error, write: [[relPath, data]] }. */
-async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns = 5, prompt = 'Доработайте ТЗ', userContent = 'Доработайте ТЗ', rows = [], workdir, engine = 'api', lang = 'ru', perBotEngine = false, tmux = true }) {
-  const saved = [], sent = [], calls = [], interactive = [];
+async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns = 5, prompt = 'Доработайте ТЗ', userContent = 'Доработайте ТЗ', rows = [], workdir, engine = 'api', lang = 'ru', perBotEngine = false, tmux = true, git = 'none', gitOn = true }) {
+  const saved = [], sent = [], calls = [], interactive = [], gitCalls = [];
   class FakeCLI {
     send(opts) {
       const h = {};
@@ -67,12 +67,15 @@ async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns =
     getUserLang: () => lang, pickRoomSeating: async () => null, WORKDIR: workdir, seatingNote: () => '', botLangName: () => (lang === 'ru' ? 'Russian' : 'English'),
     MULTI_AGENT_MAX_TURNS_CAP: 200, mcpServersForBot: (base) => base, runInteractiveSingle: async (o) => { interactive.push(o); return { fullText: `subscription answer of ${o.agent}`, completed: true, toolEvents: [] }; }, killInteractiveTmux() {},
     tmuxAvailable: () => tmux,
+    ROOM_GIT: gitOn, WM: {},
+    // `git`: 'none' = not a repo the app manages; a function = the checkpoint result for call n (1-based)
+    roomGit: { checkpoint: (dir, msg) => { gitCalls.push({ dir, msg }); return typeof git === 'function' ? git(gitCalls.length, dir, msg) : { managed: false }; } },
   };
   const run = build(deps);
   const ws = { send: (x) => sent.push(JSON.parse(x)) };
   await run({ mcpServers: {}, model: 'sonnet', maxTurns, ws, sessionId: 's1', abortController: new AbortController(), workdir, tabId: 't1', effort: null, userContent, engine, mode, perBotEngine },
     { bots, prompt, rosterBots: bots });
-  return { saved, sent, calls, interactive };
+  return { saved, sent, calls, interactive, gitCalls };
 }
 
 const B = (id) => ({ id, label: id.toUpperCase(), description: `role ${id}` });
@@ -248,6 +251,73 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     check('without tmux the pinned bot follows the chat instead of failing', [noTmux.interactive.length, noTmux.calls.some(c => c.who === 'b')], [0, true]);
     const pinnedApi = await runRoom({ bots: [B('a'), { ...B('b'), run_engine: 'api' }, B('c')], workdir: dir, perBotEngine: true, engine: 'subscription', closing: false, script: discuss });
     check('a bot pinned to api runs headless inside a subscription chat, the rest use the interactive engine', [pinnedApi.calls.some(c => c.who === 'b'), pinnedApi.interactive.some(o => o.agent === 'a')], [true, true]);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log('the room leaves a restore point and says when a document got much smaller:');
+  {
+    const dir = tmp();
+    const big = '# spec\n' + 'requirement line\n'.repeat(1500);   // ~25 KB
+    fs.writeFileSync(path.join(dir, 'TZ.md'), big);
+    const r = await runRoom({ bots: bots3, workdir: dir, prompt: 'Доработайте ТЗ',
+      git: (n) => (n === 1 ? { managed: true, committed: true, sha: 'aaa1111' } : { managed: true, committed: true, sha: 'bbb2222' }),
+      script: (c) => (c.closing ? { text: 'Обновил TZ.md.', write: [['TZ.md', '# spec\nshort\n']] } : discuss(c)) });
+    check('the directory is checkpointed before the discussion and again after it', [r.gitCalls.length, r.gitCalls[0].dir === dir, r.gitCalls[0].msg.startsWith('room: before the discussion'), r.gitCalls[1].msg.startsWith('room: Доработайте ТЗ (a, b, c)')], [2, true, true, true]);
+    const shrink = r.saved.find(m => m.text.includes('⚠️ **Документы заметно уменьшились'));
+    check('a ТЗ cut to a stub is called out (in the same note as the file list), with sizes', !!shrink && /`TZ\.md` — 25 KB → 13 B \(−100%\)/.test(shrink.text), true);
+    check('...with the exact way back: the commit from BEFORE the room', !!shrink && shrink.text.includes('git checkout aaa1111 -- <файл>'), true);
+    check('the changed file shows before → after in the change list', r.saved.some(m => m.text.includes('`TZ.md` — изменён (25 KB → 13 B)')), true);
+    check('the result commit is announced', r.saved.some(m => m.text.includes('📌 Сохранено в git: `bbb2222`')), true);
+    check('the warning is streamed to the client', r.sent.some(m => m.type === 'text' && m.text.includes('⚠️ **Документы заметно уменьшились')), true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, 'TZ.md'), 'x'.repeat(5000));
+    const grow = await runRoom({ bots: bots3, workdir: dir, git: () => ({ managed: true, committed: true, sha: 'ccc3333' }),
+      script: (c) => (c.closing ? { text: 'Дополнил.', write: [['TZ.md', 'x'.repeat(9000)]] } : discuss(c)) });
+    check('a document that grew raises no alarm', grow.saved.some(m => m.text.includes('заметно уменьшились')), false);
+    fs.writeFileSync(path.join(dir, 'TZ.md'), 'x'.repeat(5000));
+    const foreign = await runRoom({ bots: bots3, workdir: dir,
+      script: (c) => (c.closing ? { text: 'Сократил.', write: [['TZ.md', 'x'.repeat(500)]] } : discuss(c)) });
+    check('in a repo the app does not manage there is no commit and the warning says there is no git version',
+      foreign.saved.some(m => m.text.includes('Версии до правки в git нет')) && !foreign.saved.some(m => m.text.includes('📌')), true);
+    const off = await runRoom({ bots: bots3, workdir: dir, gitOn: false, git: () => ({ managed: true, committed: true, sha: 'ddd4444' }),
+      script: (c) => (c.closing ? { text: 'x', write: [['TZ.md', 'y'.repeat(10)]] } : discuss(c)) });
+    check('ROOM_GIT=off: no checkpoint at all', off.gitCalls.length, 0);
+    const failing = await runRoom({ bots: bots3, workdir: dir, git: () => ({ managed: true, error: 'index.lock exists' }),
+      script: (c) => (c.closing ? { text: 'Готово.', write: [['TZ.md', 'z'.repeat(6000)]] } : discuss(c)) });
+    check('a failed checkpoint costs the room nothing', [failing.calls.some(c => c.closing), failing.saved.some(m => m.text.includes('Комната закрыта') || m.text.includes('Room closed'))], [true, true]);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  {
+    const dir = tmp();
+    const plan = await runRoom({ bots: bots3, workdir: dir, mode: 'planning', git: () => ({ managed: true, committed: true, sha: 'eee5555' }), script: discuss });
+    check('planning mode reads only: nothing is committed', plan.gitCalls.length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log('every bot is told where it works and not to gut a document:');
+  {
+    const dir = tmp();
+    const r = await runRoom({ bots: bots3, workdir: dir, script: discuss });
+    const p = r.calls[0].prompt;
+    check('the real working directory is in the rules, and made-up /workspace paths are ruled out', p.includes(`working directory is ${dir}`) && p.includes('do not invent paths such as /workspace/'), true);
+    check('read before changing, no rewriting from scratch, no shortening unasked', p.includes('Read a file before you change it') && p.includes('do not rewrite a whole document from scratch') && p.includes('do not make one shorter unless the user asked'), true);
+    const ro = await runRoom({ bots: bots3, workdir: dir, mode: 'planning', script: discuss });
+    check('planning mode tells the path too (it reads)', ro.calls[0].prompt.includes(`working directory is ${dir}`), true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log('a message about a plan brings the planner, and it speaks last and closes:');
+  {
+    const dir = tmp();
+    const roster = [{ ...B('planner'), description: 'plans' }, B('a'), B('b')];
+    const r = await runRoom({ bots: roster, workdir: dir, prompt: 'Сделайте из ТЗ пошаговый план', script: (c) => (c.closing ? { text: 'PASS' } : (c.n <= 3 ? { text: `by ${c.who}` } : { text: 'PASS' })) });
+    check('round one order: the others first, the planner last', r.calls.filter(c => !c.closing).slice(0, 3).map(c => c.who), ['a', 'b', 'planner']);
+    check('the closing step (the file work) is the planner\'s', r.calls.filter(c => c.closing).map(c => c.who), ['planner']);
+    const other = await runRoom({ bots: roster, workdir: dir, prompt: 'Проверь пароль в логине', script: (c) => (c.closing ? { text: 'PASS' } : (c.n <= 3 ? { text: `by ${c.who}` } : { text: 'PASS' })) });
+    check('a message that is not about a plan leaves the roster order', other.calls.filter(c => !c.closing).slice(0, 3).map(c => c.who), ['planner', 'a', 'b']);
     fs.rmSync(dir, { recursive: true, force: true });
   }
 

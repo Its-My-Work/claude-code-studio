@@ -518,19 +518,38 @@ const ROOM_MAX_ROUNDS = envInt('ROOM_MAX_ROUNDS', 3);
 // `picks` (handles, in speaking order) is the seating chosen for THIS task — see the
 // auto-seating block below. Without usable picks the room falls back to the roster order
 // (room_priority, then alphabetical), which is what it always did.
-function planRoom({ bots, max, picks } = {}) {
+function planRoom({ bots, max, picks, prompt } = {}) {
   const cap = Number.isInteger(max) && max > 0 ? max : ROOM_MAX;
   const all = (Array.isArray(bots) ? bots : []).filter(b => b && b.id);
   if (all.length < ROOM_MIN) return { room: [], skipped: [], reason: 'too-few' };
+  let room = null;
   if (Array.isArray(picks)) {
     const byId = new Map(all.map(b => [b.id, b]));
     const seated = [...new Set(picks)].filter(h => byId.has(h)).slice(0, cap).map(h => byId.get(h));
-    if (seated.length >= ROOM_MIN) {
-      const seatedIds = new Set(seated.map(b => b.id));
-      return { room: seated, skipped: all.filter(b => !seatedIds.has(b.id)).map(b => b.id), reason: null };
-    }
+    if (seated.length >= ROOM_MIN) room = seated;
   }
-  return { room: all.slice(0, cap), skipped: all.slice(cap).map(b => b.id), reason: null };
+  if (!room) room = all.slice(0, cap);
+  room = seatPlanner(room, all, cap, prompt);
+  const seatedIds = new Set(room.map(b => b.id));
+  return { room, skipped: all.filter(b => !seatedIds.has(b.id)).map(b => b.id), reason: null };
+}
+
+// ── The planner ──────────────────────────────────────────────────────
+// A bot that turns an agreed ТЗ into tasks for the other bots exists only if it is asked. It was
+// forgotten: the seating model picks by a one-line description, and a weak one does not connect
+// "make a step-by-step plan" with the planner. So a message that is about a plan or tasks always seats
+// it (when the project has it), and it speaks LAST: it reads the whole discussion, and the closing
+// step (the last seat's) is then its work, the plan files.
+const PLANNER_HANDLE = 'planner';
+const PLAN_INTENT_RE = /(?:^|[^\p{L}\p{N}_])(?:план|задач|канбан|kanban|декомпоз|дорожн\p{L}*\s+карт|roadmap|backlog|бэклог|plan|tasks?(?![\p{L}\p{N}_]))/iu;
+
+/** The room with the planner in it (last) when `prompt` is about a plan or tasks; the room untouched otherwise. */
+function seatPlanner(room, all, cap, prompt) {
+  const planner = (all || []).find(b => b.id === PLANNER_HANDLE);
+  if (!planner || !PLAN_INTENT_RE.test(String(prompt || ''))) return room;
+  const others = room.filter(b => b.id !== PLANNER_HANDLE);
+  // keep the room within its cap and above its minimum: the planner takes the last free seat
+  return [...others.slice(0, Math.max(cap - 1, ROOM_MIN - 1)), planner];
 }
 
 // ── Auto seating ────────────────────────────────────────────────────────────────
@@ -677,7 +696,7 @@ function renderTranscript(entries, { perEntry = ROOM_ENTRY_CHARS, total = ROOM_T
 }
 
 // Room bookkeeping that is not conversation: a failed speaker, a pass, the seating note, a stop.
-const ROOM_NOISE_RE = /^\s*(⚠️ @|⏭️ @|🎯 |📋 \*\*|🙋 \*\*|ℹ️ |📁 )/;
+const ROOM_NOISE_RE = /^\s*(⚠️ @|⚠️ \*\*|⏭️ @|🎯 |📋 \*\*|🙋 \*\*|ℹ️ |📁 |📌 )/;
 
 // The chat before the current user message, for EVERY bot of the turn. `rows` are the chat's
 // messages in order (role, type, content, agent_id); everything from the last user message on is the
@@ -791,7 +810,7 @@ module.exports = {
   parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, planBotImport,
   MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability, BOT_ENGINES, normalizeBotEngine, botEngine, botModel,
   planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS,
-  planRoom, parseRoomReply, roomShouldContinue,
+  planRoom, seatPlanner, PLANNER_HANDLE, PLAN_INTENT_RE, parseRoomReply, roomShouldContinue,
   SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS, seatingPrompt, parseSeating, shouldReseat,
   ROOM_BOT_MIN_TURNS, roomTurnCap, renderTranscript, buildRoomHistory, currentTurnAttachments, closingRules,
   ROOM_MIN, ROOM_MAX, ROOM_MAX_MESSAGES, ROOM_MAX_ROUNDS,
