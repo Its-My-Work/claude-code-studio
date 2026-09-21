@@ -949,6 +949,8 @@ try { db.exec(`ALTER TABLE bots ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0`
 try { db.exec(`ALTER TABLE bots ADD COLUMN room_priority INTEGER`); } catch {}
 // run_engine: this bot's own billing engine ('api' | 'subscription'); NULL = follow the chat. See botsLogic.botEngine.
 try { db.exec(`ALTER TABLE bots ADD COLUMN run_engine TEXT`); } catch {}
+// room_tools: what this bot may do to files in a discussion room ('read' | 'run' | 'work'); NULL = work. See botsLogic.roomToolScope.
+try { db.exec(`ALTER TABLE bots ADD COLUMN room_tools TEXT`); } catch {}
 // A task can be assigned to a bot: it then runs with that bot's system prompt and
 // model, and its output is attributed to the bot. Combined with the scheduling
 // columns already here (scheduled_at / recurrence) this is what makes a recurring
@@ -1053,14 +1055,14 @@ const stmts = {
   // node:sqlite (Node >= 22.5), whose named-parameter binding differs from
   // better-sqlite3's and rejects `@name` objects with "column index out of range".
   // `excluded.` lets the upsert reuse the same nine values without repeating them.
-  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar,is_global,room_priority,run_engine)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar,is_global,room_priority,run_engine,room_tools)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET
       label=excluded.label, description=excluded.description, engine=excluded.engine,
       model=excluded.model, system_prompt=excluded.system_prompt,
       active_skills=excluded.active_skills, active_mcp=excluded.active_mcp,
       avatar=excluded.avatar, is_global=excluded.is_global, room_priority=excluded.room_priority,
-      run_engine=excluded.run_engine,
+      run_engine=excluded.run_engine, room_tools=excluded.room_tools,
       updated_at=datetime('now')`),
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
@@ -4968,7 +4970,7 @@ function drainInbox(sessionId, botId) {
 // other mode can also run commands and edit files.
 const BOT_READ_TOOLS = Object.freeze(['Read', 'Glob', 'Grep']);
 const BOT_WORK_TOOLS = Object.freeze(['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
-function roomBuiltinTools(mode) { return [...(mode === 'planning' ? BOT_READ_TOOLS : BOT_WORK_TOOLS)]; }
+function roomBuiltinTools(mode, scope) { return [...(mode === 'planning' || scope === 'read' ? BOT_READ_TOOLS : scope === 'run' ? [...BOT_READ_TOOLS, 'Bash'] : BOT_WORK_TOOLS)]; }
 
 // ─── Conversation room (agent_mode 'conversation') ───────────────────────────
 // 2-6 bots taking SERIAL turns on one user message, for a few rounds, then one artifact.
@@ -5118,7 +5120,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   // cap then refused.
   let messages = 0, round = 1, roundsRun = 0, escalatedBy = null, stopReason = null;
 
-  const ROOM_RULES = (self) => `You are in a group conversation with other bots about the user's message. `
+  const ROOM_RULES = (self, scope) => `You are in a group conversation with other bots about the user's message. `
     + `The others' contributions appear below in the order they were said.\n\n`
     + `How to take part:\n`
     + `- Add what only you can add. Do not restate what someone already said.\n`
@@ -5131,20 +5133,25 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     + `Code, commands and identifiers stay as they are.\n`
     + (mode === 'planning'
       ? `- Planning mode: read and analyse, but do not modify any file.\n`
+      : scope === 'read'
+        ? `- In this discussion you can read the project's files but not change them. If a file should change, say which and how: a bot with write access does it at the end.\n`
+      : scope === 'run'
+        ? `- You can read files and run commands, but not edit files. If a file should change, say which and how: a bot with write access does it at the end.\n`
       : `- You can read and edit files in the project. If you change one, name the file and what changed; the next bot reads it as you left it.\n`
         + `- Read a file before you change it. Change the parts that need changing; do not rewrite a whole document from scratch, `
         + `and do not make one shorter unless the user asked you to.\n`)
     + `- The project's working directory is ${workdir || WORKDIR}. Paths are relative to it; do not invent paths such as /workspace/....\n`
     + `- You have about ${turnCap} steps (tool calls). Do the research you need, then answer: a run that ends on a tool call `
     + `has no answer and is lost.\n`
-    + `- Keep it to a few sentences. You are ${self}.`;
+    + `- Keep it short: about ten lines at most, unless you are writing a file. A report format from your role description is for written deliverables, not for a turn here. You are ${self}.`;
 
   // One bot, one fresh CLI session (used by the discussion and by the closing step).
   // A fresh session every time. A room turn is a complete brief on its own — the whole
   // transcript is in the prompt — and resuming a bot's long-lived chat session here would
   // splice the room's rounds into the thread it uses when mentioned normally, so a later
   // @@mention would answer as if mid-conversation.
-  const speak = async (bot, botPrompt, first) => {
+  // `deliverable`: the closing step is written work, so the persona's report format stays; a discussion turn drops it.
+  const speak = async (bot, botPrompt, first, deliverable = false) => {
     const botMcp = mcpServersForBot(mcpServers, bot);
     let text = '', result = null, errored = false;
     if (botEngine(bot) === 'subscription') {
@@ -5159,7 +5166,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
       try {
         ir = await runInteractiveSingle({
           prompt: botPrompt,
-          systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
+          systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName(), { discussion: !deliverable }),
           model: botsLogic.botModel(bot, 'subscription', model),
           ws,
           sessionId: roomTmuxId,
@@ -5199,10 +5206,10 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
           contentBlocks: first && attachments.length ? attachments : null,
           model: botsLogic.botModel(bot, 'api', model),
           maxTurns: turnCap,
-          systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
+          systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName(), { discussion: !deliverable }),
           // No _ccs_bots: the room is the dispatcher. See the invariants above.
           mcpServers: botMcp,
-          allowedTools: roomBuiltinTools(mode),
+          allowedTools: roomBuiltinTools(mode, botsLogic.roomToolScope(bot)),
           abortController,
           effort,
           name: bot.label,
@@ -5237,7 +5244,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         // the transcript after it, the peers' replies were the most recent thing in view
         // and two of three bots answered "I don't see a user request" — measured on the
         // first live run. Restating it at the end costs a few tokens and fixes that.
-        const botPrompt = `${ROOM_RULES('@' + bot.id)}\n\n${history}`
+        const botPrompt = `${ROOM_RULES('@' + bot.id, botsLogic.roomToolScope(bot))}\n\n${history}`
           + (said ? `What the others have said so far, in order:\n${said}\n\n` : '')
           + `The user's message, which this conversation is about:\n${prompt}\n\n`
           + `Now add your own contribution as @${bot.id}.`;
@@ -5291,15 +5298,24 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   // for no file. Not in planning mode (no write tools), not while the room waits for the user, not when
   // stopped. The app checks the result itself below.
   let closerAnswered = false;
-  if (ROOM_CLOSING && mode !== 'planning' && engine !== 'subscription' && !escalatedBy && stopReason !== 'stopped'
-      && transcript.length > 0 && !abortController?.signal?.aborted) {
-    const closer = room[room.length - 1];
+  // The closing step writes the file, so it belongs to the last seated bot that may write (the planner speaks last
+  // when there is one). A room of read-only bots has nobody to do it, and says so instead of skipping silently.
+  const closer = [...room].reverse().find(b => botsLogic.roomToolScope(b) === 'work') || null;
+  const closingWanted = ROOM_CLOSING && mode !== 'planning' && engine !== 'subscription' && !escalatedBy && stopReason !== 'stopped'
+    && transcript.length > 0 && !abortController?.signal?.aborted;
+  if (closingWanted && !closer) {
+    const note = getUserLang() === 'ru'
+      ? 'ℹ️ Ни у кого из участников нет права записи файлов, поэтому результат остался в чате.\n\n'
+      : 'ℹ️ None of the participants may write files, so the result stayed in the chat.\n\n';
+    save(note, null); send({ type: 'text', text: note });
+  }
+  if (closingWanted && closer) {
     state(closer.id, 'running');
     send({ type: 'agent_status', agent: 'orchestrator', status: getUserLang() === 'ru' ? 'Закрывающий шаг…' : 'Closing step…' });
     const closePrompt = `${botsLogic.closingRules('@' + closer.id, botLangName())}\n\n${history}`
       + `What was said in this discussion, in order:\n${botsLogic.renderTranscript(transcript)}\n\n`
       + `The user's message, which this conversation is about:\n${prompt}`;
-    const r = await speak(closer, closePrompt, false);
+    const r = await speak(closer, closePrompt, false, true);
     if (!r.ok) {
       const why = roomStopReason(r.result, r.errored, turnCap);
       const note = `\n\n⚠️ @${closer.id} did not finish the closing step (${why}).\n\n`;
@@ -11351,6 +11367,8 @@ function saveBot(req, res, mode) {
 
   const runEngine = botsLogic.normalizeBotEngine(body.runEngine);
   if (runEngine === false) return res.status(400).json({ error: 'runEngine must be "api", "subscription" or empty (as the chat)' });
+  const roomTools = botsLogic.normalizeRoomTools(body.roomTools);
+  if (roomTools === false) return res.status(400).json({ error: 'roomTools must be "read", "run", "work" or empty (the default)' });
 
   const prompt = String(body.systemPrompt ?? '');
   if (prompt.length > BOT_PROMPT_MAX) {
@@ -11378,6 +11396,7 @@ function saveBot(req, res, mode) {
       (body.isGlobal === undefined ? (prev.is_global ? 1 : 0) : (body.isGlobal ? 1 : 0)),
       (body.roomPriority === undefined ? (prev.room_priority ?? null) : (Number.isInteger(body.roomPriority) ? body.roomPriority : null)),
       runEngine === undefined ? (prev.run_engine || null) : runEngine,
+      roomTools === undefined ? (prev.room_tools || null) : roomTools,
     );
   } catch (e) {
     log.error('bot save failed', { handle, err: e.message });
@@ -11414,6 +11433,7 @@ app.get('/api/bots/export', (req, res) => {
     avatar: b.avatar || '',
     is_global: b.is_global ? 1 : 0,
     run_engine: b.run_engine || null,
+    room_tools: b.room_tools || null,
   }));
   res.setHeader('Content-Disposition', 'attachment; filename="bots.json"');
   res.setHeader('Content-Type', 'application/json');
@@ -11452,6 +11472,7 @@ app.post('/api/bots/import', express.json({ limit: '4mb' }), (req, res) => {
           b.is_global,
           null, // room_priority: not part of an export, as before
           b.run_engine,
+          b.room_tools,
         );
         // A non-global bot imported while a project is open joins it, exactly as a bot
         // created there would. Without this an import lands nowhere the user can see.

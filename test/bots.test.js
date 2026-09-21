@@ -7,6 +7,7 @@ const {
   seatingPrompt, parseSeating, shouldReseat, SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS,
   roomTurnCap, renderTranscript, buildRoomHistory, currentTurnAttachments, closingRules, ROOM_BOT_MIN_TURNS,
   normalizeBotEngine, botEngine, botModel, seatPlanner, PLANNER_HANDLE, PLAN_INTENT_RE,
+  stripReportFormat, normalizeRoomTools, roomToolScope, ROOM_TOOL_SCOPES,
 } = require('../bots');
 
 let pass = 0, fail = 0;
@@ -304,7 +305,7 @@ const I = (incoming, live, reserved, overwrite) =>
   check('nothing is overwritten', r.overwrite, []);
   check('defaults are filled in', r.create[0],
     { id: 'writer', label: 'Writer', description: '', model: null, system_prompt: '',
-      active_skills: '[]', active_mcp: '[]', avatar: '', is_global: 0, run_engine: null });
+      active_skills: '[]', active_mcp: '[]', avatar: '', is_global: 0, run_engine: null, room_tools: null });
 }
 
 check('a live handle is skipped by default',
@@ -893,14 +894,14 @@ console.log('room: what a bot may spend, and what it is shown:');
   check('the bots are told their step budget', /You have about \$\{turnCap\} steps/.test(room), true);
   check('a failed bot is explained by the result frame (roomStopReason), not "see the error above"', room.includes('roomStopReason(result, errored, turnCap)') && !room.includes('agentStopReason(result, errored)'), true);
   check('every bot gets the chat history and this turn\'s trimmed transcript',
-    room.includes('buildRoomHistory(stmts.getMsgsLite.all(sessionId))') && room.includes('botsLogic.renderTranscript(transcript)') && /\$\{ROOM_RULES\('@' \+ bot\.id\)\}\\n\\n\$\{history\}/.test(room), true);
+    room.includes('buildRoomHistory(stmts.getMsgsLite.all(sessionId))') && room.includes('botsLogic.renderTranscript(transcript)') && /\$\{ROOM_RULES\('@' \+ bot\.id, botsLogic\.roomToolScope\(bot\)\)\}\\n\\n\$\{history\}/.test(room), true);
   check('only the files of this message go to the first speaker, in both engines',
     room.includes('currentTurnAttachments(userContent)') && (room.match(/first && attachments\.length \? attachments : null/g) || []).length === 2 && !room.includes('userContent.filter('), true);
   check('one speak() serves the discussion and the closing step', (room.match(/await speak\(/g) || []).length === 2, true);
   check('the closing step is skipped in planning mode, for the subscription engine, while waiting for the user, and when stopped',
     /mode !== 'planning' && engine !== 'subscription' && !escalatedBy && stopReason !== 'stopped'/.test(room), true);
-  check('the closer is the last seated bot', room.includes('const closer = room[room.length - 1];'), true);
-  check('the closing step can be switched off (ROOM_CLOSING=off) and its compose var exists', /const ROOM_CLOSING = String\(process\.env\.ROOM_CLOSING \|\| 'on'\)/.test(SRV4) && room.includes('if (ROOM_CLOSING && mode !== ') && /ROOM_CLOSING=\$\{ROOM_CLOSING:-on\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')) && /ROOM_BOT_MIN_TURNS=\$\{ROOM_BOT_MIN_TURNS:-20\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')), true);
+  check('the closer is the last seated bot that may WRITE', room.includes("const closer = [...room].reverse().find(b => botsLogic.roomToolScope(b) === 'work') || null;"), true);
+  check('the closing step can be switched off (ROOM_CLOSING=off) and its compose var exists', /const ROOM_CLOSING = String\(process\.env\.ROOM_CLOSING \|\| 'on'\)/.test(SRV4) && room.includes('const closingWanted = ROOM_CLOSING && mode !== ') && /ROOM_CLOSING=\$\{ROOM_CLOSING:-on\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')) && /ROOM_BOT_MIN_TURNS=\$\{ROOM_BOT_MIN_TURNS:-20\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')), true);
   check('a PASS from the closer is silent, an answer is saved under its name', /if \(!reply\.pass\) \{ save\(r\.text, closer\.id\); closerAnswered = true; \}/.test(room), true);
   check('the files are snapshotted before the discussion (not in planning) and compared after',
     /const filesBefore = mode === 'planning' \? null : await roomFiles\.snapshotDir/.test(room) && room.includes('roomFiles.diffSnapshots(filesBefore.files, after.files)'), true);
@@ -961,6 +962,35 @@ for (const no of ['привет', 'исправь ошибку в логине',
   const full = planRoom({ bots: big, prompt: 'plan the release' });
   check('a full room makes room for it, within the cap', [full.room.length, full.room[full.room.length - 1].id], [RMAX, 'planner']);
   check('the room never drops below its minimum', seatPlanner([B('a'), B('b')], roster, 2, 'план').length >= RMIN, true);
+}
+
+console.log('one persona, several modes:');
+{
+  const persona = 'Тебя зовут Тарас. 14 лет в QA.\n\nПравила:\n- Первая строка — вывод: ПРОЙДЕНО / ПРОВАЛЕНО.\n- Не выдумывай вывод. Не запускал — так и скажи.\n- Завершай так: ВЕРДИКТ / КРИТЕРИИ n из m / ДАЛЬШЕ: <имя> — <что делать>.';
+  const stripped = stripReportFormat(persona);
+  check('the closing report line is left out, every other rule stays', [stripped.includes('Завершай так'), stripped.includes('Первая строка — вывод'), stripped.includes('Не выдумывай вывод. Не запускал — так и скажи.')], [false, true, true]);
+  check('nothing but that line is removed', persona.replace(/\n- Завершай так:[^\n]*/, ''), stripped);
+  check('a persona without such a line is unchanged', stripReportFormat('Правила:\n- Пиши коротко.'), 'Правила:\n- Пиши коротко.');
+  check('idempotent', stripReportFormat(stripped), stripped);
+  check('the English wording too', stripReportFormat('Rules:\n- Be brief.\n- End with: VERDICT / NEXT.'), 'Rules:\n- Be brief.');
+  check('a rule that merely mentions finishing is not the format line', stripReportFormat('- Завершай задачу, не бросай на полпути.').includes('Завершай задачу'), true);
+  check('empty and missing input', [stripReportFormat(''), stripReportFormat(null), stripReportFormat(undefined)], ['', '', '']);
+  const bot = { id: 'taras-qa', system_prompt: persona };
+  const disc = buildBotSystemPrompt(bot, [bot], 'Russian', { discussion: true });
+  const full = buildBotSystemPrompt(bot, [bot], 'Russian');
+  check('a discussion prompt has no report format; a normal prompt keeps it', [disc.includes('Завершай так'), full.includes('Завершай так')], [false, true]);
+  check('everything else of the prompt is the same in both (language, evidence clause)', full.replace(/\n- Завершай так:[^\n]*/, '') === disc, true);
+  check('the three-argument call still means "not a discussion"', buildBotSystemPrompt(bot, [bot], 'Russian', {}).includes('Завершай так'), true);
+}
+console.log('what a bot may do to files in a room:');
+check('scopes', ROOM_TOOL_SCOPES, ['read', 'run', 'work']);
+check('empty and null mean the default, absent stays absent', [normalizeRoomTools(''), normalizeRoomTools(null), normalizeRoomTools(undefined)], [null, null, undefined]);
+check('valid ones are kept, anything else is invalid', [normalizeRoomTools('read'), normalizeRoomTools('run'), normalizeRoomTools('work'), normalizeRoomTools('root'), normalizeRoomTools('READ'), normalizeRoomTools(1)], ['read', 'run', 'work', false, false, false]);
+check('no scope means work (nothing changes for existing bots)', [roomToolScope({}), roomToolScope(null), roomToolScope({ room_tools: null }), roomToolScope({ room_tools: 'root' })], ['work', 'work', 'work', 'work']);
+check('a set scope is used', [roomToolScope({ room_tools: 'read' }), roomToolScope({ room_tools: 'run' })], ['read', 'run']);
+{
+  const plan = require('../bots').planBotImport({ incoming: [{ label: 'A', room_tools: 'read' }, { label: 'B', roomTools: 'run' }, { label: 'C', room_tools: 'root' }, { label: 'D' }], live: [], reserved: [] });
+  check('import carries the scope, in either spelling; junk becomes the default', plan.create.map(b => b.room_tools), ['read', 'run', null, null]);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -27,7 +27,7 @@ function check(label, actual, expected) {
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 const roomSrc = SRC.slice(SRC.indexOf('async function runConversationRoom('), SRV_END());
 function SRV_END() { return SRC.indexOf('async function runBotTurns('); }
-const toolsSrc = /function roomBuiltinTools\(mode\) \{[^\n]*\}/.exec(SRC)[0];
+const toolsSrc = /function roomBuiltinTools\(mode, scope\) \{[^\n]*\}/.exec(SRC)[0];
 const BOT_READ_TOOLS = ['Read', 'Glob', 'Grep'], BOT_WORK_TOOLS = ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write'];
 
 const NAMES = ['ROOM_CLOSING', 'ClaudeCLI', 'stmts', 'ROOM_SEATING', 'botsLogic', 'getUserLang', 'pickRoomSeating', 'WORKDIR', 'seatingNote', 'botLangName',
@@ -318,6 +318,42 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     check('the closing step (the file work) is the planner\'s', r.calls.filter(c => c.closing).map(c => c.who), ['planner']);
     const other = await runRoom({ bots: roster, workdir: dir, prompt: 'Проверь пароль в логине', script: (c) => (c.closing ? { text: 'PASS' } : (c.n <= 3 ? { text: `by ${c.who}` } : { text: 'PASS' })) });
     check('a message that is not about a plan leaves the roster order', other.calls.filter(c => !c.closing).slice(0, 3).map(c => c.who), ['planner', 'a', 'b']);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log('each bot works under its own file access, and answers as a discussant, not as a form:');
+  {
+    const dir = tmp();
+    const persona = (name) => `Тебя зовут ${name}.\n\nПравила:\n- Первая строка — вывод.\n- Завершай так: ВЕРДИКТ / ДАЛЬШЕ: <имя> — <что делать>.`;
+    const roster = [
+      { ...B('reader'), room_tools: 'read', system_prompt: persona('Вира') },
+      { ...B('runner'), room_tools: 'run', system_prompt: persona('Рита') },
+      { ...B('writer'), system_prompt: persona('Катя') },
+    ];
+    const r = await runRoom({ bots: roster, workdir: dir, prompt: 'Проверь ТЗ', script: (c) => (c.closing ? { text: 'Готово.' } : (c.n <= 3 ? { text: `by ${c.who}` } : { text: 'PASS' })) });
+    const by = (who) => r.calls.find(c => c.who === who && !c.closing);
+    check('read: only Read/Glob/Grep', by('reader').allowedTools, ['Read', 'Glob', 'Grep']);
+    check('run: adds the shell, still no Edit/Write', by('runner').allowedTools, ['Read', 'Glob', 'Grep', 'Bash']);
+    check('no scope: everything', by('writer').allowedTools, ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
+    check('a read-only bot is told so, and to leave the change to a writer', by('reader').prompt.includes('you can read the project\'s files but not change them') && !by('reader').prompt.includes('You can read and edit files'), true);
+    check('a runner is told it may run commands but not edit', by('runner').prompt.includes('read files and run commands, but not edit files'), true);
+    check('a writer keeps the ordinary rules', by('writer').prompt.includes('You can read and edit files in the project'), true);
+    check('discussion turns are told to be short', by('reader').prompt.includes('about ten lines at most'), true);
+    check('...and their system prompt has no closing report format (nothing to address a peer with)', r.calls.filter(c => !c.closing).every(c => !c.systemPrompt.includes('Завершай так')), true);
+    const closing = r.calls.filter(c => c.closing);
+    check('the closing step is done by the last bot that may WRITE, not by a read-only last seat', closing.map(c => c.who), ['writer']);
+    check('...and it keeps its persona\'s report format (the closing turn is a deliverable)', closing[0].systemPrompt.includes('Завершай так') && closing[0].prompt.includes('use it'), true);
+    check('the closer works with full tools', closing[0].allowedTools, ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  {
+    const dir = tmp();
+    const readers = [{ ...B('a'), room_tools: 'read' }, { ...B('b'), room_tools: 'read' }, { ...B('c'), room_tools: 'run' }];
+    const r = await runRoom({ bots: readers, workdir: dir, script: discuss });
+    check('a room where nobody may write has no closing run', r.calls.some(c => c.closing), false);
+    check('...and says so instead of skipping silently', r.saved.some(m => m.text.startsWith('ℹ️ Ни у кого из участников нет права записи файлов')), true);
+    const planning = await runRoom({ bots: readers, workdir: dir, mode: 'planning', script: discuss });
+    check('planning mode (read-only anyway) does not complain about it', planning.saved.some(m => m.text.includes('права записи')), false);
     fs.rmSync(dir, { recursive: true, force: true });
   }
 

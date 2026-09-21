@@ -43,7 +43,7 @@ for (const l of lists) if (l.includes('Bash')) check(`[${l.join(',')}] can read 
 // redirect — and ignored the chat mode entirely. It now follows the split runCliSingle makes.
 console.log('the conversation room has a real tool list:');
 {
-  const m = /const BOT_READ_TOOLS[\s\S]*?function roomBuiltinTools\(mode\) \{[^\n]*\}/.exec(src);
+  const m = /const BOT_READ_TOOLS[\s\S]*?function roomBuiltinTools\(mode, scope\) \{[^\n]*\}/.exec(src);
   check('the shared lists and the helper are found', !!m, true);
   if (m) {
     const roomTools = new Function(m[0] + '; return { roomBuiltinTools, BOT_WORK_TOOLS, BOT_READ_TOOLS };')();
@@ -54,10 +54,16 @@ console.log('the conversation room has a real tool list:');
       check(`${mode}: reads, runs commands and writes files`, tools(mode), ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
     }
     check('the caller cannot mutate the shared list', (() => { tools('task').push('X'); return tools('task').length; })(), 6);
+    // a bot's own scope (bots.room_tools) narrows what a room lets it do to files
+    check("scope 'read': read-only, whatever the mode", [tools('auto', 'read'), tools('task', 'read')], [['Read', 'Glob', 'Grep'], ['Read', 'Glob', 'Grep']]);
+    check("scope 'run': read + shell, no Edit/Write", tools('auto', 'run'), ['Read', 'Glob', 'Grep', 'Bash']);
+    check("scope 'work' / unset: everything", [tools('auto', 'work'), tools('auto', undefined), tools('auto', null)], [['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write'], ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write'], ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']]);
+    check("planning stays read-only even for a 'work' bot", tools('planning', 'work'), ['Read', 'Glob', 'Grep']);
+    check('a scope the room does not know is not a way to more rights', tools('auto', 'root').includes('Write'), true);
     check('@-bots and multi-agent workers use the same base list',
       /const botTools = \[\.\.\.BOT_WORK_TOOLS,/.test(src) && /const agentTools = \[\.\.\.BOT_WORK_TOOLS,/.test(src), true);
   }
-  check('the room hands the CLI that list (not a literal)', /allowedTools: roomBuiltinTools\(mode\),/.test(src), true);
+  check('the room hands the CLI that list (not a literal)', /allowedTools: roomBuiltinTools\(mode, botsLogic\.roomToolScope\(bot\)\),/.test(src), true);
   check('the room gets the mode from its params', /engine, mode \} = p;/.test(src), true);
   const rules = src.slice(src.indexOf('const ROOM_RULES = '), src.indexOf('const ROOM_RULES = ') + 1800);
   check('the room rules tell bots what they may do in planning mode', rules.includes("Planning mode: read and analyse, but do not modify any file"), true);
