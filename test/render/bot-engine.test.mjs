@@ -22,6 +22,7 @@ for (const m of ['haiku', 'sonnet', 'opus', 'fable']) assert.ok(new RegExp(`data
 assert.ok(/data-i18n-title="engine\.api\.title"/.test(seg('botEngineSeg')) && /data-i18n-title="engine\.sub\.title"/.test(seg('botEngineSeg')), 'the engine buttons carry the toolbar\'s explanations');
 // syncBtn() toggles EVERY `.tb-group .tb-btn` with a matching data-v; reusing those classes would fight the chat toolbar
 assert.ok(!/tb-group|tb-btn/.test(seg('botModelSeg') + seg('botEngineSeg')), 'the editor must not use the toolbar classes');
+assert.ok(html.indexOf('id="botEngineSeg"') < html.indexOf('id="botModelSeg"'), 'the engine comes first: what the model list offers depends on it');
 assert.ok(/<input type="hidden" id="botModel">/.test(html) && /<input type="hidden" id="botEngine">/.test(html), 'the chosen values live in hidden inputs');
 assert.ok(/<select id="botModelGw"[^>]*hidden>/.test(html), 'the gateway list starts hidden');
 
