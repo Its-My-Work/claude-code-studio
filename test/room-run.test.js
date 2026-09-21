@@ -32,12 +32,12 @@ const BOT_READ_TOOLS = ['Read', 'Glob', 'Grep'], BOT_WORK_TOOLS = ['Bash', 'Read
 
 const NAMES = ['ROOM_CLOSING', 'ClaudeCLI', 'stmts', 'ROOM_SEATING', 'botsLogic', 'getUserLang', 'pickRoomSeating', 'WORKDIR', 'seatingNote', 'botLangName',
   'roomFiles', 'MULTI_AGENT_MAX_TURNS_CAP', 'mcpServersForBot', 'runInteractiveSingle', 'killInteractiveTmux', 'isAgentSuccess',
-  'roomStopReason', 'BOT_READ_TOOLS', 'BOT_WORK_TOOLS'];
+  'roomStopReason', 'BOT_READ_TOOLS', 'BOT_WORK_TOOLS', 'tmuxAvailable'];
 const build = (deps) => new Function(...NAMES, `${toolsSrc}\n return ${roomSrc.trim().replace(/^async function runConversationRoom/, 'async function runConversationRoom')};`)(...NAMES.map(n => deps[n]));
 
 /** Runs one room turn. `script(call)` decides what each CLI run does: { text, subtype, error, write: [[relPath, data]] }. */
-async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns = 5, prompt = 'Доработайте ТЗ', userContent = 'Доработайте ТЗ', rows = [], workdir, engine = 'api', lang = 'ru' }) {
-  const saved = [], sent = [], calls = [];
+async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns = 5, prompt = 'Доработайте ТЗ', userContent = 'Доработайте ТЗ', rows = [], workdir, engine = 'api', lang = 'ru', perBotEngine = false, tmux = true }) {
+  const saved = [], sent = [], calls = [], interactive = [];
   class FakeCLI {
     send(opts) {
       const h = {};
@@ -65,13 +65,14 @@ async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns =
       addMsg: { run: (sid, role, type, text, tool, agent) => { if (type === 'text') saved.push({ text, agent: agent || null }); } },
     },
     getUserLang: () => lang, pickRoomSeating: async () => null, WORKDIR: workdir, seatingNote: () => '', botLangName: () => (lang === 'ru' ? 'Russian' : 'English'),
-    MULTI_AGENT_MAX_TURNS_CAP: 200, mcpServersForBot: (base) => base, runInteractiveSingle: async () => ({ fullText: '', completed: true, toolEvents: [] }), killInteractiveTmux() {},
+    MULTI_AGENT_MAX_TURNS_CAP: 200, mcpServersForBot: (base) => base, runInteractiveSingle: async (o) => { interactive.push(o); return { fullText: `subscription answer of ${o.agent}`, completed: true, toolEvents: [] }; }, killInteractiveTmux() {},
+    tmuxAvailable: () => tmux,
   };
   const run = build(deps);
   const ws = { send: (x) => sent.push(JSON.parse(x)) };
-  await run({ mcpServers: {}, model: 'sonnet', maxTurns, ws, sessionId: 's1', abortController: new AbortController(), workdir, tabId: 't1', effort: null, userContent, engine, mode },
+  await run({ mcpServers: {}, model: 'sonnet', maxTurns, ws, sessionId: 's1', abortController: new AbortController(), workdir, tabId: 't1', effort: null, userContent, engine, mode, perBotEngine },
     { bots, prompt, rosterBots: bots });
-  return { saved, sent, calls };
+  return { saved, sent, calls, interactive };
 }
 
 const B = (id) => ({ id, label: id.toUpperCase(), description: `role ${id}` });
@@ -222,6 +223,31 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     check('with nine 11K-character contributions no bot prompt passes ~30K characters (it reached 71K on the real run)', biggest < 32000, true);
     check('a long contribution reaches the next bot cut, with a pointer to the chat', disc[2].prompt.includes('more characters, the full text is in the chat'), true);
     check('the chat itself keeps every word', longRoom.saved.filter(m => m.agent && m.text.length >= 11000).length, 9);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log('a bot can run on its own engine (the planner on the subscription in an API chat):');
+  {
+    const dir = tmp();
+    const planner = { ...B('b'), run_engine: 'subscription' };
+    const mixed = [B('a'), planner, B('c')];
+    const r = await runRoom({ bots: mixed, workdir: dir, perBotEngine: true, closing: false, script: discuss });
+    check('the pinned bot goes through the interactive engine, once per round it speaks', r.interactive.map(o => o.agent).every(a => a === 'b') && r.interactive.length >= 1, true);
+    check('its interactive run is its own room seat (per-bot tmux id) with a system prompt', r.interactive[0].sessionId === 's1::room::b' && typeof r.interactive[0].systemPrompt === 'string' && r.interactive[0].systemPrompt.length > 0 && r.interactive[0].agent === 'b', true);
+    check('the other bots still use the headless (API) CLI', [...new Set(r.calls.map(c => c.who))].sort(), ['a', 'c']);
+    check('the pinned bot never touches the headless CLI', r.calls.some(c => c.who === 'b'), false);
+    check('its answer is saved under its name', r.saved.some(m => m.agent === 'b' && m.text === 'subscription answer of b'), true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  {
+    const dir = tmp();
+    const planner = { ...B('b'), run_engine: 'subscription' };
+    const off = await runRoom({ bots: [B('a'), planner, B('c')], workdir: dir, perBotEngine: false, closing: false, script: discuss });
+    check('where the override is not enabled (Telegram) the pinned bot follows the chat', [off.interactive.length, off.calls.some(c => c.who === 'b')], [0, true]);
+    const noTmux = await runRoom({ bots: [B('a'), planner, B('c')], workdir: dir, perBotEngine: true, tmux: false, closing: false, script: discuss });
+    check('without tmux the pinned bot follows the chat instead of failing', [noTmux.interactive.length, noTmux.calls.some(c => c.who === 'b')], [0, true]);
+    const pinnedApi = await runRoom({ bots: [B('a'), { ...B('b'), run_engine: 'api' }, B('c')], workdir: dir, perBotEngine: true, engine: 'subscription', closing: false, script: discuss });
+    check('a bot pinned to api runs headless inside a subscription chat, the rest use the interactive engine', [pinnedApi.calls.some(c => c.who === 'b'), pinnedApi.interactive.some(o => o.agent === 'a')], [true, true]);
     fs.rmSync(dir, { recursive: true, force: true });
   }
 

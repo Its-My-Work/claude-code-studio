@@ -123,6 +123,9 @@ const {
 } = require('./terminal-session');
 const termBridge = require('./terminal-bridge');
 const botsLogic = require('./bots');
+const gatewayModels = require('./gateway-models');
+// One catalogue for the process: the gateway the CLI talks to, read with the server's own token.
+const modelCatalog = gatewayModels.createCatalog({ baseUrl: process.env.ANTHROPIC_BASE_URL, token: process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY });
 // A message that is nothing but a mention ("@@analyst") strips to an empty string —
 // that used to become the literal `-p ''` prompt, starting the bot's CLI with no
 // instruction at all. One line stands in for "you were addressed with nothing else
@@ -943,6 +946,8 @@ try { db.exec(`ALTER TABLE bots ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0`
 // bot if her label sorts past position 6. NULL (unset) keeps today's alphabetical
 // order; a lower number sorts earlier.
 try { db.exec(`ALTER TABLE bots ADD COLUMN room_priority INTEGER`); } catch {}
+// run_engine: this bot's own billing engine ('api' | 'subscription'); NULL = follow the chat. See botsLogic.botEngine.
+try { db.exec(`ALTER TABLE bots ADD COLUMN run_engine TEXT`); } catch {}
 // A task can be assigned to a bot: it then runs with that bot's system prompt and
 // model, and its output is attributed to the bot. Combined with the scheduling
 // columns already here (scheduled_at / recurrence) this is what makes a recurring
@@ -1047,13 +1052,14 @@ const stmts = {
   // node:sqlite (Node >= 22.5), whose named-parameter binding differs from
   // better-sqlite3's and rejects `@name` objects with "column index out of range".
   // `excluded.` lets the upsert reuse the same nine values without repeating them.
-  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar,is_global,room_priority)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar,is_global,room_priority,run_engine)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET
       label=excluded.label, description=excluded.description, engine=excluded.engine,
       model=excluded.model, system_prompt=excluded.system_prompt,
       active_skills=excluded.active_skills, active_mcp=excluded.active_mcp,
       avatar=excluded.avatar, is_global=excluded.is_global, room_priority=excluded.room_priority,
+      run_engine=excluded.run_engine,
       updated_at=datetime('now')`),
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
@@ -5034,6 +5040,8 @@ function seatingNote({ room, skipped }) {
 
 async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent, engine, mode } = p;
+  // The engine THIS bot's turn runs on: its own choice (web chat only, see botsLogic.botEngine), else the chat's.
+  const botEngine = (bot) => botsLogic.botEngine(bot, engine, { enabled: !!p.perBotEngine, tmux: tmuxAvailable() });
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   const send = (o) => { try { ws.send(JSON.stringify({ ...o, ...(tabId ? { tabId } : {}) })); } catch {} };
   const save = (text, agentId) => { try { stmts.addMsg.run(sessionId, 'assistant', 'text', text, null, agentId, null, null); } catch {} };
@@ -5082,7 +5090,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     save(note, null); send({ type: 'text', text: note });
   }
 
-  send({ type: 'bots_turn', bots: room.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: b.model || model })) });
+  send({ type: 'bots_turn', bots: room.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: botsLogic.botModel(b, botEngine(b), model) })) });
   const state = (id, s, detail) => send({ type: 'bot_state', bot: id, state: s, detail: detail || '' });
 
   // What a bot may spend and is shown (see the block above roomTurnCap in bots.js). The chat's Steps
@@ -5131,7 +5139,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   const speak = async (bot, botPrompt, first) => {
     const botMcp = mcpServersForBot(mcpServers, bot);
     let text = '', result = null, errored = false;
-    if (engine === 'subscription') {
+    if (botEngine(bot) === 'subscription') {
       // Subscription billing has no headless call at all — one interactive tmux
       // pane per bot, seat re-used only within THIS one turn, torn down right after
       // (see kill below). Room turns are stateless per round already (comment above),
@@ -5144,7 +5152,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         ir = await runInteractiveSingle({
           prompt: botPrompt,
           systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
-          model: bot.model || model,
+          model: botsLogic.botModel(bot, 'subscription', model),
           ws,
           sessionId: roomTmuxId,
           abortController,
@@ -5181,7 +5189,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
           // reads the transcript, and re-sending the same screenshot per bot per round would
           // multiply its cost by the size of the room.
           contentBlocks: first && attachments.length ? attachments : null,
-          model: bot.model || model,
+          model: botsLogic.botModel(bot, 'api', model),
           maxTurns: turnCap,
           systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
           // No _ccs_bots: the room is the dispatcher. See the invariants above.
@@ -5327,6 +5335,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
 
 async function runBotTurns(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent, engine } = p;
+  const botEngine = (bot) => botsLogic.botEngine(bot, engine, { enabled: !!p.perBotEngine, tmux: tmuxAvailable() });
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   // Same tool set as a normal turn, plus the internal MCP tools — without
   // check_user_messages a bot cannot see a clarification the user sends mid-run.
@@ -5393,7 +5402,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     try {
       ws.send(JSON.stringify({
         type: 'bots_turn',
-        bots: queue.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: b.model || model })),
+        bots: queue.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: botsLogic.botModel(b, botEngine(b), model) })),
         ...(growth ? { growth: true } : {}),
         ...(tabId ? { tabId } : {}),
       }));
@@ -5477,7 +5486,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     ws.send(JSON.stringify({ type: 'agent_status', agent: bot.id, status: `${bot.avatar || '🤖'} ${bot.label}`, ...(tabId ? { tabId } : {}) }));
 
     let botText = '', botResult = null, botErrored = false;
-    if (engine === 'subscription') {
+    if (botEngine(bot) === 'subscription') {
       // Same one-process-at-a-time discipline as the room path: a dedicated tmux
       // identity per bot (so an @@mention keeps resuming ITS OWN transcript via cid,
       // same continuity the headless branch gets from `sessionId: botSession`), killed
@@ -5489,7 +5498,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
         ir = await runInteractiveSingle({
           prompt: botPrompt + standing,
           systemPrompt: botSp,
-          model: bot.model || model,
+          model: botsLogic.botModel(bot, 'subscription', model),
           ws,
           sessionId: botTmuxId,
           abortController,
@@ -5536,7 +5545,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
           : null,
         sessionId: botSession,
         // A bot may pin its own model; otherwise it follows the chat's.
-        model: bot.model || model,
+        model: botsLogic.botModel(bot, 'api', model),
         maxTurns: turnCap,
         // Only applied when there is no session to resume — that is exactly why each
         // bot needs its own session rather than sharing the chat's.
@@ -11242,6 +11251,14 @@ app.get('/api/bots', (req, res) => {
   res.json(withProjects(rows));
 });
 
+// The models a bot can be pinned to on the API engine: the gateway's own catalogue (cached), so the
+// editor offers real ids next to the Claude aliases. Never fails the editor: an unreachable gateway is
+// an empty list plus the reason.
+app.get('/api/models', async (req, res) => {
+  const r = await modelCatalog.get();
+  res.json({ models: r.models, ...(r.error ? { error: r.error } : {}), ...(r.stale ? { stale: true } : {}) });
+});
+
 // A bot row carries the projects it is available in. The UI needs this to say
 // "also in Alpha, Beta" before an edit and to warn that a delete is global —
 // without it every bot list would cost one extra request per bot.
@@ -11313,6 +11330,13 @@ function saveBot(req, res, mode) {
     }
   }
 
+  if (body.model !== undefined && body.model !== null && body.model !== '' && !gatewayModels.MODEL_ID_RE.test(String(body.model))) {
+    return res.status(400).json({ error: 'model must be 1-100 characters of a-z, 0-9, . _ : / -' });
+  }
+
+  const runEngine = botsLogic.normalizeBotEngine(body.runEngine);
+  if (runEngine === false) return res.status(400).json({ error: 'runEngine must be "api", "subscription" or empty (as the chat)' });
+
   const prompt = String(body.systemPrompt ?? '');
   if (prompt.length > BOT_PROMPT_MAX) {
     return res.status(400).json({ error: `system prompt is too long (${prompt.length} > ${BOT_PROMPT_MAX} characters)` });
@@ -11338,6 +11362,7 @@ function saveBot(req, res, mode) {
       Array.from(String(keep('avatar', prev.avatar || ''))).slice(0, 8).join(''),
       (body.isGlobal === undefined ? (prev.is_global ? 1 : 0) : (body.isGlobal ? 1 : 0)),
       (body.roomPriority === undefined ? (prev.room_priority ?? null) : (Number.isInteger(body.roomPriority) ? body.roomPriority : null)),
+      runEngine === undefined ? (prev.run_engine || null) : runEngine,
     );
   } catch (e) {
     log.error('bot save failed', { handle, err: e.message });
@@ -11373,6 +11398,7 @@ app.get('/api/bots/export', (req, res) => {
     active_mcp: b.active_mcp || '[]',
     avatar: b.avatar || '',
     is_global: b.is_global ? 1 : 0,
+    run_engine: b.run_engine || null,
   }));
   res.setHeader('Content-Disposition', 'attachment; filename="bots.json"');
   res.setHeader('Content-Type', 'application/json');
@@ -11409,6 +11435,8 @@ app.post('/api/bots/import', express.json({ limit: '4mb' }), (req, res) => {
           b.active_mcp,
           Array.from(b.avatar).slice(0, 8).join(''),
           b.is_global,
+          null, // room_priority: not part of an export, as before
+          b.run_engine,
         );
         // A non-global bot imported while a project is open joins it, exactly as a bot
         // created there would. Without this an import lands nowhere the user can see.
@@ -12464,7 +12492,7 @@ wss.on('connection', (ws) => {
         // passing the raw block next to the cleaned `botPrompt` would duplicate the
         // message (same class of bug fixed for the Telegram bot path).
         const botUserContent = buildUserContent(botPrompt, enrichedAttachments);
-        newCid = await runBotTurns({ ...params, userContent: botUserContent, engine }, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
+        newCid = await runBotTurns({ ...params, userContent: botUserContent, engine, perBotEngine: true }, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
       } else if (agentMode === 'conversation') {
         // A room seats the PROJECT's bots — a conversation mode is a property of the
         // chat, not something the user re-picks per message. Mentions are handled above,
@@ -12474,7 +12502,7 @@ wss.on('connection', (ws) => {
         // and the real question lives in the content blocks. Handing that preamble to the
         // room made every bot answer "I don't see a user request", correctly: there was
         // none. runBotTurns has always used the raw text for the same reason.
-        newCid = await runConversationRoom({ ...params, engine }, { bots: projectBots, prompt: botPrompt, rosterBots: projectBots });
+        newCid = await runConversationRoom({ ...params, engine, perBotEngine: true }, { bots: projectBots, prompt: botPrompt, rosterBots: projectBots });
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {
