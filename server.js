@@ -403,6 +403,51 @@ const DEFAULT_TASK_TITLES    = new Set(Object.values(SERVER_I18N).map(v => v.new
 function getUserLang() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')).lang || 'en'; } catch { return 'en'; }
 }
+/** MCP servers that ship with the app. `web` (web_search + web_fetch, mcp-web.js) exists only when a
+ *  search backend is configured (WEB_SEARCH_URL, a SearXNG instance), so an install without one shows
+ *  no dead entry. Listed BEFORE the config files in loadMergedConfig, so a config entry with the same
+ *  id replaces it. */
+function builtinMcpServers() {
+  const out = {};
+  if (process.env.WEB_SEARCH_URL) {
+    out.web = {
+      label: 'Web search',
+      description: 'web_search (SearXNG) and web_fetch: read-only web access for research. Pages are untrusted data; the fetcher refuses non-public addresses.',
+      command: NODE_CMD,
+      args: [helperPath('mcp-web.js')],
+      env: { WEB_SEARCH_URL: process.env.WEB_SEARCH_URL },
+      builtin: true,
+    };
+  }
+  return out;
+}
+
+/** One config MCP entry in the shape the CLI is given (same as the per-chat builders). */
+function mcpEntryFromConfig(m) {
+  if (m.type === 'http' || m.type === 'sse' || m.url) {
+    return { type: m.type || 'http', url: m.url, ...(m.headers ? { headers: m.headers } : {}), ...(m.env ? { env: expandTildeInObj(m.env) } : {}) };
+  }
+  return { command: m.command, args: m.args || [], env: expandTildeInObj(m.env || {}) };
+}
+
+/** A bot's own MCP servers (bots.active_mcp: ids from the config) on top of the chat's. The column
+ *  could always be edited but was never read when a bot ran, so a bot only ever had what the whole
+ *  chat had switched on. This is what lets the researcher have the web tools and the others not.
+ *  Returns `base` itself when the bot lists nothing. */
+function mcpServersForBot(base, bot) {
+  let ids = [];
+  try { ids = JSON.parse(bot?.active_mcp || '[]'); } catch {}
+  if (!Array.isArray(ids) || !ids.length) return base;
+  const cfg = loadMergedConfig().mcpServers || {};
+  const out = { ...base };
+  for (const id of ids) {
+    const m = typeof id === 'string' && !id.startsWith('_ccs_') ? cfg[id] : null;
+    if (!m || m.enabled === false || (!m.command && !m.url)) continue;
+    out[id] = mcpEntryFromConfig(m);
+  }
+  return out;
+}
+
 /** Language name for the bots' language rule (bots.js languageClause): the UI language. */
 function botLangName() { return LANG_NAMES[getUserLang()] || 'English'; }
 function i18nSession() { return SERVER_I18N[getUserLang()]?.newSession || SERVER_I18N.en.newSession; }
@@ -3468,7 +3513,7 @@ function loadMergedConfig() {
   try { g = JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')); } catch {}
   try { l = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
   _mergedConfigCache = addAutoDiscoveredSkills({
-    mcpServers:    { ...(g.mcpServers||{}), ...(l.mcpServers||{}) },
+    mcpServers:    { ...builtinMcpServers(), ...(g.mcpServers||{}), ...(l.mcpServers||{}) },
     skills:        { ...(g.skills||{}),     ...(l.skills||{})     },
     slashCommands: [...(l.slashCommands||[])],
     lang:          l.lang || g.lang || 'en',
@@ -5073,6 +5118,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         if (!capNow.go) { stopReason = capNow.reason; break; }
 
         state(bot.id, 'running');
+        const botMcp = mcpServersForBot(mcpServers, bot);
         const said = transcript.length
           ? 'What the others have said so far, in order:\n'
             + transcript.map(x => `[@${x.handle}]: ${x.text}`).join('\n\n') + '\n\n'
@@ -5110,7 +5156,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
               claudeSessionId: null,
               workdir,
               tabId,
-              mcpServers,
+              mcpServers: botMcp,
               userContent: (transcript.length === 0 ? userContent : null),
               agent: bot.id,
             });
@@ -5146,7 +5192,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
             maxTurns: Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP),
             systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
             // No _ccs_bots: the room is the dispatcher. See the invariants above.
-            mcpServers,
+            mcpServers: botMcp,
             allowedTools: roomBuiltinTools(mode),
             abortController,
             effort,
@@ -5347,8 +5393,9 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
 
     // Injected per bot, not once for the turn: BOTS_CALLER differs for each, and it is what
     // the endpoint uses to reject self-dispatch and to label the hand-off.
+    const chatMcp = mcpServersForBot(mcpServers, bot);
     const botMcpServers = rosterMap.size > 1
-      ? { ...mcpServers, _ccs_bots: {
+      ? { ...chatMcp, _ccs_bots: {
           command: NODE_CMD,
           args: [helperPath('mcp-bots.js')],
           env: {
@@ -5363,7 +5410,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
             BOTS_SECRET,
           },
         } }
-      : mcpServers;
+      : chatMcp;
 
     ws.send(JSON.stringify({ type: 'agent_status', agent: bot.id, status: `${bot.avatar || '🤖'} ${bot.label}`, ...(tabId ? { tabId } : {}) }));
 
