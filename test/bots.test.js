@@ -6,6 +6,7 @@ const {
   parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, EVIDENCE_CLAUSE, ROSTER_MAX,
   seatingPrompt, parseSeating, shouldReseat, SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS,
   roomTurnCap, renderTranscript, buildRoomHistory, currentTurnAttachments, closingRules, ROOM_BOT_MIN_TURNS,
+  normalizeBotEngine, botEngine, botModel,
 } = require('../bots');
 
 let pass = 0, fail = 0;
@@ -303,7 +304,7 @@ const I = (incoming, live, reserved, overwrite) =>
   check('nothing is overwritten', r.overwrite, []);
   check('defaults are filled in', r.create[0],
     { id: 'writer', label: 'Writer', description: '', model: null, system_prompt: '',
-      active_skills: '[]', active_mcp: '[]', avatar: '', is_global: 0 });
+      active_skills: '[]', active_mcp: '[]', avatar: '', is_global: 0, run_engine: null });
 }
 
 check('a live handle is skipped by default',
@@ -907,6 +908,32 @@ console.log('room: what a bot may spend, and what it is shown:');
   check('a claimed result with no file change is said outright', room.includes('!note && closerAnswered') && /Файлы не менялись/.test(room) && /No files changed/.test(room), true);
   check('the verdict comes before the closing summary', room.indexOf('roomFiles.diffSnapshots') < room.indexOf('const summary = escalatedBy'), true);
 }
+
+console.log('per-bot engine:');
+check('empty / null mean "as the chat"', [normalizeBotEngine(''), normalizeBotEngine(null)], [null, null]);
+check('an absent field stays absent (a partial edit keeps the stored value)', normalizeBotEngine(undefined), undefined);
+check('api and subscription are kept', [normalizeBotEngine('api'), normalizeBotEngine('subscription')], ['api', 'subscription']);
+check('anything else is invalid', [normalizeBotEngine('codex'), normalizeBotEngine('SUBSCRIPTION'), normalizeBotEngine(1)], [false, false, false]);
+const ON = { enabled: true, tmux: true };
+check('a bot with no choice follows the chat', [botEngine({}, 'api', ON), botEngine({ run_engine: null }, 'subscription', ON)], ['api', 'subscription']);
+check('the planner on subscription stays on it in an api chat', botEngine({ run_engine: 'subscription' }, 'api', ON), 'subscription');
+check('a bot pinned to api stays on api in a subscription chat', botEngine({ run_engine: 'api' }, 'subscription', ON), 'api');
+check('the override is ignored where the caller did not enable it (Telegram)', botEngine({ run_engine: 'subscription' }, 'api', { enabled: false, tmux: true }), 'api');
+check('the override is ignored by default', botEngine({ run_engine: 'subscription' }, 'api'), 'api');
+check('without tmux a subscription bot follows the chat instead of failing every turn', botEngine({ run_engine: 'subscription' }, 'api', { enabled: true, tmux: false }), 'api');
+check('an unknown stored value follows the chat', botEngine({ run_engine: 'codex' }, 'subscription', ON), 'subscription');
+check('an unknown chat engine counts as api', botEngine({}, undefined, ON), 'api');
+{
+  const plan = planBotImport({ incoming: [{ label: 'Planner', run_engine: 'subscription' }, { label: 'Other', runEngine: 'api' }, { label: 'Bad', run_engine: 'codex' }, { label: 'None' }], live: [], reserved: [] });
+  check('import carries the engine, in either spelling', plan.create.map(b => b.run_engine), ['subscription', 'api', null, null]);
+}
+
+console.log('per-bot model:');
+check('no model of its own follows the chat', [botModel({}, 'api', 'sonnet'), botModel({ model: null }, 'subscription', 'opus')], ['sonnet', 'opus']);
+check('an alias is kept on both engines', [botModel({ model: 'opus' }, 'api', 'sonnet'), botModel({ model: 'opus' }, 'subscription', 'sonnet')], ['opus', 'opus']);
+check('a gateway model is kept on the API engine', botModel({ model: 'poolside/laguna-s-2.1:free' }, 'api', 'sonnet'), 'poolside/laguna-s-2.1:free');
+check('a gateway model means nothing on the subscription: the chat model is used (not a silent sonnet)', botModel({ model: 'poolside/laguna-s-2.1:free' }, 'subscription', 'opus'), 'opus');
+check('a full Claude id is fine on the subscription', botModel({ model: 'claude-opus-4-8' }, 'subscription', 'sonnet'), 'claude-opus-4-8');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

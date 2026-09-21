@@ -320,6 +320,7 @@ function planBotImport({ incoming, live, reserved, overwrite } = {}) {
       active_mcp: normList(raw?.active_mcp ?? raw?.activeMcp),
       avatar: typeof raw?.avatar === 'string' ? raw.avatar : '',
       is_global: (raw?.is_global ?? raw?.isGlobal) ? 1 : 0,
+      run_engine: normalizeBotEngine(raw?.run_engine ?? raw?.runEngine) || null,
     };
     (liveSet.has(handle) ? replace : create).push(row);
   }
@@ -396,6 +397,50 @@ function botsAvailability({ remote, runEngine } = {}) {
   if (remote) return { available: false, reason: 'ssh' };
   if (runEngine === 'subscription') return { available: false, reason: 'subscription' };
   return { available: true, reason: null };
+}
+
+// ─── Per-bot engine ──────────────────────────────────────────────────
+// A bot may pin its own billing engine, so one bot (a planner) can run on the Claude
+// subscription while the chat, and every other bot, stays on `api`. `null` is "as the
+// chat", which is what every existing bot has.
+//
+// The override is honoured only where the caller says so (`enabled`): the web chat owns a
+// WebSocket the interactive pane streams into; Telegram hands the bot runner a stand-in
+// socket, and a tmux pane must not be started behind it. And only while tmux exists —
+// the subscription engine is a tmux pane, so without one the bot quietly follows the chat
+// rather than failing every turn.
+const BOT_ENGINES = ['api', 'subscription'];
+
+/** A stored/submitted value as it is kept: 'api', 'subscription' or null. undefined stays undefined. */
+function normalizeBotEngine(v) {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  return BOT_ENGINES.includes(v) ? v : false;
+}
+
+// The subscription engine takes a model as a plain alias or Claude id ([A-Za-z0-9._-], the same shape
+// claude-interactive.js accepts); gateway ids ("vendor/model:free") only exist on the API side.
+const CLAUDE_MODEL_RE = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * The model one bot's turn asks for on a given engine: its own choice, else the chat's. A gateway id
+ * pinned on a bot is meaningless on the subscription, and the interactive engine would quietly turn it
+ * into `sonnet`; falling back to the chat's model says what is really used.
+ */
+function botModel(bot, engine, chatModel) {
+  const own = bot && typeof bot.model === 'string' ? bot.model : '';
+  if (!own) return chatModel;
+  if (engine === 'subscription' && !CLAUDE_MODEL_RE.test(own)) return chatModel;
+  return own;
+}
+
+/** The engine one bot's turn runs on: the bot's own choice, else the chat's. */
+function botEngine(bot, chatEngine, { enabled = false, tmux = true } = {}) {
+  const chat = chatEngine === 'subscription' ? 'subscription' : 'api';
+  const own = bot && BOT_ENGINES.includes(bot.run_engine) ? bot.run_engine : null;
+  if (!own || !enabled) return chat;
+  if (own === 'subscription' && !tmux) return chat;
+  return own;
 }
 
 // ─── Inbox ────────────────────────────────────────────────────────────────────
@@ -744,7 +789,7 @@ module.exports = {
   HANDLE_RE, EVIDENCE_CLAUSE, ROSTER_MAX, IMPORT_MAX,
   isValidHandle, handleFromLabel, uniqueHandle,
   parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, planBotImport,
-  MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability,
+  MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability, BOT_ENGINES, normalizeBotEngine, botEngine, botModel,
   planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS,
   planRoom, parseRoomReply, roomShouldContinue,
   SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS, seatingPrompt, parseSeating, shouldReseat,

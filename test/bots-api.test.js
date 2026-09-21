@@ -63,7 +63,7 @@ async function api(method, url, body) {
 
   // CCS_DESKTOP=1 bypasses auth; APP_DIR redirects data/ to the temp dir.
   const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR: APP_DIR },
+    env: { ...process.env, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR: APP_DIR, ANTHROPIC_BASE_URL: '', ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_API_KEY: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '', exited = false;
@@ -138,6 +138,34 @@ async function api(method, url, body) {
     const r = await api('POST', '/api/bots', { label: 'L'.repeat(200), description: 'd'.repeat(900) });
     check('the label is truncated to its cap', r.json.label.length, 100);
     check('the description is truncated to its cap', r.json.description.length, 500);
+  }
+
+  console.log('per-bot engine:');
+  {
+    const made = (await api('POST', '/api/bots', { label: 'Planner', runEngine: 'subscription' })).json;
+    check('a new bot can be pinned to the subscription engine', made.run_engine, 'subscription');
+    check('an ordinary bot follows the chat (no engine)', (await api('POST', '/api/bots', { label: 'Plain' })).json.run_engine, null);
+    check('a partial update keeps the engine', (await api('PUT', `/api/bots/${made.id}`, { label: 'Planner 2' })).json.run_engine, 'subscription');
+    check('an unknown engine is refused', (await api('PUT', `/api/bots/${made.id}`, { label: 'P', runEngine: 'codex' })).status, 400);
+    check('a refused update leaves the engine alone', (await api('GET', '/api/bots')).json.find(b => b.id === made.id).run_engine, 'subscription');
+    const exp = (await api('GET', '/api/bots/export')).json;
+    check('the export carries the engine', exp.bots.find(b => b.id === made.id).run_engine, 'subscription');
+    check('an empty value clears it back to "as the chat"', (await api('PUT', `/api/bots/${made.id}`, { label: 'P', runEngine: '' })).json.run_engine, null);
+    const imp = await api('POST', '/api/bots/import', { overwrite: true, bots: [{ id: made.id, label: 'Planner', run_engine: 'subscription' }] });
+    check('an import restores it', [imp.json.updated, (await api('GET', '/api/bots')).json.find(b => b.id === made.id).run_engine], [1, 'subscription']);
+  }
+
+  console.log('per-bot model:');
+  {
+    const gw = (await api('POST', '/api/bots', { label: 'Gw', model: 'poolside/laguna-s-2.1:free' })).json;
+    check('a gateway model id is stored', gw.model, 'poolside/laguna-s-2.1:free');
+    check('an alias is stored', (await api('PUT', `/api/bots/${gw.id}`, { label: 'Gw', model: 'opus' })).json.model, 'opus');
+    check('a partial update keeps the model', (await api('PUT', `/api/bots/${gw.id}`, { label: 'Gw2' })).json.model, 'opus');
+    check('a malformed model is a 400', (await api('PUT', `/api/bots/${gw.id}`, { label: 'Gw', model: 'x; rm -rf /' })).status, 400);
+    check('and leaves the stored one alone', (await api('GET', '/api/bots')).json.find(b => b.id === gw.id).model, 'opus');
+    check('an empty model clears it (follow the chat)', (await api('PUT', `/api/bots/${gw.id}`, { label: 'Gw', model: '' })).json.model, null);
+    const m = await api('GET', '/api/models');
+    check('with no gateway configured the catalogue is empty with the reason, not an error', [m.status, m.json.models, m.json.error], [200, [], 'no-gateway']);
   }
 
   console.log('soft delete:');
