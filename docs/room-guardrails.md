@@ -57,7 +57,7 @@ list to restrict: there it is a request in the prompt, not a lock.
 On a live run with real models the planner, seated last, started writing its eleven-file package inside its discussion turn and
 ran out of its 20 steps before it reported anything. Now the bot that will close the conversation (the last seated bot that may
 write) is told: "In this turn do not change any file; give your contribution in about ten lines" and does the writing in the closing
-step, which has **twice** the steps of a discussion turn. Other writers still edit files during the discussion, as before. With
+step, which has **three times** the steps of a discussion turn. Other writers still edit files during the discussion, as before. With
 the closing step off (`ROOM_CLOSING=off`), in planning mode, or on the Subscription engine nobody defers its writing.
 
 Read-only and run-only bots, who have nowhere to put a long answer but the chat, are asked for the gist in about ten lines and

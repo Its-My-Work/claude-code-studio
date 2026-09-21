@@ -168,7 +168,7 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     const dir = tmp();
     const r = await runRoom({ bots: bots3, workdir: dir, script: (c) => c.closing ? { subtype: 'error_max_turns', error: true } : discuss(c) });
     const note = r.saved.find(m => m.text.includes('did not finish the closing step'));
-    check('is named, with the real reason (the closing step has its own, doubled, budget)', !!note && note.text.includes('hit the 40-turn limit'), true);
+    check('is named, with the real reason (the closing step has its own, tripled, budget)', !!note && note.text.includes('hit the 60-turn limit'), true);
     check('no "the document is updated" warning is invented for it', has(r, /Файлы не менялись/), false);
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -334,7 +334,8 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     const by = (who) => r.calls.find(c => c.who === who && !c.closing);
     check('read: only Read/Glob/Grep', by('reader').allowedTools, ['Read', 'Glob', 'Grep']);
     check('run: adds the shell, still no Edit/Write', by('runner').allowedTools, ['Read', 'Glob', 'Grep', 'Bash']);
-    check('no scope: everything', by('writer').allowedTools, ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
+    check('no scope means work, but as the closer it is read-only until the closing step (see below)', by('writer').allowedTools, ['Read', 'Glob', 'Grep']);
+    check('...and has everything when it closes', r.calls.find(c => c.who === 'writer' && c.closing).allowedTools, ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
     check('a read-only bot is told so, and to leave the change to a writer', by('reader').prompt.includes('you can read the project\'s files but not change them') && !by('reader').prompt.includes('You can read and edit files'), true);
     check('a runner is told it may run commands but not edit', by('runner').prompt.includes('read files and run commands, but not edit files'), true);
     check('the closer (last writer) is told its discussion turn is a contribution and the files come after', by('writer').prompt.includes('You close this conversation') && by('writer').prompt.includes('do not change any file') && !by('writer').prompt.includes('You can read and edit files'), true);
@@ -366,9 +367,14 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     const p = (who) => r.calls.find(c => c.who === who && !c.closing).prompt;
     check('a is an ordinary writer', p('a').includes('You can read and edit files in the project') && !p('a').includes('You close this conversation'), true);
     check('c (last writer) closes: no file changes in its discussion turn', p('c').includes('You close this conversation') && !p('c').includes('You can read and edit files'), true);
-    check('the closing step gets twice the steps of a discussion turn', [r.calls.find(c => !c.closing).maxTurns, r.calls.find(c => c.closing).maxTurns], [20, 40]);
+    const tools = (who, closing) => r.calls.find(c => c.who === who && !!c.closing === closing).allowedTools;
+    check('...and the tool list says so too: the closer\'s discussion turn is read-only', tools('c', false), ['Read', 'Glob', 'Grep']);
+    check('an ordinary writer keeps full tools in the discussion', tools('a', false), ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
+    check('the closing step gets three times the steps of a discussion turn', [r.calls.find(c => !c.closing).maxTurns, r.calls.find(c => c.closing).maxTurns], [20, 60]);
+    const closes = await runRoom({ bots: roster, workdir: dir, script: (c) => (c.closing ? { text: 'Готово.' } : discuss(c)) });
+    check('...but in the closing step it has full tools', closes.calls.find(c => c.closing).allowedTools, ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
     const off = await runRoom({ bots: roster, workdir: dir, closing: false, script: discuss });
-    check('with the closing step off nobody is told to wait for it', off.calls.some(c => c.prompt.includes('You close this conversation')), false);
+    check('with the closing step off nobody is told to wait for it, and nobody is held back', [off.calls.some(c => c.prompt.includes('You close this conversation')), off.calls.every(c => c.allowedTools.includes('Write'))], [false, true]);
     const plan = await runRoom({ bots: roster, workdir: dir, mode: 'planning', script: discuss });
     check('planning mode (read-only anyway) has no closer either', plan.calls.some(c => c.prompt.includes('You close this conversation')), false);
     const sub = await runRoom({ bots: roster, workdir: dir, engine: 'subscription', script: discuss });
