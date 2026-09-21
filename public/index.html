@@ -4149,6 +4149,16 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">One line. Other bots see this, so they know who to hand work to.</div>
       </div>
       <div class="cmd-field">
+        <label data-i18n="bot.modal.engine.label">Engine</label>
+        <div class="bot-seg" id="botEngineSeg" role="group">
+          <button type="button" class="bot-seg-btn on" data-v="" onclick="setBotEngine('')" data-i18n="bot.engine.inherit">Same as chat</button>
+          <button type="button" class="bot-seg-btn" data-v="api" onclick="setBotEngine('api')" data-i18n="bot.engine.api" data-i18n-title="engine.api.title">API</button>
+          <button type="button" class="bot-seg-btn" data-v="subscription" onclick="setBotEngine('subscription')" data-i18n="bot.engine.subscription" data-i18n-title="engine.sub.title">Claude subscription</button>
+        </div>
+        <input type="hidden" id="botEngine">
+        <div class="cmd-name-hint" data-i18n="bot.modal.engine.hint">Applies to this bot only, even when the chat runs on the other engine. Subscription needs a Claude login inside the server and tmux.</div>
+      </div>
+      <div class="cmd-field">
         <label data-i18n="bot.modal.model.label">Model</label>
         <div class="bot-seg" id="botModelSeg" role="group">
           <button type="button" class="bot-seg-btn on" data-v="" onclick="setBotModel('')" data-i18n="bot.model.inherit">Same as chat</button>
@@ -4160,16 +4170,6 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <select id="botModelGw" class="bot-seg-gw" onchange="setBotModel(this.value)" hidden></select>
         <input type="hidden" id="botModel">
         <div class="cmd-name-hint" data-i18n="bot.modal.model.hint">Haiku, Sonnet, Opus, Fable, as on the new-chat bar. On the subscription these are Claude CLI aliases; on the API, whatever the gateway maps them to.</div>
-      </div>
-      <div class="cmd-field">
-        <label data-i18n="bot.modal.engine.label">Engine</label>
-        <div class="bot-seg" id="botEngineSeg" role="group">
-          <button type="button" class="bot-seg-btn on" data-v="" onclick="setBotEngine('')" data-i18n="bot.engine.inherit">Same as chat</button>
-          <button type="button" class="bot-seg-btn" data-v="api" onclick="setBotEngine('api')" data-i18n="bot.engine.api" data-i18n-title="engine.api.title">API</button>
-          <button type="button" class="bot-seg-btn" data-v="subscription" onclick="setBotEngine('subscription')" data-i18n="bot.engine.subscription" data-i18n-title="engine.sub.title">Claude subscription</button>
-        </div>
-        <input type="hidden" id="botEngine">
-        <div class="cmd-name-hint" data-i18n="bot.modal.engine.hint">Applies to this bot only, even when the chat runs on the other engine. Subscription needs a Claude login inside the server and tmux.</div>
       </div>
       <div class="cmd-field">
         <label class="bot-global-row" for="botGlobal">
