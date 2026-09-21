@@ -80,6 +80,9 @@ services:
       # Who sits in a conversation room: `auto` (default) = one short model call picks the bots the task
       # needs and their order; `priority` = roster order (room_priority, then alphabetical).
       - ROOM_SEATING=${ROOM_SEATING:-auto}
+      # Web access for bots: a SearXNG instance (JSON format on) switches on the built-in `web` MCP
+      # server (web_search + web_fetch). Empty = no such server. See docs/web-tools.md.
+      - WEB_SEARCH_URL=${WEB_SEARCH_URL:-}
       # Multi-agent ("Мульти") mode: same idea as the room caps above, but for the
       # dependency-wave orchestrator (runMultiAgent/agent-dag.js). A wave is one batch of
       # agents whose deps are satisfied; MULTI_AGENT_MAX_PLAN only bounds this indirectly
