@@ -3,7 +3,7 @@
 const assert = require('assert');
 const {
   isValidHandle, handleFromLabel, uniqueHandle,
-  parseMentions, renderRoster, buildBotSystemPrompt, planDispatch, EVIDENCE_CLAUSE, ROSTER_MAX,
+  parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, EVIDENCE_CLAUSE, ROSTER_MAX,
 } = require('../bots');
 
 let pass = 0, fail = 0;
@@ -647,6 +647,38 @@ check('escalation outranks the other stops',
   const passBranch = body.slice(body.indexOf('passed —'), body.indexOf('passed —') + 400);
   check('a pass is persisted but not re-sent to the client',
     /send\(\{\s*type:\s*'text'/.test(passBranch), false);
+}
+
+// A Russian user was answered in English by most of a room: the bots' own prompts say nothing
+// about language, the app's LANGUAGE line never reached them, and the room rules are English.
+console.log('bots answer in the UI language:');
+{
+  check('no language given -> no clause', languageClause(''), '');
+  check('a blank name -> no clause', languageClause('   '), '');
+  const c = languageClause('Russian');
+  check('the clause names the language', c.includes('in Russian'), true);
+  check('it overrides the language of earlier messages', c.includes('whatever language the messages before yours are in'), true);
+  check('code and identifiers are left alone', c.includes('identifiers stay as they are'), true);
+
+  const withLang = buildBotSystemPrompt({ ...BOTS[0], system_prompt: 'You track altcoins.' }, BOTS, 'Russian');
+  check('the persona still leads', withLang.startsWith('You track altcoins.'), true);
+  check('the clause follows the persona, ahead of the evidence clause',
+    withLang.indexOf(c) > 0 && withLang.indexOf(c) < withLang.indexOf(EVIDENCE_CLAUSE), true);
+  check('without a language nothing changes',
+    buildBotSystemPrompt(BOTS[0], BOTS), buildBotSystemPrompt(BOTS[0], BOTS, undefined));
+
+  // server.js must actually pass it: the pure part is useless if a call site forgets.
+  const _fs2 = require('fs'), _path2 = require('path');
+  const SRV2 = _fs2.readFileSync(_path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const calls = [...SRV2.matchAll(/botsLogic\.buildBotSystemPrompt\(([^\n]*)/g)].map(m => m[1]);
+  check('all four bot prompt call sites are found', calls.length, 4);
+  for (const args of calls) check(`call site passes the language: (${args.slice(0, 48)}…`, /botLangName\(\)/.test(args), true);
+  const room = SRV2.slice(SRV2.indexOf('const ROOM_RULES = '), SRV2.indexOf('const ROOM_RULES = ') + 1200);
+  check('the room rules state the language', /Write in \$\{botLangName\(\)\}/.test(room), true);
+  const standing = SRV2.slice(SRV2.indexOf('const standing = botSession'), SRV2.indexOf('const standing = botSession') + 500);
+  check('a resumed bot gets the rule in the user turn too (the system prompt is dropped on resume)',
+    standing.includes('languageClause(botLangName())'), true);
+  check('the language helper maps the UI language to a name', /function botLangName\(\) \{ return LANG_NAMES\[getUserLang\(\)\]/.test(SRV2), true);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
