@@ -4135,9 +4135,12 @@ async function runCliSingle(p) {
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
   const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
+  // Built-in tools go by the CLI's own names (Read/Glob/Grep/Edit/NotebookEdit). The old
+  // View/GlobTool/GrepTool/ListDir/SearchReplace are not tools any more: `--tools` drops
+  // them silently, which left a run with only Bash+Write (Read -> "not enabled").
   const tools = mode==='planning'
-    ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools]
-    : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', ...mcpTools];
+    ? ['Read','Glob','Grep', ...mcpTools]
+    : ['Bash','Read','Glob','Grep','NotebookEdit','Edit','Write', ...mcpTools];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', fullThinking = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -4537,8 +4540,8 @@ async function runSshSingle(p) {
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
   const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
   const tools = mode==='planning'
-    ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools]
-    : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...mcpTools];
+    ? ['Read','Glob','Grep', ...mcpTools]
+    : ['Bash','Read','Glob','Grep','Edit','Write', ...mcpTools];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', fullThinking = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -5043,7 +5046,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
             systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots),
             // No _ccs_bots: the room is the dispatcher. See the invariants above.
             mcpServers,
-            allowedTools: ['Bash', 'View', 'GlobTool', 'GrepTool', 'ListDir'],
+            allowedTools: ['Bash', 'Read', 'Glob', 'Grep'],
             abortController,
             effort,
             name: bot.label,
@@ -5121,7 +5124,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
   const botMcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user',
                        'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages',
                        'mcp___ccs_bots__message_bot'];
-  const botTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...botMcpTools];
+  const botTools = ['Bash','Read','Glob','Grep','Edit','Write', ...botMcpTools];
   // Interrupt delivery, identical to runCliSingle: a PreToolUse hook fires on every
   // tool call and a Stop hook covers a text-only answer, so a message sent while a
   // bot is working reaches it during the run instead of waiting for the next turn.
@@ -5599,7 +5602,7 @@ async function runMultiAgent(p) {
       // Same standing instruction a single-agent turn gets: without it a worker does
       // not know user clarifications can arrive mid-run.
       const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION;
-      const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write',
+      const agentTools = ['Bash','Read','Glob','Grep','Edit','Write',
         'mcp___ccs_user_interrupt__check_user_messages'];
       // Interrupt delivery, identical to runCliSingle. Workers had neither the hooks
       // nor the tool, so a clarification sent while the team was working was silently
