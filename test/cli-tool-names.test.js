@@ -65,7 +65,7 @@ console.log('the conversation room has a real tool list:');
   }
   check('the room hands the CLI that list (not a literal)', /allowedTools: roomBuiltinTools\(mode, botsLogic\.roomToolScope\(bot\)\),/.test(src), true);
   check('the room gets the mode from its params', /engine, mode \} = p;/.test(src), true);
-  const rules = src.slice(src.indexOf('const ROOM_RULES = '), src.indexOf('const ROOM_RULES = ') + 1800);
+  const rules = src.slice(src.indexOf('const ROOM_RULES = '), src.indexOf('const ROOM_RULES = ') + 3600);
   check('the room rules tell bots what they may do in planning mode', rules.includes("Planning mode: read and analyse, but do not modify any file"), true);
   check('…and in the other modes', rules.includes('You can read and edit files in the project'), true);
 }

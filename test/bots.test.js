@@ -890,18 +890,18 @@ console.log('room: what a bot may spend, and what it is shown:');
   const _fs4 = require('fs'), _path4 = require('path');
   const SRV4 = _fs4.readFileSync(_path4.join(__dirname, '..', 'server.js'), 'utf8');
   const room = SRV4.slice(SRV4.indexOf('async function runConversationRoom('), SRV4.indexOf('async function runBotTurns('));
-  check('the room takes its turn cap from roomTurnCap, not the raw Steps', room.includes('botsLogic.roomTurnCap({ maxTurns, cap: MULTI_AGENT_MAX_TURNS_CAP })') && room.includes('maxTurns: turnCap,') && !/maxTurns: Math\.min\(maxTurns/.test(room), true);
+  check('the room takes its turn cap from roomTurnCap, not the raw Steps', room.includes('botsLogic.roomTurnCap({ maxTurns, cap: MULTI_AGENT_MAX_TURNS_CAP })') && room.includes('maxTurns: deliverable ? closeCap : turnCap,') && !/maxTurns: Math\.min\(maxTurns/.test(room), true);
   check('the bots are told their step budget', /You have about \$\{turnCap\} steps/.test(room), true);
   check('a failed bot is explained by the result frame (roomStopReason), not "see the error above"', room.includes('roomStopReason(result, errored, turnCap)') && !room.includes('agentStopReason(result, errored)'), true);
   check('every bot gets the chat history and this turn\'s trimmed transcript',
-    room.includes('buildRoomHistory(stmts.getMsgsLite.all(sessionId))') && room.includes('botsLogic.renderTranscript(transcript)') && /\$\{ROOM_RULES\('@' \+ bot\.id, botsLogic\.roomToolScope\(bot\)\)\}\\n\\n\$\{history\}/.test(room), true);
+    room.includes('buildRoomHistory(stmts.getMsgsLite.all(sessionId))') && room.includes('botsLogic.renderTranscript(transcript)') && /\$\{ROOM_RULES\('@' \+ bot\.id, botsLogic\.roomToolScope\(bot\), !!\(closingPlanned && closer && closer\.id === bot\.id\)\)\}\\n\\n\$\{history\}/.test(room), true);
   check('only the files of this message go to the first speaker, in both engines',
     room.includes('currentTurnAttachments(userContent)') && (room.match(/first && attachments\.length \? attachments : null/g) || []).length === 2 && !room.includes('userContent.filter('), true);
   check('one speak() serves the discussion and the closing step', (room.match(/await speak\(/g) || []).length === 2, true);
   check('the closing step is skipped in planning mode, for the subscription engine, while waiting for the user, and when stopped',
-    /mode !== 'planning' && engine !== 'subscription' && !escalatedBy && stopReason !== 'stopped'/.test(room), true);
-  check('the closer is the last seated bot that may WRITE', room.includes("const closer = [...room].reverse().find(b => botsLogic.roomToolScope(b) === 'work') || null;"), true);
-  check('the closing step can be switched off (ROOM_CLOSING=off) and its compose var exists', /const ROOM_CLOSING = String\(process\.env\.ROOM_CLOSING \|\| 'on'\)/.test(SRV4) && room.includes('const closingWanted = ROOM_CLOSING && mode !== ') && /ROOM_CLOSING=\$\{ROOM_CLOSING:-on\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')) && /ROOM_BOT_MIN_TURNS=\$\{ROOM_BOT_MIN_TURNS:-20\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')), true);
+    room.includes("const closingPlanned = ROOM_CLOSING && mode !== 'planning' && engine !== 'subscription';") && /const closingWanted = closingPlanned && !escalatedBy && stopReason !== 'stopped'/.test(room), true);
+  check('the closer is the last seated bot that may WRITE', room.includes("const closer = [...room].reverse().find(b => botsLogic.roomToolScope(b) === 'work') || null;") && room.indexOf('const closer =') < room.indexOf('const ROOM_RULES'), true);
+  check('the closing step can be switched off (ROOM_CLOSING=off) and its compose var exists', /const ROOM_CLOSING = String\(process\.env\.ROOM_CLOSING \|\| 'on'\)/.test(SRV4) && room.includes('const closingPlanned = ROOM_CLOSING && mode !== ') && /ROOM_CLOSING=\$\{ROOM_CLOSING:-on\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')) && /ROOM_BOT_MIN_TURNS=\$\{ROOM_BOT_MIN_TURNS:-20\}/.test(_fs4.readFileSync(_path4.join(__dirname, '..', 'docker-compose.yml'), 'utf8')), true);
   check('a PASS from the closer is silent, an answer is saved under its name', /if \(!reply\.pass\) \{ save\(r\.text, closer\.id\); closerAnswered = true; \}/.test(room), true);
   check('the files are snapshotted before the discussion (not in planning) and compared after',
     /const filesBefore = mode === 'planning' \? null : await roomFiles\.snapshotDir/.test(room) && room.includes('roomFiles.diffSnapshots(filesBefore.files, after.files)'), true);

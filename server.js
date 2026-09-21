@@ -5101,6 +5101,12 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   // What a bot may spend and is shown (see the block above roomTurnCap in bots.js). The chat's Steps
   // is a floor-lifted budget here: a bot that runs out of turns while researching says nothing at all.
   const turnCap = botsLogic.roomTurnCap({ maxTurns, cap: MULTI_AGENT_MAX_TURNS_CAP });
+  // The closing step is written work (a plan package is a dozen files), so it gets twice the steps of a discussion turn.
+  const closeCap = Math.min(turnCap * 2, MULTI_AGENT_MAX_TURNS_CAP);
+  // The bot that will write the files AFTER the discussion: the last seated one that may write. Its discussion turn is a
+  // contribution, not the work: a planner that starts writing its package inside the discussion runs out of steps before it reports.
+  const closer = [...room].reverse().find(b => botsLogic.roomToolScope(b) === 'work') || null;
+  const closingPlanned = ROOM_CLOSING && mode !== 'planning' && engine !== 'subscription';
   // The chat before this message, given to EVERY bot of the turn (it used to be replayed to the first
   // speaker only), and only the files that belong to THIS message (the replay re-attached old ones).
   let history = '';
@@ -5120,7 +5126,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   // cap then refused.
   let messages = 0, round = 1, roundsRun = 0, escalatedBy = null, stopReason = null;
 
-  const ROOM_RULES = (self, scope) => `You are in a group conversation with other bots about the user's message. `
+  const ROOM_RULES = (self, scope, closes) => `You are in a group conversation with other bots about the user's message. `
     + `The others' contributions appear below in the order they were said.\n\n`
     + `How to take part:\n`
     + `- Add what only you can add. Do not restate what someone already said.\n`
@@ -5133,10 +5139,12 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     + `Code, commands and identifiers stay as they are.\n`
     + (mode === 'planning'
       ? `- Planning mode: read and analyse, but do not modify any file.\n`
+      : closes
+        ? `- You close this conversation: when the discussion is over you write the result into the files. In this turn do not change any file; give your contribution in about ten lines.\n`
       : scope === 'read'
-        ? `- In this discussion you can read the project's files but not change them. If a file should change, say which and how: a bot with write access does it at the end.\n`
+        ? `- In this discussion you can read the project's files but not change them. If a file should change, or your answer would be long (a plan, a spec), give the gist in about ten lines and say what the writer should put into the file.\n`
       : scope === 'run'
-        ? `- You can read files and run commands, but not edit files. If a file should change, say which and how: a bot with write access does it at the end.\n`
+        ? `- You can read files and run commands, but not edit files. If a file should change, or your answer would be long (a plan, a spec), give the gist in about ten lines and say what the writer should put into the file.\n`
       : `- You can read and edit files in the project. If you change one, name the file and what changed; the next bot reads it as you left it.\n`
         + `- Read a file before you change it. Change the parts that need changing; do not rewrite a whole document from scratch, `
         + `and do not make one shorter unless the user asked you to.\n`)
@@ -5205,7 +5213,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
           // multiply its cost by the size of the room.
           contentBlocks: first && attachments.length ? attachments : null,
           model: botsLogic.botModel(bot, 'api', model),
-          maxTurns: turnCap,
+          maxTurns: deliverable ? closeCap : turnCap,
           systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName(), { discussion: !deliverable }),
           // No _ccs_bots: the room is the dispatcher. See the invariants above.
           mcpServers: botMcp,
@@ -5244,7 +5252,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         // the transcript after it, the peers' replies were the most recent thing in view
         // and two of three bots answered "I don't see a user request" — measured on the
         // first live run. Restating it at the end costs a few tokens and fixes that.
-        const botPrompt = `${ROOM_RULES('@' + bot.id, botsLogic.roomToolScope(bot))}\n\n${history}`
+        const botPrompt = `${ROOM_RULES('@' + bot.id, botsLogic.roomToolScope(bot), !!(closingPlanned && closer && closer.id === bot.id))}\n\n${history}`
           + (said ? `What the others have said so far, in order:\n${said}\n\n` : '')
           + `The user's message, which this conversation is about:\n${prompt}\n\n`
           + `Now add your own contribution as @${bot.id}.`;
@@ -5300,8 +5308,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   let closerAnswered = false;
   // The closing step writes the file, so it belongs to the last seated bot that may write (the planner speaks last
   // when there is one). A room of read-only bots has nobody to do it, and says so instead of skipping silently.
-  const closer = [...room].reverse().find(b => botsLogic.roomToolScope(b) === 'work') || null;
-  const closingWanted = ROOM_CLOSING && mode !== 'planning' && engine !== 'subscription' && !escalatedBy && stopReason !== 'stopped'
+  const closingWanted = closingPlanned && !escalatedBy && stopReason !== 'stopped'
     && transcript.length > 0 && !abortController?.signal?.aborted;
   if (closingWanted && !closer) {
     const note = getUserLang() === 'ru'
@@ -5317,7 +5324,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
       + `The user's message, which this conversation is about:\n${prompt}`;
     const r = await speak(closer, closePrompt, false, true);
     if (!r.ok) {
-      const why = roomStopReason(r.result, r.errored, turnCap);
+      const why = roomStopReason(r.result, r.errored, closeCap);
       const note = `\n\n⚠️ @${closer.id} did not finish the closing step (${why}).\n\n`;
       save(note, closer.id); send({ type: 'text', text: note, agent: closer.id });
       state(closer.id, 'failed', why);

@@ -168,7 +168,7 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     const dir = tmp();
     const r = await runRoom({ bots: bots3, workdir: dir, script: (c) => c.closing ? { subtype: 'error_max_turns', error: true } : discuss(c) });
     const note = r.saved.find(m => m.text.includes('did not finish the closing step'));
-    check('is named, with the real reason', !!note && note.text.includes('hit the 20-turn limit'), true);
+    check('is named, with the real reason (the closing step has its own, doubled, budget)', !!note && note.text.includes('hit the 40-turn limit'), true);
     check('no "the document is updated" warning is invented for it', has(r, /Файлы не менялись/), false);
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -177,13 +177,13 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
   {
     const dir = tmp();
     const r = await runRoom({ bots: bots3, workdir: dir, maxTurns: 5, script: (c) => (c.closing ? { text: 'PASS' } : (c.n === 1 ? { subtype: 'error_max_turns', error: true } : discuss(c))) });
-    check('every bot run gets at least 20 steps although the chat says 5', [...new Set(r.calls.map(c => c.maxTurns))], [20]);
+    check('every discussion turn gets at least 20 steps although the chat says 5', [...new Set(r.calls.filter(c => !c.closing).map(c => c.maxTurns))], [20]);
     const note = r.saved.find(m => m.text.includes('@a did not finish'));
     check('a bot that still hits the limit is told why — not "see the error above"', !!note && note.text.includes('(hit the 20-turn limit)') && !note.text.includes('see the error above'), true);
     check('the room carries on after it', r.calls.length > 3, true);
     check('the bots are told their budget', r.calls[0].prompt.includes('You have about 20 steps'), true);
     const big = await runRoom({ bots: bots3, workdir: dir, maxTurns: 60, script: discuss });
-    check('a bigger Steps is kept', [...new Set(big.calls.map(c => c.maxTurns))], [60]);
+    check('a bigger Steps is kept', [...new Set(big.calls.filter(c => !c.closing).map(c => c.maxTurns))], [60]);
     const crash = await runRoom({ bots: bots3, workdir: dir, script: (c) => (c.closing ? { text: 'PASS' } : (c.n === 1 ? { subtype: null, error: true } : discuss(c))) });
     check('a crash with no result frame still says "failed — see the error above"', crash.saved.some(m => m.text.includes('@a did not finish (failed — see the error above)')), true);
     fs.rmSync(dir, { recursive: true, force: true });
@@ -337,7 +337,8 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     check('no scope: everything', by('writer').allowedTools, ['Bash', 'Read', 'Glob', 'Grep', 'Edit', 'Write']);
     check('a read-only bot is told so, and to leave the change to a writer', by('reader').prompt.includes('you can read the project\'s files but not change them') && !by('reader').prompt.includes('You can read and edit files'), true);
     check('a runner is told it may run commands but not edit', by('runner').prompt.includes('read files and run commands, but not edit files'), true);
-    check('a writer keeps the ordinary rules', by('writer').prompt.includes('You can read and edit files in the project'), true);
+    check('the closer (last writer) is told its discussion turn is a contribution and the files come after', by('writer').prompt.includes('You close this conversation') && by('writer').prompt.includes('do not change any file') && !by('writer').prompt.includes('You can read and edit files'), true);
+    check('read-only bots are asked for the gist when their answer would be long', by('reader').prompt.includes('give the gist in about ten lines'), true);
     check('discussion turns are told to be short', by('reader').prompt.includes('about ten lines at most'), true);
     check('...and their system prompt has no closing report format (nothing to address a peer with)', r.calls.filter(c => !c.closing).every(c => !c.systemPrompt.includes('Завершай так')), true);
     const closing = r.calls.filter(c => c.closing);
@@ -354,6 +355,24 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     check('...and says so instead of skipping silently', r.saved.some(m => m.text.startsWith('ℹ️ Ни у кого из участников нет права записи файлов')), true);
     const planning = await runRoom({ bots: readers, workdir: dir, mode: 'planning', script: discuss });
     check('planning mode (read-only anyway) does not complain about it', planning.saved.some(m => m.text.includes('права записи')), false);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log('a writer that is not the closer keeps writing in the discussion; the closer writes at the end:');
+  {
+    const dir = tmp();
+    const roster = [B('a'), B('b'), B('c')];   // all may write: c closes
+    const r = await runRoom({ bots: roster, workdir: dir, maxTurns: 5, script: (c) => (c.closing ? { text: 'PASS' } : (c.n <= 3 ? { text: `by ${c.who}` } : { text: 'PASS' })) });
+    const p = (who) => r.calls.find(c => c.who === who && !c.closing).prompt;
+    check('a is an ordinary writer', p('a').includes('You can read and edit files in the project') && !p('a').includes('You close this conversation'), true);
+    check('c (last writer) closes: no file changes in its discussion turn', p('c').includes('You close this conversation') && !p('c').includes('You can read and edit files'), true);
+    check('the closing step gets twice the steps of a discussion turn', [r.calls.find(c => !c.closing).maxTurns, r.calls.find(c => c.closing).maxTurns], [20, 40]);
+    const off = await runRoom({ bots: roster, workdir: dir, closing: false, script: discuss });
+    check('with the closing step off nobody is told to wait for it', off.calls.some(c => c.prompt.includes('You close this conversation')), false);
+    const plan = await runRoom({ bots: roster, workdir: dir, mode: 'planning', script: discuss });
+    check('planning mode (read-only anyway) has no closer either', plan.calls.some(c => c.prompt.includes('You close this conversation')), false);
+    const sub = await runRoom({ bots: roster, workdir: dir, engine: 'subscription', script: discuss });
+    check('on the subscription engine there is no closing step, so nobody defers its writing', sub.calls.some(c => c.prompt.includes('You close this conversation')), false);
     fs.rmSync(dir, { recursive: true, force: true });
   }
 
