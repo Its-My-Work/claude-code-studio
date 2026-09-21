@@ -167,10 +167,25 @@ const EVIDENCE_CLAUSE =
   + 'never invent a filename, line number or command. When you are inferring, estimating or '
   + 'unsure, label it as such instead of stating it as fact.';
 
-function buildBotSystemPrompt(bot, allBots) {
+// The language rule for bots. A bot's own prompt is a persona and says nothing about language,
+// and the app's LANGUAGE line (buildSystemPrompt) is not applied to bots — so a bot fell back on
+// the language of the text around it: the English room rules and the earlier bots' replies. A
+// Russian user was answered in English by most of a room (2 of 10 replies were Russian), and the
+// language followed whoever spoke first. Everything a bot says in a chat is read by the user, so
+// none of it is the "inter-agent chatter" that line allows to stay English.
+function languageClause(langName) {
+  const name = String(langName || '').trim();
+  if (!name) return '';
+  return `LANGUAGE: Write everything the user reads — replies, questions, hand-offs to other bots — in ${name}, `
+    + `whatever language the messages before yours are in. Code, commands, file names and identifiers stay as they are.`;
+}
+
+function buildBotSystemPrompt(bot, allBots, langName) {
   const parts = [];
   const own = String(bot?.system_prompt || '').trim();
   if (own) parts.push(own);
+  const lang = languageClause(langName);
+  if (lang) parts.push(lang);
   parts.push(EVIDENCE_CLAUSE);
   const roster = renderRoster(allBots, bot?.id);
   if (roster) parts.push(roster);
@@ -505,7 +520,7 @@ function roomShouldContinue({ round, messages, allPassed, escalated, caps } = {}
 module.exports = {
   HANDLE_RE, EVIDENCE_CLAUSE, ROSTER_MAX, IMPORT_MAX,
   isValidHandle, handleFromLabel, uniqueHandle,
-  parseMentions, renderRoster, buildBotSystemPrompt, planDispatch, planBotImport,
+  parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, planBotImport,
   MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability,
   planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS,
   planRoom, parseRoomReply, roomShouldContinue,

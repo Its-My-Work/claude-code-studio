@@ -403,6 +403,8 @@ const DEFAULT_TASK_TITLES    = new Set(Object.values(SERVER_I18N).map(v => v.new
 function getUserLang() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')).lang || 'en'; } catch { return 'en'; }
 }
+/** Language name for the bots' language rule (bots.js languageClause): the UI language. */
+function botLangName() { return LANG_NAMES[getUserLang()] || 'English'; }
 function i18nSession() { return SERVER_I18N[getUserLang()]?.newSession || SERVER_I18N.en.newSession; }
 function i18nTask()    { return SERVER_I18N[getUserLang()]?.newTask    || SERVER_I18N.en.newTask; }
 
@@ -2144,7 +2146,7 @@ async function startTask(task) {
       // bot, and dropped entirely when the task resumes a session. It rides the task
       // prompt instead — see where `prompt` is built above.
       const taskBotSp = taskBot
-        ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all()) + USER_INTERRUPT_INSTRUCTION
+        ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all(), botLangName()) + USER_INTERRUPT_INSTRUCTION
         : undefined;
       const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid,
         // The bot's own model wins over the task's: picking a bot is picking who does
@@ -4958,6 +4960,8 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     + `- If the room cannot proceed without a decision only the user can make, write @user `
     + `followed by the single question. Use it sparingly — it ends the conversation.\n`
     + `- Do not address peers with @@handles to hand work over; in this room everyone speaks in turn.\n`
+    + `- Write in ${botLangName()}, the user's language, even when the messages before yours are in another language. `
+    + `Code, commands and identifiers stay as they are.\n`
     + `- Keep it to a few sentences. You are ${self}.`;
 
   try {
@@ -5001,7 +5005,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
           try {
             ir = await runInteractiveSingle({
               prompt: botPrompt,
-              systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots),
+              systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
               model: bot.model || model,
               ws,
               sessionId: roomTmuxId,
@@ -5043,7 +5047,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
               : null,
             model: bot.model || model,
             maxTurns: Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP),
-            systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots),
+            systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
             // No _ccs_bots: the room is the dispatcher. See the invariants above.
             mcpServers,
             allowedTools: ['Bash', 'Read', 'Glob', 'Grep'],
@@ -5225,7 +5229,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     const isFirst = previous.length === 0;
     // The same standing instruction a normal turn gets: tell the bot the tool exists
     // and when to call it, or it will not think to look.
-    const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots) + USER_INTERRUPT_INSTRUCTION
+    const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()) + USER_INTERRUPT_INSTRUCTION
       + BACKGROUND_TASK_INSTRUCTION
       + (rosterMap.size > 1 ? BOTS_DISPATCH_INSTRUCTION : '');
     const prior = stmts.getBotSession.get(sessionId, bot.id);
@@ -5239,6 +5243,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     // Re-sent in the USER turn, the one channel --resume always delivers.
     const standing = botSession
       ? '\n\n' + [botsLogic.renderRoster(rosterBots, bot.id),
+                  botsLogic.languageClause(botLangName()),
                   BACKGROUND_TASK_INSTRUCTION.trim(),
                   rosterMap.size > 1 ? BOTS_DISPATCH_INSTRUCTION.trim() : ''].filter(Boolean).join('\n\n')
       : '';
