@@ -35,4 +35,13 @@ function agentStopReason(result, errored, turnCap, continuesUsed = 0) {
   return 'was stopped before it reported completion';
 }
 
-module.exports = { isAgentSuccess, shouldAutoContinue, agentStopReason, MAX_TURNS_SUBTYPE };
+// Why a conversation-room bot did not finish. The room reads the final `result` frame FIRST: a run that
+// hit its turn limit exits non-zero, which the CLI wrapper also reports as an error, and the note then
+// said "failed - see the error above" (with nothing above) instead of the real reason. Only when no
+// result frame arrived is the error the reason.
+function roomStopReason(result, errored, turnCap) {
+  if (result?.subtype && result.subtype !== 'success') return agentStopReason(result, false, turnCap);
+  return agentStopReason(result, errored, turnCap);
+}
+
+module.exports = { isAgentSuccess, shouldAutoContinue, agentStopReason, roomStopReason, MAX_TURNS_SUBTYPE };

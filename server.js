@@ -115,7 +115,8 @@ const UNATTENDED_MAX_TURNS = 30;
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
 const { detectAuthError, authErrorNotice } = require('./auth-errors');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
-const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
+const { isAgentSuccess, shouldAutoContinue, agentStopReason, roomStopReason } = require('./multi-agent-result');
+const roomFiles = require('./room-files');
 const {
   resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
   tmuxNameFor, buildLaunchCommand, isReapCandidate, shouldReap, pickOverflow, TMUX_PREFIX,
@@ -4983,6 +4984,9 @@ function roomBuiltinTools(mode) { return [...(mode === 'planning' ? BOT_READ_TOO
 // seats the same handful whatever the task. Read once at startup, like the other ROOM_* vars.
 const ROOM_SEATING = String(process.env.ROOM_SEATING || 'auto').toLowerCase() === 'priority' ? 'priority' : 'auto';
 const ROOM_SEATING_TIMEOUT_MS = 60000;
+// The closing step of a room (one more bot run per turn that puts the result into the file the user
+// asked for). `off` = the room only discusses, as before. Read once at startup.
+const ROOM_CLOSING = String(process.env.ROOM_CLOSING || 'on').toLowerCase() !== 'off';
 
 // One tool-less call that proposes the seating. Same shape as the multi-agent planner above:
 // --json-schema delivers the answer through the synthetic StructuredOutput tool, and tools=''
@@ -5081,6 +5085,17 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   send({ type: 'bots_turn', bots: room.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: b.model || model })) });
   const state = (id, s, detail) => send({ type: 'bot_state', bot: id, state: s, detail: detail || '' });
 
+  // What a bot may spend and is shown (see the block above roomTurnCap in bots.js). The chat's Steps
+  // is a floor-lifted budget here: a bot that runs out of turns while researching says nothing at all.
+  const turnCap = botsLogic.roomTurnCap({ maxTurns, cap: MULTI_AGENT_MAX_TURNS_CAP });
+  // The chat before this message, given to EVERY bot of the turn (it used to be replayed to the first
+  // speaker only), and only the files that belong to THIS message (the replay re-attached old ones).
+  let history = '';
+  try { history = botsLogic.buildRoomHistory(stmts.getMsgsLite.all(sessionId)); } catch {}
+  const attachments = botsLogic.currentTurnAttachments(userContent);
+  // The room is judged by what it changed on disk, not by what a bot says it changed.
+  const filesBefore = mode === 'planning' ? null : await roomFiles.snapshotDir(workdir || WORKDIR);
+
   // The room's own record. Each entry is one bot's contribution, in the order spoken —
   // this is what every later bot reads, and what the closing artifact is built from.
   const transcript = [];
@@ -5104,7 +5119,90 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     + (mode === 'planning'
       ? `- Planning mode: read and analyse, but do not modify any file.\n`
       : `- You can read and edit files in the project. If you change one, name the file and what changed; the next bot reads it as you left it.\n`)
+    + `- You have about ${turnCap} steps (tool calls). Do the research you need, then answer: a run that ends on a tool call `
+    + `has no answer and is lost.\n`
     + `- Keep it to a few sentences. You are ${self}.`;
+
+  // One bot, one fresh CLI session (used by the discussion and by the closing step).
+  // A fresh session every time. A room turn is a complete brief on its own — the whole
+  // transcript is in the prompt — and resuming a bot's long-lived chat session here would
+  // splice the room's rounds into the thread it uses when mentioned normally, so a later
+  // @@mention would answer as if mid-conversation.
+  const speak = async (bot, botPrompt, first) => {
+    const botMcp = mcpServersForBot(mcpServers, bot);
+    let text = '', result = null, errored = false;
+    if (engine === 'subscription') {
+      // Subscription billing has no headless call at all — one interactive tmux
+      // pane per bot, seat re-used only within THIS one turn, torn down right after
+      // (see kill below). Room turns are stateless per round already (comment above),
+      // so there is no cross-round session to resume — same one-shot semantics as
+      // the headless branch, just routed through the Claude Max login instead of a
+      // token/key.
+      const roomTmuxId = `${sessionId}::room::${bot.id}`;
+      let ir;
+      try {
+        ir = await runInteractiveSingle({
+          prompt: botPrompt,
+          systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
+          model: bot.model || model,
+          ws,
+          sessionId: roomTmuxId,
+          abortController,
+          claudeSessionId: null,
+          workdir,
+          tabId,
+          mcpServers: botMcp,
+          userContent: (first && attachments.length ? attachments : null),
+          agent: bot.id,
+        });
+      } finally {
+        // Always kill, success or failure — leaving the pane up would keep piling
+        // one resident `claude` process per bot that has ever spoken, on a 1-core/
+        // 2.9GB host shared with other services. Sequential + torn-down-immediately
+        // keeps peak memory at one interactive process at a time, at the cost of a
+        // fresh cold start for every bot's every turn.
+        try { killInteractiveTmux(roomTmuxId); } catch {}
+      }
+      text = ir.fullText;
+      // errored stays false: runInteractiveSingle never throws, it reports failure
+      // through result.subtype instead (undefined when !ir.completed), same signal
+      // isAgentSuccess()/agentStopReason() already read for the headless branch.
+      result = { subtype: ir.completed ? 'success' : undefined, session_id: ir.cid };
+      for (const ev of ir.toolEvents) {
+        try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (ev.input || '').substring(0, 500), ev.name, bot.id, null, null); } catch {}
+      }
+    } else {
+      await new Promise(res => {
+        let settled = false;
+        const done = () => { if (!settled) { settled = true; res(); } };
+        cli.send({
+          prompt: botPrompt,
+          // Only the files of THIS message, and to the first speaker only — everyone after
+          // reads the transcript, and re-sending the same screenshot per bot per round would
+          // multiply its cost by the size of the room.
+          contentBlocks: first && attachments.length ? attachments : null,
+          model: bot.model || model,
+          maxTurns: turnCap,
+          systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
+          // No _ccs_bots: the room is the dispatcher. See the invariants above.
+          mcpServers: botMcp,
+          allowedTools: roomBuiltinTools(mode),
+          abortController,
+          effort,
+          name: bot.label,
+          settingSources: 'project,local',
+        })
+          .onText(t => {
+            text += t;
+            send({ type: 'text', text: t, agent: bot.id });
+          })
+          .onResult(r => { result = r; })
+          .onError(() => { errored = true; done(); })
+          .onDone(done);
+      });
+    }
+    return { text, result, errored, ok: !errored && isAgentSuccess(result) };
+  };
 
   try {
     while (true) {
@@ -5118,104 +5216,24 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         if (!capNow.go) { stopReason = capNow.reason; break; }
 
         state(bot.id, 'running');
-        const botMcp = mcpServersForBot(mcpServers, bot);
-        const said = transcript.length
-          ? 'What the others have said so far, in order:\n'
-            + transcript.map(x => `[@${x.handle}]: ${x.text}`).join('\n\n') + '\n\n'
-          : '';
+        const said = botsLogic.renderTranscript(transcript);
         // The question goes LAST, immediately before the bot generates. With it first and
         // the transcript after it, the peers' replies were the most recent thing in view
         // and two of three bots answered "I don't see a user request" — measured on the
         // first live run. Restating it at the end costs a few tokens and fixes that.
-        const botPrompt = `${ROOM_RULES('@' + bot.id)}\n\n${said}`
+        const botPrompt = `${ROOM_RULES('@' + bot.id)}\n\n${history}`
+          + (said ? `What the others have said so far, in order:\n${said}\n\n` : '')
           + `The user's message, which this conversation is about:\n${prompt}\n\n`
           + `Now add your own contribution as @${bot.id}.`;
 
-        // A fresh CLI session every round. A room turn is a complete brief on its own —
-        // the whole transcript is in the prompt — and resuming a bot's long-lived chat
-        // session here would splice the room's rounds into the thread it uses when
-        // mentioned normally, so a later @@mention would answer as if mid-conversation.
-        let text = '', result = null, errored = false;
-        if (engine === 'subscription') {
-          // Subscription billing has no headless call at all — one interactive tmux
-          // pane per bot, seat re-used only within THIS one turn, torn down right after
-          // (see kill below). Room turns are stateless per round already (comment above),
-          // so there is no cross-round session to resume — same one-shot semantics as
-          // the headless branch, just routed through the Claude Max login instead of a
-          // token/key.
-          const roomTmuxId = `${sessionId}::room::${bot.id}`;
-          let ir;
-          try {
-            ir = await runInteractiveSingle({
-              prompt: botPrompt,
-              systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
-              model: bot.model || model,
-              ws,
-              sessionId: roomTmuxId,
-              abortController,
-              claudeSessionId: null,
-              workdir,
-              tabId,
-              mcpServers: botMcp,
-              userContent: (transcript.length === 0 ? userContent : null),
-              agent: bot.id,
-            });
-          } finally {
-            // Always kill, success or failure — leaving the pane up would keep piling
-            // one resident `claude` process per bot that has ever spoken, on a 1-core/
-            // 2.9GB host shared with other services. Sequential + torn-down-immediately
-            // keeps peak memory at one interactive process at a time, at the cost of a
-            // fresh cold start for every bot's every turn.
-            try { killInteractiveTmux(roomTmuxId); } catch {}
-          }
-          text = ir.fullText;
-          // errored stays false: runInteractiveSingle never throws, it reports failure
-          // through result.subtype instead (undefined when !ir.completed), same signal
-          // isAgentSuccess()/agentStopReason() already read for the headless branch.
-          result = { subtype: ir.completed ? 'success' : undefined, session_id: ir.cid };
-          for (const ev of ir.toolEvents) {
-            try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (ev.input || '').substring(0, 500), ev.name, bot.id, null, null); } catch {}
-          }
-        } else {
-        await new Promise(res => {
-          let settled = false;
-          const done = () => { if (!settled) { settled = true; res(); } };
-          cli.send({
-            prompt: botPrompt,
-            // Attachments go to the first speaker only — everyone after reads the
-            // transcript, and re-sending the same screenshot per bot per round would
-            // multiply its cost by the size of the room.
-            contentBlocks: (transcript.length === 0 && Array.isArray(userContent))
-              ? userContent.filter(b => !(b?.type === 'text' && b.text === prompt))
-              : null,
-            model: bot.model || model,
-            maxTurns: Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP),
-            systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName()),
-            // No _ccs_bots: the room is the dispatcher. See the invariants above.
-            mcpServers: botMcp,
-            allowedTools: roomBuiltinTools(mode),
-            abortController,
-            effort,
-            name: bot.label,
-            settingSources: 'project,local',
-          })
-            .onText(t => {
-              text += t;
-              send({ type: 'text', text: t, agent: bot.id });
-            })
-            .onResult(r => { result = r; })
-            .onError(() => { errored = true; done(); })
-            .onDone(done);
-        });
-        }
-
-        const ok = !errored && isAgentSuccess(result);
+        const { text, result, errored, ok } = await speak(bot, botPrompt, transcript.length === 0);
         if (!ok) {
           // A failed speaker is reported and the room carries on: one bot crashing is not
           // a reason to lose the conversation the others already had.
-          const note = `\n\n⚠️ @${bot.id} did not finish (${agentStopReason(result, errored)}).\n\n`;
+          const why = roomStopReason(result, errored, turnCap);
+          const note = `\n\n⚠️ @${bot.id} did not finish (${why}).\n\n`;
           save(note, bot.id); send({ type: 'text', text: note, agent: bot.id });
-          state(bot.id, 'failed', agentStopReason(result, errored));
+          state(bot.id, 'failed', why);
           continue;
         }
 
@@ -5248,6 +5266,50 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
     }
   } finally {
     for (const b of room) state(b.id, 'done');
+  }
+
+  // The closing step. The discussion alone changed nothing on disk in the run that motivated this: nobody
+  // was told to write, and the writer posted the plan as chat text and later said the document was
+  // updated. So the last speaker (auto seating puts the writer/wrapper last) is asked to put the result
+  // into the file the user named, read it back, and say what changed — or to PASS when the task asked
+  // for no file. Not in planning mode (no write tools), not while the room waits for the user, not when
+  // stopped. The app checks the result itself below.
+  let closerAnswered = false;
+  if (ROOM_CLOSING && mode !== 'planning' && engine !== 'subscription' && !escalatedBy && stopReason !== 'stopped'
+      && transcript.length > 0 && !abortController?.signal?.aborted) {
+    const closer = room[room.length - 1];
+    state(closer.id, 'running');
+    send({ type: 'agent_status', agent: 'orchestrator', status: getUserLang() === 'ru' ? 'Закрывающий шаг…' : 'Closing step…' });
+    const closePrompt = `${botsLogic.closingRules('@' + closer.id, botLangName())}\n\n${history}`
+      + `What was said in this discussion, in order:\n${botsLogic.renderTranscript(transcript)}\n\n`
+      + `The user's message, which this conversation is about:\n${prompt}`;
+    const r = await speak(closer, closePrompt, false);
+    if (!r.ok) {
+      const why = roomStopReason(r.result, r.errored, turnCap);
+      const note = `\n\n⚠️ @${closer.id} did not finish the closing step (${why}).\n\n`;
+      save(note, closer.id); send({ type: 'text', text: note, agent: closer.id });
+      state(closer.id, 'failed', why);
+    } else {
+      const reply = botsLogic.parseRoomReply(r.text);
+      if (!reply.pass) { save(r.text, closer.id); closerAnswered = true; }
+      state(closer.id, 'done');
+    }
+  }
+
+  // What actually happened on disk. Shown whenever something changed; when the closing bot reported a
+  // result and nothing changed, said outright, so "the document is updated" cannot stand unchecked.
+  if (filesBefore && !filesBefore.truncated) {
+    const after = await roomFiles.snapshotDir(workdir || WORKDIR);
+    if (!after.truncated) {
+      const diff = roomFiles.diffSnapshots(filesBefore.files, after.files);
+      let note = roomFiles.describeChanges(diff, after.files, getUserLang());
+      if (!note && closerAnswered) {
+        note = getUserLang() === 'ru'
+          ? '⚠️ **Файлы не менялись.** Бот написал, что результат внесён, но в рабочей папке ничего не изменилось: считайте, что документ не обновлён.\n\n'
+          : '⚠️ **No files changed.** The bot reported a result, but nothing in the working directory changed: treat the document as not updated.\n\n';
+      }
+      if (note) { save(note, null); send({ type: 'text', text: note }); }
+    }
   }
 
   // One artifact, always — this is what a DAG node would consume when the room is later

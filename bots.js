@@ -587,6 +587,112 @@ function shouldReseat({ prompt, hasAttachments, previous, bots } = {}) {
   return String(prompt || '').trim().length >= SEATING_REPICK_MIN_CHARS;
 }
 
+// ── What a room bot is given, and what it may spend ─────────────────────────────
+// Measured on a real run (2026-09-21, "finish the spec"): the chat's "Steps" was 5 and the bots
+// research with tools, so 8 of 20 replies ended with `max_turns_reached` and no answer; prompts grew
+// from 1.4K to 71K characters over three rounds (every bot re-reads everything said so far); on a
+// follow-up turn only the FIRST speaker received the replayed chat history (84K characters) and the
+// others knew nothing of it; and no bot was ever told to put the result into a file.
+
+// A room bot needs room to research before it answers, so the chat's Steps is a floor-lifted
+// budget here, not a hard limit: a bot that hits it says nothing at all.
+const ROOM_BOT_MIN_TURNS = envInt('ROOM_BOT_MIN_TURNS', 20);
+function roomTurnCap({ maxTurns, cap, min = ROOM_BOT_MIN_TURNS } = {}) {
+  const asked = Number.isInteger(maxTurns) && maxTurns > 0 ? maxTurns : 30;
+  const want = Math.max(asked, min);
+  return Number.isInteger(cap) && cap > 0 ? Math.min(want, cap) : want;
+}
+
+const ROOM_ENTRY_CHARS = envInt('ROOM_ENTRY_CHARS', 3500);            // one contribution, as shown to the next bot
+const ROOM_TRANSCRIPT_CHARS = envInt('ROOM_TRANSCRIPT_CHARS', 24000); // all contributions of this turn
+const ROOM_HISTORY_MSG_CHARS = envInt('ROOM_HISTORY_MSG_CHARS', 1500);
+const ROOM_HISTORY_CHARS = envInt('ROOM_HISTORY_CHARS', 16000);       // chat history from earlier turns
+
+// This turn's contributions as the next bot reads them. The chat and the database keep every word;
+// only the PROMPT is trimmed: each contribution is cut to `perEntry`, and when the total would pass
+// `total` the oldest ones are left out (and said to be). Without this every round re-sent the whole
+// room to every bot, so a three-round room cost a quarter of a million characters of input.
+function renderTranscript(entries, { perEntry = ROOM_ENTRY_CHARS, total = ROOM_TRANSCRIPT_CHARS } = {}) {
+  const parts = (Array.isArray(entries) ? entries : [])
+    .filter(e => e && e.handle && e.text)
+    .map(e => {
+      const t = String(e.text);
+      const body = t.length > perEntry ? `${t.slice(0, perEntry).trimEnd()}\n[… cut: ${t.length - perEntry} more characters, the full text is in the chat]` : t;
+      return `[@${e.handle}]: ${body}`;
+    });
+  const kept = [];
+  let used = 0;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (kept.length && used + parts[i].length > total) break;
+    kept.unshift(parts[i]);
+    used += parts[i].length + 2;
+  }
+  const omitted = parts.length - kept.length;
+  return (omitted ? `[… ${omitted} earlier contribution${omitted === 1 ? '' : 's'} left out]\n\n` : '') + kept.join('\n\n');
+}
+
+// Room bookkeeping that is not conversation: a failed speaker, a pass, the seating note, a stop.
+const ROOM_NOISE_RE = /^\s*(⚠️ @|⏭️ @|🎯 |📋 \*\*|🙋 \*\*|ℹ️ |📁 )/;
+
+// The chat before the current user message, for EVERY bot of the turn. `rows` are the chat's
+// messages in order (role, type, content, agent_id); everything from the last user message on is the
+// current turn and is left out. Each message is cut, and the newest ones are kept when the total would
+// pass `maxChars`. Replaces handing the raw replay to the first speaker only.
+function buildRoomHistory(rows, { maxChars = ROOM_HISTORY_CHARS, perMsg = ROOM_HISTORY_MSG_CHARS } = {}) {
+  const all = Array.isArray(rows) ? rows : [];
+  let lastUser = -1;
+  all.forEach((r, i) => { if (r && r.role === 'user') lastUser = i; });
+  const items = [];
+  for (const r of lastUser === -1 ? all : all.slice(0, lastUser)) {
+    if (!r || r.type === 'tool' || r.type === 'thinking' || !r.content) continue;
+    const text = String(r.content).trim();
+    if (!text || ROOM_NOISE_RE.test(text)) continue;
+    const label = r.role === 'user' ? 'You' : (r.role === 'assistant' && r.agent_id ? '@' + r.agent_id : null);
+    if (!label) continue;   // room summaries and notes carry no agent
+    const body = text.length > perMsg ? `${text.slice(0, perMsg).trimEnd()} [… cut]` : text;
+    items.push(`[${label}]: ${body}`);
+  }
+  if (!items.length) return '';
+  const kept = [];
+  let used = 0;
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (kept.length && used + items[i].length > maxChars) break;
+    kept.unshift(items[i]);
+    used += items[i].length + 2;
+  }
+  const omitted = items.length - kept.length;
+  return 'Earlier in this chat (oldest first; long messages are cut):\n'
+    + (omitted ? `[… ${omitted} earlier message${omitted === 1 ? '' : 's'} left out]\n\n` : '')
+    + kept.join('\n\n') + '\n\n';
+}
+
+// The files that belong to the CURRENT user message. On a follow-up turn the content is the replay of
+// the whole chat ("[User turn N]" blocks, each with the attachments of that turn), so everything up
+// to the last "[User turn N]" marker is history and is not attached again; a plain message has no
+// marker and keeps all its attachments.
+function currentTurnAttachments(userContent) {
+  if (!Array.isArray(userContent)) return [];
+  let start = 0;
+  userContent.forEach((b, i) => { if (b && b.type === 'text' && /^\[User turn \d+\]$/.test(String(b.text || '').trim())) start = i; });
+  return userContent.slice(start).filter(b => b && b.type !== 'text');
+}
+
+// What the last speaker is asked to do when the discussion is over. The room produced 44 messages and
+// no change to the file the user asked to have finished: nobody was told to write, and the writer
+// posted the plan as chat text and later said the document was updated. The bot may decline with PASS
+// (the task did not ask for a file); the app compares the files before and after either way.
+function closingRules(self, langName) {
+  return `You are ${self} and you close this conversation. The discussion is over; the contributions are above.\n\n`
+    + `If the user's message asks for a file or document to be created or changed, do it now:\n`
+    + `- put the agreed result into the right file in the project: update the file the user names or attached `
+    + `rather than starting a new one, and keep what was already good;\n`
+    + `- read the file back to check it;\n`
+    + `- then reply in a few lines: the file path, what changed, and anything still open. Do not paste the document into the chat.\n\n`
+    + `If the user's message did not ask for a file or document, reply with exactly the English word PASS — never translate it.\n`
+    + `Never claim a change you did not make: the app compares the files before and after and shows the user what actually changed.\n`
+    + `Write in ${langName || 'English'}. Code, commands and identifiers stay as they are.`;
+}
+
 // What a bot's reply means for the room.
 //
 // PASS must be the whole opening of the reply, not merely present in it: "the tests pass
@@ -642,5 +748,6 @@ module.exports = {
   planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS,
   planRoom, parseRoomReply, roomShouldContinue,
   SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS, seatingPrompt, parseSeating, shouldReseat,
+  ROOM_BOT_MIN_TURNS, roomTurnCap, renderTranscript, buildRoomHistory, currentTurnAttachments, closingRules,
   ROOM_MIN, ROOM_MAX, ROOM_MAX_MESSAGES, ROOM_MAX_ROUNDS,
 };
