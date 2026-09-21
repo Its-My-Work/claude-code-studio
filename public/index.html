@@ -2934,19 +2934,19 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="left-inner">
     <!-- Activity: live runs + scheduled + recent, across ALL projects -->
     <div class="sec" id="activitySec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('activity')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('activity')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('activity')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('activity')}">
         <span>⚡ <span data-i18n="act.title">Activity</span></span>
         <span style="display:flex;align-items:center;gap:6px;">
           <button class="sec-filter-btn" id="actGroupBtn" onclick="event.stopPropagation();toggleActivityGroup()" data-i18n-title="act.group" title="Group by project ↔ flat list">⊞</button>
           <span class="badge" id="actLiveCount">0</span>
         </span>
       </div>
-      <div class="sec-body" id="activityBody">
+      <div class="sec-body collapsed" id="activityBody">
         <div class="act-list" id="activityList"><div class="act-empty" data-i18n="act.empty">No activity</div></div>
       </div>
     </div>
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
         <span data-i18n="sec.projects">Projects</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
@@ -2954,7 +2954,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <span class="badge" id="projCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="projBody">
+      <div class="sec-body collapsed" id="projBody">
         <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.proj" aria-label="Filter projects" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
         <div class="sec-list"><div id="projList"></div></div>
       </div>
@@ -2962,7 +2962,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
     <!-- SSH Hosts section -->
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
         <span data-i18n="sec.sshHosts">SSH Hosts</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
@@ -2970,14 +2970,14 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <span class="badge" id="sshHostCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="sshHostsBody">
+      <div class="sec-body collapsed" id="sshHostsBody">
         <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.ssh" aria-label="Filter SSH hosts" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
         <div class="sec-list"><div id="sshHostList"></div></div>
       </div>
     </div>
 
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
         <span data-i18n="sec.chats">Chats</span>
         <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
           <button class="sec-filter-btn" id="histFilterBtn" onclick="event.stopPropagation();toggleSecFilter('hist')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
@@ -2985,7 +2985,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <span class="badge" id="histCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="histBody">
+      <div class="sec-body collapsed" id="histBody">
         <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.hist" aria-label="Filter chats" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
         <div class="sec-list"><div class="hist-list" id="histList"></div></div>
         <div class="hist-bulk-bar" id="histBulkBar">
@@ -2997,7 +2997,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
 
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
         <span data-i18n="sec.mcp">MCP</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
@@ -3007,7 +3007,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <span class="badge" id="mcpCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="mcpBody">
+      <div class="sec-body collapsed" id="mcpBody">
         <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.mcp" aria-label="Filter MCP servers" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="mcp.hint">Enable tools that Claude can use in this chat.</div>
         <div class="sec-list"><div id="mcpList"></div></div>
@@ -3015,7 +3015,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
 
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
         <span data-i18n="sec.skills">Skills</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="skillsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('skills')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
@@ -3024,7 +3024,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <span class="badge" id="skillsCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="skillsBody">
+      <div class="sec-body collapsed" id="skillsBody">
         <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.skills" aria-label="Filter skills" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="skills.hint">Skills are instruction files added to the system prompt.</div>
         <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Skills are auto-selected based on task text</div>
@@ -3034,7 +3034,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
 
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
         <span data-i18n="sec.cmds">/ Commands</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
@@ -3042,7 +3042,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <span class="badge" id="cmdsCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="cmdsBody">
+      <div class="sec-body collapsed" id="cmdsBody">
         <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.cmds" aria-label="Filter commands" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="cmds.hint">Slash commands — shortcuts to prompts. Type / in chat.</div>
         <div class="sec-list"><div id="cmdsList"></div></div>
@@ -3050,7 +3050,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
 
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('bots')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('bots')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('bots')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('bots')}">
         <span data-i18n="sec.bots">Bots</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-add-btn" onclick="event.stopPropagation();openBotsImport()" title="Import bots from a JSON file" data-i18n-title="bots.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
@@ -3059,21 +3059,21 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <span class="badge" id="botsCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="botsBody">
+      <div class="sec-body collapsed" id="botsBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="bots.hint">Participants in this project. Mention one with @@ in a message.</div>
         <div class="sec-list"><div id="botsList"></div></div>
       </div>
     </div>
 
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('agents')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('agents')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('agents')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('agents')}">
         <span data-i18n="sec.agents">Agents</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
           <button class="sec-add-btn" onclick="event.stopPropagation();openAgentForm()" title="Add agent" data-i18n-title="agent.add.new">＋</button>
           <span class="badge" id="agentsCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="agentsBody">
+      <div class="sec-body collapsed" id="agentsBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">External agents for task delegation.</div>
         <div class="sec-list"><div id="agentsList"></div></div>
       </div>
@@ -3144,14 +3144,14 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
     <!-- Telegram Remote Access -->
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('tg')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tg')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('tg')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tg')}">
         <span data-i18n="sec.telegram">Telegram</span>
         <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
           <span class="tg-status-dot" id="tgStatusDot">●</span>
           <span class="badge" id="tgCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="tgBody">
+      <div class="sec-body collapsed" id="tgBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tg.hint">Control Studio remotely via Telegram bot.</div>
 
         <!-- Bot Token -->
@@ -11052,6 +11052,11 @@ const _SEC_FILTER_CFG = {
   sshHosts: { listId: 'sshHostList', itemSel: '.rh-item' }
 };
 
+// Opens a collapsed section (same path as clicking its title, so the state is saved).
+function expandSec(id) {
+  if ($i(id + 'Body')?.classList.contains('collapsed')) toggleSec(id);
+}
+
 function toggleSecFilter(id) {
   const row = $i(id + 'FilterRow');
   const btn = $i(id + 'FilterBtn');
@@ -11060,6 +11065,8 @@ function toggleSecFilter(id) {
   if (visible) {
     clearSecFilter(id);
   } else {
+    // The filter row lives inside the section body — a collapsed section would hide it.
+    expandSec(id);
     row.style.display = 'flex';
     if (btn) btn.classList.add('on');
     const inp = $i(id + 'FilterInp');
@@ -16679,6 +16686,32 @@ setTimeout(tgLoadStatus, 500);
 
 // ─── Persist UI state across page refreshes ──────────────────────────────
 const LS_KEY = 'cc_ui_state';
+// Left-panel sections: saved-state key -> id of the collapsible body. Shared by save and
+// restore so the two can't drift (they did: Activity and Bots were in neither). Every body
+// starts `collapsed` in the markup, so a browser with no saved choice gets a tidy sidebar;
+// whatever the user opens or closes afterwards is remembered per browser.
+const SIDEBAR_SECTIONS = {
+  activity: 'activityBody', proj: 'projBody', sshHosts: 'sshHostsBody', hist: 'histBody',
+  mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', bots: 'botsBody',
+  agents: 'agentsBody', tunnel: 'tunnelBody', tg: 'tgBody',
+};
+function sidebarSectionsState() {
+  const out = {};
+  for (const [k, id] of Object.entries(SIDEBAR_SECTIONS)) out[k] = !!$i(id)?.classList.contains('collapsed');
+  return out;
+}
+function applySidebarSections(saved) {
+  if (!saved || typeof saved !== 'object') return;
+  for (const [k, id] of Object.entries(SIDEBAR_SECTIONS)) {
+    // No saved choice for this section (old state, or never toggled) -> keep the collapsed default.
+    if (typeof saved[k] !== 'boolean') continue;
+    const el = $i(id);
+    if (!el) continue;
+    el.classList.toggle('collapsed', saved[k]);
+    const title = el.previousElementSibling;
+    if (title) title.setAttribute('aria-expanded', String(!saved[k]));
+  }
+}
 // One shape for a restored tab, used by every restore path — they drifted apart
 // before and a field added in one place was silently missing in the others.
 function restoreTab(t) {
@@ -16738,7 +16771,7 @@ function saveUIState() {
       autoSkillsMode,
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
-      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), agents: c('agentsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tunnel: c('tunnelBody'), tg: c('tgBody') },
+      sections: sidebarSectionsState(),
       openTabs: savedOpenTabs.map(saveTab),
       activeTabId: savedOpenTabs.some(t => t.id === activeTabId) ? activeTabId : null,
       allProjTabs,
@@ -16774,16 +16807,7 @@ function restoreUIState() {
       setPanel('leftPanel', isMobile ? true : s.panels.left);
       setPanel('rightPanel', isMobile ? true : s.panels.right);
     }
-    if (s.sections) {
-      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', agents: 'agentsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tunnel: 'tunnelBody', tg: 'tgBody' };
-      for (const [k, elId] of Object.entries(secs)) {
-        const el = $i(elId);
-        if (!el) continue;
-        el.classList.toggle('collapsed', !!s.sections[k]);
-        const title = el.previousElementSibling;
-        if (title) title.setAttribute('aria-expanded', String(!s.sections[k]));
-      }
-    }
+    if (s.sections) applySidebarSections(s.sections);
     // Restore current project's tabs
     if (s.openTabs?.length) {
       openTabs = s.openTabs.map(restoreTab);
