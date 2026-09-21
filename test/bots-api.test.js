@@ -168,6 +168,22 @@ async function api(method, url, body) {
     check('with no gateway configured the catalogue is empty with the reason, not an error', [m.status, m.json.models, m.json.error], [200, [], 'no-gateway']);
   }
 
+  console.log('room file access:');
+  {
+    const made = (await api('POST', '/api/bots', { label: 'Reader', roomTools: 'read' })).json;
+    check('a bot can be created read-only in rooms', made.room_tools, 'read');
+    check('a bot with no choice has the default (null)', (await api('POST', '/api/bots', { label: 'Plain2' })).json.room_tools, null);
+    check('a partial update keeps it', (await api('PUT', `/api/bots/${made.id}`, { label: 'Reader 2' })).json.room_tools, 'read');
+    check('it can change', (await api('PUT', `/api/bots/${made.id}`, { label: 'R', roomTools: 'run' })).json.room_tools, 'run');
+    check('an unknown value is refused', (await api('PUT', `/api/bots/${made.id}`, { label: 'R', roomTools: 'root' })).status, 400);
+    check('...and leaves the stored one alone', (await api('GET', '/api/bots')).json.find(b => b.id === made.id).room_tools, 'run');
+    check('the export carries it', (await api('GET', '/api/bots/export')).json.bots.find(b => b.id === made.id).room_tools, 'run');
+    check('an empty value returns to the default', (await api('PUT', `/api/bots/${made.id}`, { label: 'R', roomTools: '' })).json.room_tools, null);
+    const imp = await api('POST', '/api/bots/import', { overwrite: true, bots: [{ id: made.id, label: 'R', room_tools: 'read' }] });
+    check('an import restores it', [imp.json.updated, (await api('GET', '/api/bots')).json.find(b => b.id === made.id).room_tools], [1, 'read']);
+    check('engine and model are untouched by all this', (await api('GET', '/api/bots')).json.find(b => b.id === made.id).run_engine, null);
+  }
+
   console.log('soft delete:');
   {
     const before = (await api('GET', '/api/bots')).json.length;

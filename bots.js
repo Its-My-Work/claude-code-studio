@@ -180,9 +180,40 @@ function languageClause(langName) {
     + `whatever language the messages before yours are in. Code, commands, file names and identifiers stay as they are.`;
 }
 
-function buildBotSystemPrompt(bot, allBots, langName) {
+// ─── One persona, several modes ───────────────────────────────────────
+// A persona says who the bot is and what it stands for. Two things in it belong to a MODE instead:
+// the report it closes a written deliverable with ("Завершай так: ВЕРДИКТ / … / ДАЛЬШЕ: <имя>"), and what
+// it may do to files. The app owns both: the report line is left out of discussion turns, and the
+// file access of a room is a field of the bot (`room_tools`), enforced through the tool list.
+const REPORT_FORMAT_LINE_RE = /^[ \t]*[-*][ \t]*(?:Завершай(?:те)? (?:так|ответ)|Формат (?:ответа|итога|отчёта)|Finish (?:like this|with)|End (?:your (?:reply|answer) )?(?:like this|with))(?![\p{L}\p{N}_])[^\n]*\n?/gimu;
+
+/** The persona without its closing-report-format line (a line the persona does not have costs nothing). */
+function stripReportFormat(prompt) {
+  return String(prompt || '').replace(REPORT_FORMAT_LINE_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd();
+}
+
+// What a bot may do to files while it takes part in a room, where several bots act on the same
+// files and nobody is answerable for them (a mention or a Kanban card has ONE responsible actor and
+// keeps full tools): read | run (read + commands) | work (read + commands + edit). Unset = work.
+const ROOM_TOOL_SCOPES = ['read', 'run', 'work'];
+
+/** 'read' | 'run' | 'work' | null (empty = the default) | false (invalid); undefined stays undefined. */
+function normalizeRoomTools(v) {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  return ROOM_TOOL_SCOPES.includes(v) ? v : false;
+}
+
+/** The scope a bot works under in a room. */
+function roomToolScope(bot) {
+  return ROOM_TOOL_SCOPES.includes(bot && bot.room_tools) ? bot.room_tools : 'work';
+}
+
+function buildBotSystemPrompt(bot, allBots, langName, { discussion = false } = {}) {
   const parts = [];
-  const own = String(bot?.system_prompt || '').trim();
+  // A turn in a discussion is not a deliverable: the persona's closing report format is left out of it
+  // (it made a bot address itself with "ДАЛЬШЕ: <name>" and turned every reply into a five-part form).
+  const own = discussion ? stripReportFormat(bot?.system_prompt).trim() : String(bot?.system_prompt || '').trim();
   if (own) parts.push(own);
   const lang = languageClause(langName);
   if (lang) parts.push(lang);
@@ -321,6 +352,7 @@ function planBotImport({ incoming, live, reserved, overwrite } = {}) {
       avatar: typeof raw?.avatar === 'string' ? raw.avatar : '',
       is_global: (raw?.is_global ?? raw?.isGlobal) ? 1 : 0,
       run_engine: normalizeBotEngine(raw?.run_engine ?? raw?.runEngine) || null,
+      room_tools: normalizeRoomTools(raw?.room_tools ?? raw?.roomTools) || null,
     };
     (liveSet.has(handle) ? replace : create).push(row);
   }
@@ -751,7 +783,8 @@ function closingRules(self, langName) {
     + `- put the agreed result into the right file in the project: update the file the user names or attached `
     + `rather than starting a new one, and keep what was already good;\n`
     + `- read the file back to check it;\n`
-    + `- then reply in a few lines: the file path, what changed, and anything still open. Do not paste the document into the chat.\n\n`
+    + `- then reply in a few lines: the file path, what changed, and anything still open (if your role description defines a report format, use it). `
+    + `Do not paste the document into the chat.\n\n`
     + `If the user's message did not ask for a file or document, reply with exactly the English word PASS — never translate it.\n`
     + `Never claim a change you did not make: the app compares the files before and after and shows the user what actually changed.\n`
     + `Write in ${langName || 'English'}. Code, commands and identifiers stay as they are.`;
@@ -809,6 +842,7 @@ module.exports = {
   isValidHandle, handleFromLabel, uniqueHandle,
   parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, planBotImport,
   MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability, BOT_ENGINES, normalizeBotEngine, botEngine, botModel,
+  stripReportFormat, ROOM_TOOL_SCOPES, normalizeRoomTools, roomToolScope,
   planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS,
   planRoom, seatPlanner, PLANNER_HANDLE, PLAN_INTENT_RE, parseRoomReply, roomShouldContinue,
   SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS, seatingPrompt, parseSeating, shouldReseat,

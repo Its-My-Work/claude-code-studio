@@ -32,3 +32,22 @@ Bot `planner` turns an agreed ТЗ into tasks (see the bot's prompt). A message 
 план, задач, канбан, декомпоз, roadmap, backlog, plan, tasks…) always seats it, whatever the seating model chose, and
 **last**: it reads the whole discussion, and the closing step (the last seat's) is then its work, the plan files. A
 project without a `planner` bot, and a message that is not about a plan, are unaffected.
+
+## One persona, several modes
+
+The persona says who the bot is. Two things in it belong to a mode, and the app now owns both:
+
+- **The closing report format** (`- Завершай так: ВЕРДИКТ / … / ДАЛЬШЕ: <имя>`). A discussion turn is not a deliverable: the line
+  is left out of the system prompt there (`stripReportFormat`), so a bot no longer turns every reply into a five-part form or
+  addresses itself with "ДАЛЬШЕ: <own name>". The room tells everyone to keep to about ten lines. The **closing step** is written
+  work, so there the persona's report format stays (the planner's СОЗДАНО / ПОКРЫТИЕ / ВОПРОСЫ is exactly that).
+- **What a bot may do to files in a room** (`bots.room_tools`, the "Files in a discussion" row of the bot editor):
+  `read` (Read/Glob/Grep), `run` (+ Bash), `work` (+ Edit/Write). Unset = `work`, so nothing changes for a bot that was never
+  configured. In a room several bots act on the same files and nobody is answerable for them; on a Kanban card or when you
+  address a bot with `@@` there is one responsible actor, and it keeps full tools. Planning mode is read-only for everyone.
+
+The closing step belongs to the last seated bot that may write (the planner speaks last when it is there). A room where nobody
+may write says so ("None of the participants may write files, so the result stayed in the chat") instead of skipping silently.
+
+The restriction is the tool list, so it is real on the API engine. On the Subscription engine the interactive CLI has no tool
+list to restrict: there it is a request in the prompt, not a lock.

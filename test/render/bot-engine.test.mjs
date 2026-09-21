@@ -26,6 +26,28 @@ assert.ok(html.indexOf('id="botEngineSeg"') < html.indexOf('id="botModelSeg"'), 
 assert.ok(/<input type="hidden" id="botModel">/.test(html) && /<input type="hidden" id="botEngine">/.test(html), 'the chosen values live in hidden inputs');
 assert.ok(/<select id="botModelGw"[^>]*hidden>/.test(html), 'the gateway list starts hidden');
 
+// ── file access in a discussion
+assert.deepStrictEqual(values(seg('botRoomToolsSeg')), ['', 'read', 'run', 'work'], 'default, read, read + run, read + write');
+assert.ok(/<button type="button" class="bot-seg-btn on" data-v=""/.test(seg('botRoomToolsSeg')), 'the default starts selected');
+assert.ok(!/tb-group|tb-btn/.test(seg('botRoomToolsSeg')), 'own classes again');
+assert.ok(/<input type="hidden" id="botRoomTools">/.test(html), 'a hidden input carries the value');
+assert.ok(/\$i\('botRoomTools'\)\.value = bot\?\.room_tools \|\| '';\s*renderBotRoomTools\(\);/.test(html), 'the form loads it');
+assert.ok(/roomTools: \$i\('botRoomTools'\)\.value \|\| null,/.test(html), 'saveBot sends it');
+{
+  const chips = ['', 'read', 'run', 'work'].map(v => { const c = { dataset: { v }, on: false }; c.classList = { toggle: (_, f) => { c.on = !!f; } }; return c; });
+  const hid = { value: '' };
+  Object.assign(globalThis, { $i: (id) => (id === 'botRoomTools' ? hid : null), document: { querySelectorAll: () => chips } });
+  const renderBotRoomTools = loadFn('renderBotRoomTools'); globalThis.renderBotRoomTools = renderBotRoomTools;
+  const setBotRoomTools = loadFn('setBotRoomTools');
+  const lit = () => chips.filter(c => c.on).map(c => c.dataset.v);
+  setBotRoomTools('read'); assert.deepStrictEqual([hid.value, lit()], ['read', ['read']]);
+  setBotRoomTools('work'); assert.deepStrictEqual([hid.value, lit()], ['work', ['work']]);
+  setBotRoomTools(''); assert.deepStrictEqual([hid.value, lit()], ['', ['']], 'back to the default');
+  for (const k of ['$i', 'document', 'renderBotRoomTools']) delete globalThis[k];
+}
+const hasKey = (k) => (html.match(new RegExp(`['"]${k.replace(/\./g, '\\.')}['"]:`, 'g')) || []).length;
+for (const k of ['bot.modal.tools.label', 'bot.tools.default', 'bot.tools.read', 'bot.tools.run', 'bot.tools.work', 'bot.modal.tools.hint']) assert.strictEqual(hasKey(k), 5, `${k} in all five languages`);
+
 // ── wiring
 assert.ok(/\$i\('botEngine'\)\.value = bot\?\.run_engine \|\| '';\s*renderBotEngine\(\);\s*renderBotModel\(bot\?\.model \|\| ''\);/.test(html), 'the form loads the stored engine and model');
 assert.ok(/model: \$i\('botModel'\)\.value \|\| null,\s*runEngine: \$i\('botEngine'\)\.value \|\| null,/.test(html), 'saveBot sends both; empty means "as the chat"');
