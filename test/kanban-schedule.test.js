@@ -134,7 +134,13 @@ console.log('\nwhich task dials each run path actually receives:');
   const fs2 = require('fs'), path2 = require('path');
   const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
   const i2 = SRV.indexOf('async function startTask(task)');
-  const seg = SRV.slice(i2, i2 + 20000);
+  // 26000, not 20000: the empty-final-turn / blocked-status work (2026-09-22) added
+  // ~700 chars ahead of cli.send(...) inside startTask and pushed its `effort:` field
+  // (originally ~19850) past the old window, failing this pin for a reason that had
+  // nothing to do with what it actually checks. Comment above already called this exact
+  // failure mode — leaving headroom this time instead of trimming to the current byte
+  // count again.
+  const seg = SRV.slice(i2, i2 + 26000);
   const callArgs = (needle) => {
     const k = seg.indexOf(needle);
     if (k === -1) return '';
