@@ -123,6 +123,18 @@ assert.ok(/case 'plan_review':[\s\S]{0,120}_prRender\(d\.review, d\.messageId\)/
   const m = /_planReviews\[String\(m\.id\)\] = review;[\s\S]{0,200}?planReviewCardHtml\(review, String\(m\.id\)/.exec(html);
   assert.ok(m, '_planReviews is set BEFORE the DB-restore render, not after (the bug: a click on a restored card found nothing to toggle)');
 }
+{
+  // Reported live, with a screenshot: a reloaded chat showed the card AND, right under it, the
+  // raw JSON it was built from as a second message. Cause: the card was inserted with .before()
+  // in front of the message bubble instead of replacing its content, same as agent_plan already
+  // does one branch up — so the bubble kept rendering the JSON as markdown text.
+  const restoreStart = html.indexOf("else if (m.role === 'assistant' && m.type === 'plan_review')");
+  assert.notStrictEqual(restoreStart, -1, 'plan_review is its own branch in the same if/else chain agent_plan uses (so a plain assistant bubble is never built for it first)');
+  const restore = html.slice(restoreStart, html.indexOf("} else if (m.role === 'assistant') {", restoreStart));
+  assert.ok(!restore.includes('.before('), 'the plan_review branch no longer inserts the card next to a raw-JSON bubble');
+  assert.ok(restore.includes("w.querySelector('.msg').innerHTML = planReviewCardHtml(review, String(m.id)"), 'the card REPLACES the message body, exactly like the agent_plan branch above it');
+  assert.ok(restore.includes("w.querySelector('.msg').innerHTML = renderMd(m.content);"), 'a malformed row falls back to plain rendering instead of an empty bubble');
+}
 assert.ok(/case 'plan_import_result':[\s\S]{0,60}_prShowResult\(d\)/.test(html), "the WS 'plan_import_result' frame updates it");
 assert.ok(/m\.role === 'assistant' && m\.type === 'plan_review'/.test(html), 'a reloaded session restores the card from its DB row');
 assert.ok(/m\.type === 'plan_review'\) \{ _allMsgs\.push\(m\); continue; \}/.test(html), 'the ingestion loop keeps plan_review rows for the restore pass');
