@@ -695,6 +695,41 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .atc-dispatch-btn:hover { background: rgba(124,106,239,.25); border-color: rgba(124,106,239,.4); }
 .atc-dispatch-btn:disabled { opacity: .5; cursor: default; }
 
+/* ─── Plan review card (planner bot's plan/ package -> Kanban approval) ─── */
+.plan-review-card {
+  align-self: flex-start; background: var(--s2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 0; max-width: 560px; width: 100%; overflow: hidden; animation: status-appear .25s var(--ease-out); margin: 4px 0;
+}
+.prc-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px 8px; border-bottom: 1px solid rgba(124,106,239,.1); }
+.prc-header .prc-icon { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.prc-title { font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: .02em; }
+.prc-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.prc-msgs { padding: 6px 14px 0; display: flex; flex-direction: column; gap: 4px; }
+.prc-errors { font-size: 11px; color: var(--red); }
+.prc-warnings { font-size: 11px; color: var(--muted); }
+.prc-msgs ul { margin: 2px 0 6px 16px; padding: 0; }
+.prc-tasks { padding: 6px 10px 4px; display: flex; flex-direction: column; gap: 3px; max-height: 320px; overflow-y: auto; }
+.prc-task { display: flex; align-items: flex-start; gap: 8px; padding: 5px 8px; border-radius: 8px; background: rgba(255,255,255,.02); }
+.prc-task.prc-task-err { background: rgba(248,81,79,.07); }
+.prc-task input[type=checkbox] { margin-top: 2px; flex-shrink: 0; }
+.prc-task-body { min-width: 0; flex: 1; }
+.prc-task-row1 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.prc-task-id { font-size: 10px; font-weight: 700; color: var(--accent2); }
+.prc-task-title { font-size: 11.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prc-task-bot { font-size: 10px; color: var(--muted); background: rgba(255,255,255,.05); border-radius: 5px; padding: 1px 5px; flex-shrink: 0; }
+.prc-task-existing { font-size: 10px; color: var(--green); flex-shrink: 0; }
+.prc-task-deps { font-size: 10px; color: var(--muted); opacity: .75; }
+.prc-task-issues { font-size: 10px; margin-top: 2px; }
+.prc-task-issues .prc-e { color: var(--red); }
+.prc-task-issues .prc-w { color: var(--muted); }
+.prc-footer { padding: 8px 14px 12px; border-top: 1px solid rgba(124,106,239,.06); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prc-footer .prc-count { font-size: 10px; color: var(--muted); }
+.prc-approve-btn { background: rgba(124,106,239,.12); color: var(--accent); border: 1px solid rgba(124,106,239,.22); border-radius: 6px; padding: 5px 12px; font-size: 11.5px; cursor: pointer; font-weight: 600; transition: background .15s, border-color .15s, color .15s; margin-left: auto; white-space: nowrap; }
+.prc-approve-btn:hover:not(:disabled) { background: rgba(124,106,239,.25); border-color: rgba(124,106,239,.4); }
+.prc-approve-btn:disabled { opacity: .4; cursor: default; }
+.prc-done { font-size: 11.5px; color: var(--green); font-weight: 600; }
+.prc-done-detail { font-size: 10px; color: var(--muted); margin-left: 8px; }
+
 /* ─── Chain progress card (dispatched tasks) ─── */
 .chain-progress-card {
   align-self: flex-start; background: var(--s2);
@@ -2664,6 +2699,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   .welcome-prompts { grid-template-columns: 1fr; max-width: 320px; }
   .proj-dd-menu { min-width: auto; max-width: calc(100vw - 32px); }
   .agent-team-card { max-width: calc(100vw - 40px); }
+  .plan-review-card { max-width: calc(100vw - 40px); }
   .chain-progress-card { max-width: calc(100vw - 40px); }
   .cd-btn-ok, .cd-btn-cancel { min-height: 44px; padding: 10px 20px; }
   .fpv-modal { width: 100vw !important; max-width: 100vw !important; height: 100vh !important; height: 100dvh !important; max-height: 100vh !important; max-height: 100dvh !important; border-radius: 0 !important; }
@@ -5043,7 +5079,7 @@ const TRANSLATIONS = {
     'me.err.id_dup':'Сервер з таким ID вже існує.','me.err.url_req':'URL є обов\'язковим для HTTP серверів.',
     'me.err.cmd_req':'Команда є обов\'язковою для stdio серверів.','me.err.request':'Помилка запиту — перевірте логи сервера.',
     'me.toast.added':'MCP-сервер додано.','me.toast.updated':'MCP-сервер оновлено.','me.kv.del':'Видалити',
-    'notif.dismiss':'Закрити','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Відкрити Kanban →','msf.sent':'✅ Надіслано',
+    'notif.dismiss':'Закрити','plan.review.title':'Огляд плану','plan.review.sub':'{n} задач(і) на затвердження','plan.review.sub_tz':'{n} задач(і) на затвердження, за {tz}','plan.errors.title':'Не можна затвердити:','plan.warnings.title':'Варто знати:','plan.deps':'Залежить від:','plan.will_update':'оновить картку','plan.empty':'У плані немає задач для імпорту.','plan.selected.count':'{n} із {total} обрано','plan.approve.btn':'Затвердити в Backlog ({n})','plan.approve.none':'Нічого не обрано','plan.approving':'Імпортую…','plan.approve.retry':'Повторити','plan.imported.title':'План імпортовано','plan.imported.done':'Імпортовано в Backlog','plan.imported.detail':'створено {c}, оновлено {u}, пропущено {s}','plan.import.err':'Не вдалося імпортувати план','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Відкрити Kanban →','msf.sent':'✅ Надіслано',
     'skill.custom_desc':'Користувацький скіл','skill.custom_cat':'🔧 Кастомні',
     'files.remote_unavail':'🌐 Віддалений проект —<br>файловий браузер недоступний','files.truncated':'… список обрізано — у теці забагато файлів','fpv.remote_binary':'Попередній перегляд недоступний для віддалених проєктів (лише текст)',
     'hist.drag':'Перетягнути','tg.device.connected':'📱 Telegram: {name} підключено',
@@ -5447,7 +5483,7 @@ const TRANSLATIONS = {
     'me.err.id_dup':'A server with this ID already exists.','me.err.url_req':'URL is required for HTTP servers.',
     'me.err.cmd_req':'Command is required for stdio servers.','me.err.request':'Request failed — check the server logs.',
     'me.toast.added':'MCP server added.','me.toast.updated':'MCP server updated.','me.kv.del':'Remove',
-    'notif.dismiss':'Dismiss','msf.plan_kanban':'Plan → Kanban','msf.open_kanban':'Open Kanban →','msf.sent':'✅ Sent',
+    'notif.dismiss':'Dismiss','plan.review.title':'Plan review','plan.review.sub':'{n} task(s) to approve','plan.review.sub_tz':'{n} task(s) to approve, against {tz}','plan.errors.title':'Cannot approve:','plan.warnings.title':'Worth knowing:','plan.deps':'Depends on:','plan.will_update':'will update the card','plan.empty':'No tasks to import in this plan.','plan.selected.count':'{n} of {total} selected','plan.approve.btn':'Approve to Backlog ({n})','plan.approve.none':'Nothing selected','plan.approving':'Importing…','plan.approve.retry':'Retry','plan.imported.title':'Plan imported','plan.imported.done':'Imported to Backlog','plan.imported.detail':'{c} created, {u} updated, {s} skipped','plan.import.err':'Could not import the plan','msf.plan_kanban':'Plan → Kanban','msf.open_kanban':'Open Kanban →','msf.sent':'✅ Sent',
     'skill.custom_desc':'Custom skill','skill.custom_cat':'🔧 Custom',
     'files.remote_unavail':'🌐 Remote project —<br>file browser not available','files.truncated':'… listing truncated — too many files in this folder','fpv.remote_binary':'Preview is not available for remote projects (text only)',
     'hist.drag':'Drag to reorder','tg.device.connected':'📱 Telegram: {name} connected',
@@ -5851,7 +5887,7 @@ const TRANSLATIONS = {
     'me.err.id_dup':'Сервер с таким ID уже существует.','me.err.url_req':'URL обязателен для HTTP серверов.',
     'me.err.cmd_req':'Команда обязательна для stdio серверов.','me.err.request':'Ошибка запроса — проверьте логи сервера.',
     'me.toast.added':'MCP-сервер добавлен.','me.toast.updated':'MCP-сервер обновлён.','me.kv.del':'Удалить',
-    'notif.dismiss':'Закрыть','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Открыть Kanban →','msf.sent':'✅ Отправлено',
+    'notif.dismiss':'Закрыть','plan.review.title':'Обзор плана','plan.review.sub':'{n} задач(и) на утверждение','plan.review.sub_tz':'{n} задач(и) на утверждение, по {tz}','plan.errors.title':'Нельзя утвердить:','plan.warnings.title':'Стоит знать:','plan.deps':'Зависит от:','plan.will_update':'обновит карточку','plan.empty':'В плане нет задач для импорта.','plan.selected.count':'{n} из {total} выбрано','plan.approve.btn':'Утвердить в Backlog ({n})','plan.approve.none':'Ничего не выбрано','plan.approving':'Импортирую…','plan.approve.retry':'Повторить','plan.imported.title':'План импортирован','plan.imported.done':'Импортировано в Backlog','plan.imported.detail':'создано {c}, обновлено {u}, пропущено {s}','plan.import.err':'Не удалось импортировать план','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Открыть Kanban →','msf.sent':'✅ Отправлено',
     'skill.custom_desc':'Пользовательский навык','skill.custom_cat':'🔧 Кастомные',
     'files.remote_unavail':'🌐 Удалённый проект —<br>файловый браузер недоступен','files.truncated':'… список обрезан — в папке слишком много файлов','fpv.remote_binary':'Предпросмотр недоступен для удалённых проектов (только текст)',
     'hist.drag':'Перетащить','tg.device.connected':'📱 Telegram: {name} подключён',
@@ -6167,7 +6203,7 @@ const TRANSLATIONS = {
     "me.err.id_fmt":"L'ID du serveur ne peut contenir que des lettres, des chiffres, des tirets et des underscores.","me.err.id_dup":"Un serveur avec cet ID existe déjà.",
     "me.err.url_req":"L'URL est requise pour les serveurs HTTP.","me.err.cmd_req":"La commande est requise pour les serveurs stdio.",
     "me.err.request":"La requête a échoué — consultez les journaux du serveur.","me.toast.added":"Serveur MCP ajouté.","me.toast.updated":"Serveur MCP mis à jour.","me.kv.del":"Retirer",
-    "notif.dismiss":"Ignorer","msf.plan_kanban":"Plan → Kanban","msf.open_kanban":"Ouvrir Kanban →","msf.sent":"✅ Envoyé","skill.custom_desc":"Compétence personnalisée",
+    "notif.dismiss":"Ignorer","plan.review.title":"Revue du plan","plan.review.sub":"{n} tâche(s) à approuver","plan.review.sub_tz":"{n} tâche(s) à approuver, d'après {tz}","plan.errors.title":"Impossible à approuver :","plan.warnings.title":"À savoir :","plan.deps":"Dépend de :","plan.will_update":"mettra à jour la carte","plan.empty":"Aucune tâche à importer dans ce plan.","plan.selected.count":"{n} sur {total} sélectionnées","plan.approve.btn":"Approuver vers Backlog ({n})","plan.approve.none":"Rien de sélectionné","plan.approving":"Import en cours…","plan.approve.retry":"Réessayer","plan.imported.title":"Plan importé","plan.imported.done":"Importé dans Backlog","plan.imported.detail":"{c} créées, {u} mises à jour, {s} ignorées","plan.import.err":"Impossible d'importer le plan","msf.plan_kanban":"Plan → Kanban","msf.open_kanban":"Ouvrir Kanban →","msf.sent":"✅ Envoyé","skill.custom_desc":"Compétence personnalisée",
     "skill.custom_cat":"🔧 Personnalisé","files.remote_unavail":"🌐 Projet distant —<br>navigateur de fichiers non disponible","files.truncated":"… liste tronquée — trop de fichiers dans ce dossier","fpv.remote_binary":"Aperçu indisponible pour les projets distants (texte uniquement)","hist.drag":"Glisser pour réorganiser",
     "tg.device.connected":"📱 Telegram : {name} connecté","tg.bot.started":"✅ Bot Telegram démarré : @{bot}","compact.btn":"Compacter et nouveau",
     "compact.title":"Compacter le chat et démarrer une nouvelle session","compact.loading":"Compactage…","compact.success":"✅ Chat compacté — ouverture d'une nouvelle session",
@@ -6447,7 +6483,7 @@ const TRANSLATIONS = {
     "me.saving.add":"מוסיף…","me.saving.edit":"שומר…","me.id.locked":"לא ניתן לשנות את ה-ID של השרת","me.err.json":"JSON לא תקין — תקנו קודם את התחביר.","me.err.json_save":"JSON לא תקין — לא ניתן לשמור.",
     "me.err.id_req":"נדרש ID לשרת.","me.err.id_fmt":"ה-ID של השרת יכול להכיל רק אותיות, ספרות, מקפים וקווים תחתונים.","me.err.id_dup":"כבר קיים שרת עם ID הזה.","me.err.url_req":"נדרש URL לשרתי HTTP.",
     "me.err.cmd_req":"נדרשת פקודה לשרתי stdio.","me.err.request":"הבקשה נכשלה — בדקו את לוגי השרת.","me.toast.added":"שרת ה-MCP נוסף.","me.toast.updated":"שרת ה-MCP עודכן.","me.kv.del":"הסרה",
-    "notif.dismiss":"סגירה","msf.plan_kanban":"תוכנית → Kanban","msf.open_kanban":"פתיחת Kanban →","msf.sent":"✅ נשלח","skill.custom_desc":"Skill מותאם אישית","skill.custom_cat":"🔧 מותאם אישית",
+    "notif.dismiss":"סגירה","plan.review.title":"סקירת תוכנית","plan.review.sub":"{n} משימות לאישור","plan.review.sub_tz":"{n} משימות לאישור, מול {tz}","plan.errors.title":"לא ניתן לאשר:","plan.warnings.title":"כדאי לדעת:","plan.deps":"תלוי ב:","plan.will_update":"יעדכן את הכרטיס","plan.empty":"אין משימות לייבוא בתוכנית הזו.","plan.selected.count":"{n} מתוך {total} נבחרו","plan.approve.btn":"אישור ל-Backlog ({n})","plan.approve.none":"לא נבחר דבר","plan.approving":"מייבא…","plan.approve.retry":"נסה שוב","plan.imported.title":"התוכנית יובאה","plan.imported.done":"יובא ל-Backlog","plan.imported.detail":"{c} נוצרו, {u} עודכנו, {s} דולגו","plan.import.err":"ייבוא התוכנית נכשל","msf.plan_kanban":"תוכנית → Kanban","msf.open_kanban":"פתיחת Kanban →","msf.sent":"✅ נשלח","skill.custom_desc":"Skill מותאם אישית","skill.custom_cat":"🔧 מותאם אישית",
     "files.remote_unavail":"🌐 פרויקט מרוחק —<br>דפדפן הקבצים לא זמין","files.truncated":"… הרשימה נחתכה — יותר מדי קבצים בתיקייה זו","fpv.remote_binary":"תצוגה מקדימה אינה זמינה לפרויקטים מרוחקים (טקסט בלבד)","hist.drag":"גררו לסידור מחדש","tg.device.connected":"📱 Telegram: {name} התחבר","tg.bot.started":"✅ בוט ה-Telegram הופעל: @{bot}",
     "compact.btn":"כיווץ וחדש","compact.title":"כיווץ הצ'אט ופתיחת סשן חדש","compact.loading":"מכווץ…","compact.success":"✅ הצ'אט כווץ — פותח סשן חדש","compact.err":"הכיווץ נכשל",
     "git.clean":"על הענף הראשי","git.ahead":"יש שינויים לא ממוזגים","git.dirty":"יש שינויים לא שמורים","git.conflict":"התנגשות מיזוג","git.commit":"קומיט לשינויים","git.merge":"מיזוג לענף הראשי","git.committed":"✅ בוצע קומיט","git.nothing":"אין שינויים לקומיט","git.merged":"✅ מוזג לענף הראשי","git.err":"שגיאת git",
@@ -7683,6 +7719,14 @@ function handleWsMsg(d) {
       if (isVisible && d.agents?.length) {
         _atcRender(d.plan || '', d.agents, d.dispatched || false);
       }
+      break;
+
+    case 'plan_review':
+      if (isVisible && d.review) _prRender(d.review, d.messageId);
+      break;
+
+    case 'plan_import_result':
+      _prShowResult(d);
       break;
 
     case 'bots_turn': {
@@ -9417,6 +9461,110 @@ function _atcUpdate(agentId, state) {
   const barEl = card.querySelector('.atc-progress-bar');
   if (countEl) countEl.textContent = `${done}/${total}`;
   if (barEl) barEl.style.width = `${Math.round((done / total) * 100)}%`;
+}
+
+// ─── Plan review card (planner's plan/ package -> Kanban) ───
+// review objects and each card's current checkbox selection, keyed by the DB message id the card
+// was posted as (so a WS 'plan_import_result' or a later re-render can find the right card/state).
+let _planReviews = {}, _planSelections = {};
+
+function _prDepMap(review) {
+  const rev = {}; // taskId -> [ids that depend on it]
+  for (const t of review.tasks) for (const d of t.depends_on || []) (rev[d] = rev[d] || []).push(t.id);
+  return rev;
+}
+function _prTogglePlanTask(messageId, taskId, on) {
+  const sel = _planSelections[messageId]; const review = _planReviews[messageId];
+  if (!sel || !review) return;
+  if (on) sel.add(taskId);
+  else {
+    // Unchecking a task also unchecks whatever depends on it — never leave a selected task with an
+    // unselected dependency (the server would skip it anyway; this just shows that up front).
+    const rev = _prDepMap(review);
+    const drop = [taskId]; const seen = new Set();
+    while (drop.length) { const id = drop.pop(); if (seen.has(id)) continue; seen.add(id); sel.delete(id); for (const dep of (rev[id] || [])) drop.push(dep); }
+  }
+  _prRerenderTasks(messageId);
+}
+function _prRerenderTasks(messageId) {
+  const card = document.querySelector(`.plan-review-card[data-message-id="${messageId}"]`);
+  if (!card) return;
+  const review = _planReviews[messageId], sel = _planSelections[messageId];
+  card.querySelectorAll('.prc-task input[type=checkbox]').forEach(cb => { cb.checked = sel.has(cb.dataset.taskId); });
+  const btn = card.querySelector('.prc-approve-btn');
+  if (btn) { const n = sel.size; btn.disabled = n === 0; btn.textContent = n ? t('plan.approve.btn').replace('{n}', n) : t('plan.approve.none'); }
+}
+function planReviewCardHtml(review, messageId, imported) {
+  const errBlock = review.errors.length
+    ? `<div class="prc-errors">⚠️ ${escH(t('plan.errors.title'))}<ul>${review.errors.map(e => `<li>${escH(e)}</li>`).join('')}</ul></div>` : '';
+  const warnBlock = (!imported && review.warnings.length)
+    ? `<div class="prc-warnings">${escH(t('plan.warnings.title'))}<ul>${review.warnings.slice(0, 8).map(w => `<li>${escH(w)}</li>`).join('')}</ul></div>` : '';
+  const depsTitle = (ids) => ids.length ? `${t('plan.deps')} ${ids.join(', ')}` : '';
+  const rows = review.tasks.map(tk => {
+    const checked = imported ? true : (_planSelections[messageId] ? _planSelections[messageId].has(tk.id) : true);
+    const issues = [...tk.errors.map(m => `<span class="prc-e">⚠ ${escH(m)}</span>`), ...tk.warnings.map(m => `<span class="prc-w">${escH(m)}</span>`)];
+    return `<label class="prc-task${tk.errors.length ? ' prc-task-err' : ''}" title="${escH(depsTitle(tk.depends_on))}">
+      ${imported ? '' : `<input type="checkbox" data-task-id="${escH(tk.id)}" ${checked ? 'checked' : ''} ${tk.errors.length ? 'disabled' : ''} onchange="_prTogglePlanTask('${messageId}','${escH(tk.id)}',this.checked)">`}
+      <div class="prc-task-body">
+        <div class="prc-task-row1">
+          <span class="prc-task-id">${escH(tk.id)}</span>
+          <span class="prc-task-title">${escH(tk.title || tk.id)}</span>
+          <span class="prc-task-bot">@@${escH(tk.bot || '?')}</span>
+          ${tk.existingTaskId ? `<span class="prc-task-existing">↻ ${escH(t('plan.will_update'))}</span>` : ''}
+        </div>
+        ${tk.depends_on.length ? `<div class="prc-task-deps">${escH(depsTitle(tk.depends_on))}</div>` : ''}
+        ${issues.length ? `<div class="prc-task-issues">${issues.join(' · ')}</div>` : ''}
+      </div>
+    </label>`;
+  }).join('');
+  const footer = imported
+    ? `<span class="prc-done">✅ ${escH(t('plan.imported.done'))}</span>
+       <span class="prc-done-detail">${escH(t('plan.imported.detail').replace('{c}', imported.created).replace('{u}', imported.updated).replace('{s}', imported.skipped.length))}</span>`
+    : `<span class="prc-count">${escH(t('plan.selected.count').replace('{n}', (_planSelections[messageId] || new Set()).size).replace('{total}', review.tasks.length))}</span>
+       <button class="prc-approve-btn" ${!review.canApprove || !review.tasks.length ? 'disabled' : ''} onclick="_prApprove('${messageId}')">${escH(t('plan.approve.btn').replace('{n}', (_planSelections[messageId] || new Set()).size))}</button>`;
+  return `<div class="plan-review-card" data-message-id="${messageId}">
+    <div class="prc-header">
+      <div class="prc-icon">📋</div>
+      <div>
+        <div class="prc-title">${escH(imported ? t('plan.imported.title') : t('plan.review.title'))}</div>
+        <div class="prc-sub">${escH((review.tzPath ? t('plan.review.sub_tz').replace('{tz}', review.tzPath) : t('plan.review.sub')).replace('{n}', review.tasks.length))}</div>
+      </div>
+    </div>
+    <div class="prc-msgs">${errBlock}${warnBlock}</div>
+    <div class="prc-tasks">${rows || `<div class="prc-warnings">${escH(t('plan.empty'))}</div>`}</div>
+    <div class="prc-footer">${footer}</div>
+  </div>`;
+}
+function _prRender(review, messageId) {
+  _planReviews[messageId] = review;
+  if (!_planSelections[messageId]) _planSelections[messageId] = new Set(review.tasks.filter(t => !t.errors.length).map(t => t.id));
+  const old = document.querySelector(`.plan-review-card[data-message-id="${messageId}"]`);
+  if (old) old.remove();
+  const wrap = document.createElement('div');
+  wrap.innerHTML = planReviewCardHtml(review, messageId, null);
+  msgsEl.appendChild(wrap.firstElementChild);
+  scrollBottom();
+}
+function _prApprove(messageId) {
+  if (!ws || ws.readyState !== 1) return;
+  const sel = _planSelections[messageId]; if (!sel || !sel.size) return;
+  const btn = document.querySelector(`.plan-review-card[data-message-id="${messageId}"] .prc-approve-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = t('plan.approving'); }
+  ws.send(JSON.stringify({ type: 'approve_plan', sessionId: currentSessionId, workdir: curWorkdir || undefined, selected: [...sel], messageId, tabId: activeTabId }));
+}
+function _prShowResult(d) {
+  const review = _planReviews[d.messageId];
+  const card = document.querySelector(`.plan-review-card[data-message-id="${d.messageId}"]`);
+  if (!d.ok) {
+    if (card) { const btn = card.querySelector('.prc-approve-btn'); if (btn) { btn.disabled = false; btn.textContent = t('plan.approve.retry'); } }
+    toast(d.error || t('plan.import.err'), true);
+    return;
+  }
+  if (review && card) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = planReviewCardHtml(review, d.messageId, { created: d.created, updated: d.updated, skipped: d.skipped });
+    card.replaceWith(wrap.firstElementChild);
+  }
 }
 
 // ─── Chain progress card (dispatched tasks tracking) ────────────────────
@@ -13002,7 +13150,16 @@ function _renderMsgAt(idx, prepend = false) {
   }
   // Add "Done" footer for completed assistant messages in history
   // Show on the last assistant msg before a user msg or end of conversation
-  if (m.role === 'assistant' && m.type !== 'agent_plan') {
+  if (m.role === 'assistant' && m.type === 'plan_review') {
+    try {
+      const review = JSON.parse(m.content);
+      const wrap = document.createElement('div');
+      wrap.innerHTML = planReviewCardHtml(review, String(m.id), review.imported || null);
+      w.querySelector('.msg').before(wrap.firstElementChild);
+      if (!review.imported && !_planSelections[String(m.id)]) _planReviews[String(m.id)] = review;
+    } catch {}
+  }
+  if (m.role === 'assistant' && m.type !== 'agent_plan' && m.type !== 'plan_review') {
     const next = _allMsgs[idx + 1];
     if (!next || next.role === 'user') {
       w.appendChild(_msfCreate('done', t('msf.done')));
@@ -13222,6 +13379,7 @@ async function loadSess(id) {
           _allMsgs.push(m);
           continue;
         }
+        if (m.type === 'plan_review') { _allMsgs.push(m); continue; }
         if (m.role === 'assistant' && m.type === 'text') {
           if (m.agent_id && _agentTools[m.agent_id]) {
             // Multi-agent: all tools for this agent (regardless of DB order)
@@ -17899,7 +18057,7 @@ function exportSessionMd() {
   const title = tab?.title || 'Chat';
   const lines = [`# ${title}\n`];
   for (const m of _allMsgs) {
-    if (!m.content || m.type === 'thinking' || m.type === 'agent_plan') continue;
+    if (!m.content || m.type === 'thinking' || m.type === 'agent_plan' || m.type === 'plan_review') continue;
     const header = m.role === 'user' ? '## You' : '## Claude';
     lines.push(header, m.content.trim(), '');
   }

@@ -118,6 +118,8 @@ const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require(
 const { isAgentSuccess, shouldAutoContinue, agentStopReason, roomStopReason } = require('./multi-agent-result');
 const roomFiles = require('./room-files');
 const roomGit = require('./room-git');
+const planImport = require('./plan-import');
+const planLib = require('./plan-lib');
 const {
   resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
   tmuxNameFor, buildLaunchCommand, isReapCandidate, shouldReap, pickOverflow, TMUX_PREFIX,
@@ -956,6 +958,10 @@ try { db.exec(`ALTER TABLE bots ADD COLUMN room_tools TEXT`); } catch {}
 // columns already here (scheduled_at / recurrence) this is what makes a recurring
 // job belong to a named specialist rather than to nobody.
 try { db.exec(`ALTER TABLE tasks ADD COLUMN bot_id TEXT`); } catch {}
+// plan_task_id: the id a Kanban card was imported FROM, e.g. "T-003" (plan-lib.js parseTaskFile) —
+// how a re-import finds "this card already exists" instead of creating a duplicate every time the
+// planner's package is re-approved. NULL for every task not created that way.
+try { db.exec(`ALTER TABLE tasks ADD COLUMN plan_task_id TEXT`); } catch {}
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -1084,6 +1090,7 @@ const stmts = {
   setRoomRoster: db.prepare(`UPDATE sessions SET room_roster=? WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
+  updateMsgContent: db.prepare(`UPDATE messages SET content=? WHERE id=?`),
   addTelegramMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,source) VALUES (?,?,?,?,?,?,?,?,'telegram')`),
   markInterruptDelivered: db.prepare(`UPDATE messages SET type='interrupt_delivered' WHERE id=?`),
   getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY created_at ASC, CASE WHEN type='thinking' THEN 0 ELSE 1 END ASC, id ASC`),
@@ -5359,6 +5366,22 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
           : '⚠️ **No files changed.** The bot reported a result, but nothing in the working directory changed: treat the document as not updated.\n\n';
       }
       if (note) { save(note, null); send({ type: 'text', text: note }); }
+
+      // A planner writes plan/ but never a Kanban card (see plan-import.js): this is the review
+      // that stands between "files on disk" and "cards on the board", posted the moment those files
+      // changed — no extra model call, the disk diff above already told us they did.
+      const planTouched = [...diff.added, ...diff.modified].some(p => p.startsWith('plan/tasks/'));
+      if (planTouched) {
+        try {
+          const review = await buildPlanReview(workdir || WORKDIR);
+          if (review.tasks.length) {
+            const content = JSON.stringify(review);
+            const info = stmts.addMsg.run(sessionId, 'assistant', 'plan_review', content, null, closer ? closer.id : null, null, null);
+            const messageId = Number(info.lastInsertRowid);
+            send({ type: 'plan_review', messageId, review });
+          }
+        } catch (e) { log.warn('plan review after room close failed', { err: e.message }); }
+      }
     }
   }
 
@@ -8067,6 +8090,114 @@ app.post('/api/tasks/dispatch', (req, res) => {
   setImmediate(processQueue);
   log.info('Tasks dispatched', { chainId, count: createdTasks.length, workdir });
   res.json({ chain_id: chainId, session_id: chainSessionId, tasks: createdTasks });
+});
+
+// ─── Plan → Kanban import ───────────────────────────────────────────────
+// A planner bot writes plan/tasks/*.md, a linted structural preview (plan-lib.js /
+// plan-import.js), never a Kanban card — that needs the user's approval, which is what this
+// section is for. Cards are created as 'backlog' (board only, nothing runs) so approving a
+// plan never starts unattended work by itself; the user moves cards to 'todo' from the board
+// when ready, same as any imported checklist (see TASK_MANAGER_INSTRUCTION).
+
+/** The bots this project actually has (global + linked) — same roster a room in this project would use. */
+function projectBotIds(workdir) {
+  const proj = loadProjects().find(pr => pr.workdir === workdir);
+  const rows = proj ? stmts.listProjectBots.all(proj.id) : stmts.listBots.all();
+  return rows.map(b => b.id);
+}
+
+/** plan_task_id ("T-003") -> kanban task id, for every card this workdir has already imported. */
+function existingPlanTaskMap(workdir) {
+  const rows = db.prepare(`SELECT id, plan_task_id FROM tasks WHERE workdir=? AND plan_task_id IS NOT NULL`).all(workdir);
+  return Object.fromEntries(rows.map(r => [r.plan_task_id, r.id]));
+}
+
+async function buildPlanReview(workdir) {
+  return planImport.reviewPlan({ workdir, botIds: projectBotIds(workdir), existing: existingPlanTaskMap(workdir) });
+}
+
+const PLAN_IMPORT_MAX = 200; // a plan is user-approved, not agent-spawned — no MAX_TASK_CHILDREN_PER_RUN-style throttle needed, just a sane ceiling
+
+/**
+ * Writes `review`'s selected tasks to the board (transaction: all or nothing). `selected` = null
+ * means "everything the linter allowed" (buildImportPlan's own default). Never runs anything:
+ * every card lands as 'backlog'. -> { created, updated, skipped: [{id,reason}] } or throws if the
+ * review itself has lint errors (the caller must not have offered Approve in that case).
+ */
+function applyPlanImport({ workdir, review, selected }) {
+  if (!review.canApprove) { const e = new Error('plan has lint errors'); e.code = 'PLAN_LINT'; throw e; }
+  if (review.tasks.length > PLAN_IMPORT_MAX) { const e = new Error(`plan has ${review.tasks.length} tasks, over the ${PLAN_IMPORT_MAX}-task import limit`); e.code = 'PLAN_TOO_BIG'; throw e; }
+  const existing = existingPlanTaskMap(workdir);
+  const byId = new Map(review.tasks.map(t => [t.id, t]));
+  const graph = planLib.buildImportPlan({ tasks: review.tasks, errors: [], existing, selected });
+
+  const idMap = { ...Object.fromEntries(graph.toUpdate.map(t => [t.id, existing[t.id]])) };
+  let created = 0, updated = 0;
+  db.transaction(() => {
+    for (const t of graph.toCreate) {
+      const full = byId.get(t.id);
+      const taskId = genId();
+      idMap[t.id] = taskId;
+      stmts.createTask.run(
+        taskId, String(full.title || full.id).substring(0, 200), String(full.description || '').substring(0, 2000),
+        '', 'backlog', 0, null, workdir, sqlVal(full.model), 'auto', 'single', full.max_turns || UNATTENDED_MAX_TURNS,
+        null, null /* depends_on: filled in the remap pass below */, null, null, null, null, null, null, null, full.bot,
+      );
+      created++;
+    }
+    for (const t of graph.toUpdate) {
+      const full = byId.get(t.id);
+      const taskId = existing[t.id];
+      const row = stmts.getTask.get(taskId);
+      if (!row) continue; // the card was deleted from under us — treat as nothing to update
+      stmts.updateTask.run(
+        String(full.title || full.id).substring(0, 200), String(full.description || '').substring(0, 2000), row.notes,
+        row.status, row.sort_order, row.session_id, row.workdir, sqlVal(full.model) || row.model, row.mode, row.agent_mode,
+        full.max_turns || row.max_turns, row.attachments, row.depends_on /* remapped below */, row.chain_id,
+        row.source_session_id, row.scheduled_at, row.recurrence, row.recurrence_end_at, row.effort, row.run_engine,
+        full.bot, taskId,
+      );
+      updated++;
+    }
+    // Second pass: depends_on remapped to real Kanban ids, now that every id in this batch has one
+    // (mirrors /api/tasks/dispatch's own two-pass id assignment, for the same forward-reference reason).
+    for (const t of [...graph.toCreate, ...graph.toUpdate]) {
+      const full = byId.get(t.id);
+      const taskId = idMap[t.id];
+      const deps = (full.depends_on || []).map(d => idMap[d]).filter(Boolean);
+      db.prepare(`UPDATE tasks SET depends_on=?, updated_at=datetime('now') WHERE id=?`).run(deps.length ? JSON.stringify(deps) : null, taskId);
+      stmts.setTaskContext.run(String(full.context || '').substring(0, 10000), null, taskId);
+      db.prepare(`UPDATE tasks SET plan_task_id=? WHERE id=?`).run(full.id, taskId);
+    }
+  })();
+  return { created, updated, skipped: graph.toSkip };
+}
+
+// Dry run: parse + lint the plan/ package of a workdir, no writes. Used by the approval card and
+// (optionally) as a stand-alone check, e.g. after editing plan files by hand.
+app.post('/api/plans/review', express.json(), async (req, res) => {
+  const workdir = String((req.body || {}).workdir || '').trim();
+  if (!workdir) return res.status(400).json({ error: 'workdir required' });
+  try { res.json(await buildPlanReview(workdir)); }
+  catch (e) { log.error('plan review failed', { workdir, err: e.message }); res.status(500).json({ error: 'could not read the plan' }); }
+});
+
+// The write: re-reads and re-lints the files fresh (never trusts a review object the client held
+// on to — the files, or the board, may have changed since it was shown) and applies `selected`.
+app.post('/api/plans/import', express.json(), async (req, res) => {
+  const workdir = String((req.body || {}).workdir || '').trim();
+  const selected = Array.isArray((req.body || {}).selected) ? (req.body || {}).selected : null;
+  if (!workdir) return res.status(400).json({ error: 'workdir required' });
+  try {
+    const review = await buildPlanReview(workdir);
+    if (!review.canApprove) return res.status(409).json({ error: 'the plan has lint errors and cannot be approved', review });
+    const result = applyPlanImport({ workdir, review, selected });
+    log.info('Plan imported', { workdir, ...result, skipped: result.skipped.length });
+    res.json(result);
+  } catch (e) {
+    log.error('plan import failed', { workdir, err: e.message });
+    res.status(e.code === 'PLAN_TOO_BIG' ? 413 : 500).json({ error: e.message });
+  }
 });
 
 // Sessions
@@ -13504,6 +13635,46 @@ wss.on('connection', (ws) => {
         } catch (e) {
           log.error('dispatch_plan error', { error: e.message });
           ws.send(JSON.stringify({ type: 'error', error: `Dispatch failed: ${e.message}`, ...(msg.tabId ? { tabId: msg.tabId } : {}) }));
+        }
+      })();
+      return;
+    }
+
+    // The user's decision on a plan_review card. Re-reads and re-lints the files fresh — never
+    // trusts the review object the card was built from, which may be stale (the files, the board,
+    // or the bot roster may have changed since). `selected`: null/omitted = everything the linter
+    // allowed (Approve all); an array = only those plan ids (a deselected task's dependents are
+    // skipped by applyPlanImport itself, never imported with a dangling depends_on).
+    if (msg.type === 'approve_plan') {
+      (async () => {
+        try {
+          const { sessionId, workdir, selected, messageId, tabId } = msg;
+          const session = sessionId ? stmts.getSession.get(sessionId) : null;
+          const wd = workdir || session?.workdir || WORKDIR;
+          const review = await buildPlanReview(wd);
+          if (!review.canApprove) {
+            ws.send(JSON.stringify({ type: 'plan_import_result', ok: false, error: 'the plan has lint errors and cannot be approved', review, ...(tabId ? { tabId } : {}) }));
+            return;
+          }
+          const result = applyPlanImport({ workdir: wd, review, selected: Array.isArray(selected) ? selected : null });
+          log.info('Plan imported via WS', { workdir: wd, ...result, skipped: result.skipped.length });
+          // The persisted card is patched with the outcome, so a page reload shows "imported", not an
+          // approve button that would re-run the import a second time.
+          if (messageId) {
+            try {
+              const patched = { ...review, imported: { ...result, at: new Date().toISOString() } };
+              stmts.updateMsgContent.run(JSON.stringify(patched), messageId);
+            } catch {}
+          }
+          const note = getUserLang() === 'ru'
+            ? `✅ В Backlog: создано ${result.created}, обновлено ${result.updated}${result.skipped.length ? `, пропущено ${result.skipped.length}` : ''}.\n\n`
+            : `✅ To Backlog: ${result.created} created, ${result.updated} updated${result.skipped.length ? `, ${result.skipped.length} skipped` : ''}.\n\n`;
+          if (sessionId) { try { stmts.addMsg.run(sessionId, 'assistant', 'text', note, null, null, null, null); } catch {} }
+          ws.send(JSON.stringify({ type: 'plan_import_result', ok: true, ...result, messageId, ...(tabId ? { tabId } : {}) }));
+          if (sessionId) ws.send(JSON.stringify({ type: 'text', text: note, ...(tabId ? { tabId } : {}) }));
+        } catch (e) {
+          log.error('approve_plan error', { error: e.message });
+          ws.send(JSON.stringify({ type: 'plan_import_result', ok: false, error: e.message, ...(msg.tabId ? { tabId: msg.tabId } : {}) }));
         }
       })();
       return;
