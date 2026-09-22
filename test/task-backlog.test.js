@@ -343,13 +343,21 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
   refuse.stdout.on('data', d => { refuseLog += d; });
   refuse.stderr.on('data', d => { refuseLog += d; });
   process.on('exit', () => { try { refuse.kill('SIGTERM'); } catch {} try { fs.rmSync(APP3, { recursive: true, force: true }); } catch {} });
-  let refuseUp = false;
-  for (let i = 0; i < 80; i++) {
-    try { const r = await fetch(`http://localhost:${PORT3}/api/health`); if (r.ok) { refuseUp = true; break; } } catch {}
-    await sleep(250);
+  // HOST=localhost is a NAME, and this sandbox's own dual-stack resolution is split: the server's
+  // net.Server.listen('localhost') and the test client's own DNS lookup of 'localhost' do not agree on
+  // which loopback family to use (observed here: the server binds ::1, a plain lookup of 'localhost'
+  // answers 127.0.0.1 only) — so a client that also just asks for 'localhost' can get ECONNREFUSED
+  // against a server that is, in fact, up. The server's HOST=localhost decision (the thing under test)
+  // does not depend on which literal address the test then uses to reach it, so the client tries both.
+  let refuseUp = false, refuseHost = null;
+  for (let i = 0; i < 80 && !refuseUp; i++) {
+    for (const host of ['127.0.0.1', '[::1]']) {
+      try { const r = await fetch(`http://${host}:${PORT3}/api/health`); if (r.ok) { refuseUp = true; refuseHost = host; break; } } catch {}
+    }
+    if (!refuseUp) await sleep(250);
   }
   if (!refuseUp) die(`the refusing server on port ${PORT3} did not start\n${refuseLog}`);
-  const refuseRes = await fetch(`http://localhost:${PORT3}/api/internal/task-manager`, {
+  const refuseRes = await fetch(`http://${refuseHost}:${PORT3}/api/internal/task-manager`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: 'Bearer short-secret' },
     body: JSON.stringify({ action: 'list_tasks' }),
