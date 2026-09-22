@@ -132,7 +132,10 @@ check('getTasks joins bots on the task\'s bot_id', /LEFT JOIN bots b ON t\.bot_i
 check('the bots join excludes soft-deleted bots', /LEFT JOIN bots b ON t\.bot_id = b\.id AND b\.deleted_at IS NULL/.test(getTasksSql), true);
 
 // And the card must render the helper rather than a hand-rolled copy of it.
-const makeCardBody = SRC.slice(SRC.indexOf('function makeCard('), SRC.indexOf('function makeCard(') + 2600);
+// 3200, not 2600: the 'blocked' status work (2026-09-22) added a blockedInfo/blockedBadge
+// pair ahead of the footer template inside makeCard, pushing ${cfgBadges} (originally
+// ~2450) past the old window.
+const makeCardBody = SRC.slice(SRC.indexOf('function makeCard('), SRC.indexOf('function makeCard(') + 3200);
 check('makeCard builds its badges from kbRunBadges', /const cfgBadges=kbRunBadges\(tk\)/.test(makeCardBody), true);
 check('makeCard puts them in the footer', /\$\{cfgBadges\}/.test(makeCardBody), true);
 // The old single-badge form must be gone from the TASK card. It survives on the CHAIN
