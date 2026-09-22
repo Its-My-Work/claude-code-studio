@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
@@ -1455,6 +1456,11 @@ function deriveChainStatusFromTasks(tasks) {
   if (tasks.some(t => t.status === 'in_progress')) return 'in_progress';
   if (tasks.some(t => t.status === 'cancelled') &&
       !tasks.some(t => t.status === 'in_progress' || t.status === 'todo')) return 'cancelled';
+  // A blocked member halts the chain exactly like a cancelled one does (the next member's
+  // depends_on never sees 'done'), but it is not a failure — showing it as 'backlog' (the
+  // fallthrough below) would hide that the chain actually ran and needs a human now.
+  if (tasks.some(t => t.status === 'blocked') &&
+      !tasks.some(t => t.status === 'in_progress' || t.status === 'todo')) return 'blocked';
   if (tasks.some(t => t.status === 'todo')) return 'todo';
   return 'backlog';
 }
@@ -1879,6 +1885,7 @@ const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
+const blockedTasks = new Map();       // taskId → reason, set by report_result({blocked:true}); consumed once when the run's final status is decided
 // task IDs started via the independent-worker path. Not a cap counter — the cap is
 // global (see processQueue) — this only tells /api/running-sessions whether a task row
 // still has a worker behind it.
@@ -2042,6 +2049,7 @@ async function startTask(task) {
     }
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
+    blockedTasks.delete(task.id); // clear any stale flag an earlier, crashed run left behind
     let fullText = '', newCid = claudeSessionId, hasError = false;
     taskBuffers.set(task.id, '');
     // Notify watchers — use task_retrying for restarts, task_started for first run
@@ -2063,6 +2071,11 @@ async function startTask(task) {
     let currentTaskCid = claudeSessionId;
     let lastTaskResult = null;
     let lastTaskTurnUsage = null; // usage of the most recent assistant turn → real ctx-window occupancy
+    // Own text of the LAST loop iteration only (not the whole run) — set at the end of
+    // every iteration, read once after the loop exits. Distinguishes "the agent's final
+    // turn actually said something" from fullText being non-empty only because of EARLIER
+    // turns (tool errors, auto-continue notices, …). See emptyFinalTurn below.
+    let lastTurnText = '';
     const effectiveTaskMaxTurns = task.max_turns || UNATTENDED_MAX_TURNS;
 
     // Build MCP config for task execution — user MCPs from config + internal task-manager
@@ -2152,6 +2165,7 @@ async function startTask(task) {
           const _tb = (taskBuffers.get(task.id) || '') + r.fullText;
           taskBuffers.set(task.id, _tb.length > MAX_CHAT_BUFFER ? _tb.slice(-MAX_CHAT_BUFFER) : _tb);
         }
+        lastTurnText = r.fullText || ''; // one-shot engine: this run's whole text IS its last (and only) turn
         if (r.cid) { newCid = r.cid; currentTaskCid = r.cid; try { stmts.updateClaudeId.run(r.cid, sessionId); } catch {} }
         if (!r.completed) hasError = true;
         lastTaskResult = r.completed ? { subtype: 'success' } : { subtype: 'error' };
@@ -2256,6 +2270,7 @@ async function startTask(task) {
             resolve();
           });
       });
+      lastTurnText = fullText.slice(_ftBefore); // this iteration's own contribution only
 
       // 🌐 Transient server overload (HTTP 429/529) — short pause + retry, before the
       // success break and WITHOUT consuming the auto-continue budget. Same root cause as
@@ -2352,6 +2367,18 @@ async function startTask(task) {
         const isRateLimited = isTransientOverload(fullText)
           || (hasError && (fullText.includes('rate_limit') || fullText.includes('overloaded') || fullText.includes('Too many')));
         const MAX_CHAIN_RETRIES = 2;
+        // Explicit escalation: the agent itself called report_result({blocked:true}) at
+        // some point during this run. Read once, right here, regardless of how the CLI
+        // turn itself ended — a blocked call followed by end_turn is still blocked.
+        const blockReason = blockedTasks.get(task.id);
+        if (blockReason !== undefined) blockedTasks.delete(task.id);
+        // T-001, 2026-09-22: the CLI can end a turn subtype:'success' with literally
+        // nothing in it — two consecutive empty text blocks, then the run just stopped.
+        // Every task prompt ends with a mandatory verification report (see
+        // TASK_VERIFICATION_SUFFIX), so an empty final turn means that report never
+        // happened. 'done' would be a lie about it — route it into the failure path below
+        // (as 'empty_response') instead of the merge/done branch.
+        const emptyFinalTurn = isSuccess && blockReason === undefined && !lastTurnText.trim();
 
         if (usageLimit) {
           // Re-queue instead of completing: getTodoTasks() skips a todo row until its
@@ -2378,7 +2405,38 @@ async function startTask(task) {
               sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
             });
           }
-        } else if (isSuccess) {
+        } else if (blockReason !== undefined) {
+          // ⛔ Explicit escalation — the agent recognized it could not proceed and said so
+          // through report_result, instead of the silent failure the empty-turn check
+          // exists to catch. Own status, distinct from both 'done' and 'cancelled': a
+          // human needs to look at it, but nothing here says the agent did anything
+          // wrong. No merge, no chain retry, no re-queue — those all assume either
+          // success or a retryable failure, and this is neither.
+          db.prepare(`UPDATE tasks SET status='blocked', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+            .run(blockReason.substring(0, 300), task.id);
+          log.warn(`[taskWorker] task ${task.id}: blocked — ${blockReason}`);
+          if (task.source_session_id) {
+            const _ctx = getNotificationContext(task.source_session_id);
+            broadcastToSession(task.source_session_id, {
+              type: 'notification', level: 'warn',
+              title: `Blocked: "${task.title}"`,
+              detail: blockReason,
+              tabId: task.source_session_id,
+              chainTaskId: task.id, chainStatus: 'blocked',
+              sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+            });
+          }
+          if (telegramBot && telegramBot.isRunning()) {
+            telegramBot.notifyTaskComplete({
+              sessionId,
+              title: task.title || 'Task',
+              status: 'blocked',
+              duration: Date.now() - _taskStartedAt,
+              error: blockReason,
+              botId: task.bot_id || null,
+            }).catch(() => {});
+          }
+        } else if (isSuccess && !emptyFinalTurn) {
           // ✅ Success — recurring standalone tasks re-arm directly (skip intermediate 'done')
           const reArmed = (task.recurrence && !task.chain_id) ? scheduleNextRun(task) : false;
           if (!reArmed) {
@@ -2536,7 +2594,7 @@ async function startTask(task) {
           }
         } else if (task.chain_id && !usageLimitExhausted && !taskAuthStop && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
-          const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
+          const reason = isRateLimited ? 'rate_limited' : emptyFinalTurn ? 'empty_response' : 'agent_incomplete';
           _retryBackoffMs = isRateLimited ? Math.min(60000 * ((task.task_retry_count || 0) + 1), 300000) : 3000;
           db.prepare(`UPDATE tasks SET status='todo', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
@@ -2560,7 +2618,7 @@ async function startTask(task) {
           // mirrors the parseable "usage_limit:<unix> …" prefix above.
           const reason = taskAuthStop
             ? `auth_error:${taskAuthStop.kind} ${taskAuthStop.message || ''}`.trim().substring(0, 300)
-            : usageLimitExhausted ? 'usage_limit_exhausted' : isRateLimited ? 'rate_limited' : 'agent_incomplete';
+            : usageLimitExhausted ? 'usage_limit_exhausted' : isRateLimited ? 'rate_limited' : emptyFinalTurn ? 'empty_response' : 'agent_incomplete';
           db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
           log.error(`[taskWorker] task ${task.id}: cancelled (${reason}, subtype: ${lastTaskResult?.subtype || 'unknown'})`);
@@ -6062,6 +6120,11 @@ app.use((_req, res, next) => {
   res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
   next();
 });
+// Nothing here ever set Content-Encoding — kanban.html (~140KB) and /api/tasks (~190KB+,
+// growing with every task: description/context are the biggest fields) went out
+// uncompressed on every load and every poll. gzip/br cut plain HTML and JSON by 70-80%;
+// this is the one-line fix, ahead of express.static and every route below.
+app.use(compression());
 app.use(express.json({ limit:'5mb' }));
 app.use(cookieParser());
 
@@ -6635,15 +6698,21 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
 
       // ── report_result ──────────────────────────────────────────────────
       case 'report_result': {
-        const { data } = req.body;
+        const { data, blocked, reason } = req.body;
         if (!callerTaskId) return res.status(400).json({ error: 'No task ID' });
         if (data === undefined) return res.status(400).json({ error: 'Missing data' });
 
         const outputJson = (typeof data === 'string' ? data : JSON.stringify(data)).substring(0, 10000);
         stmts.setTaskOutput.run(outputJson, callerTaskId);
 
-        log.info('[task-manager] report_result', { taskId: callerTaskId, outputLen: outputJson.length });
-        return res.json({ ok: true });
+        // Consumed once the run's loop exits (taskWorker, "After loop" section) — this
+        // just records the request; it does not touch task.status itself, because the
+        // process is still running and may keep going after this call.
+        const isBlocked = blocked === true;
+        if (isBlocked) blockedTasks.set(callerTaskId, String(reason || '').trim().substring(0, 280) || 'no reason given');
+
+        log.info('[task-manager] report_result', { taskId: callerTaskId, outputLen: outputJson.length, blocked: isBlocked });
+        return res.json({ ok: true, blocked: isBlocked });
       }
 
       // ── get_task_result ────────────────────────────────────────────────
