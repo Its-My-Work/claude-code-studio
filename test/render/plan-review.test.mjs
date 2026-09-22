@@ -38,6 +38,37 @@ const planReviewCardHtml = loadFn('planReviewCardHtml');
   assert.ok(out.includes('Зависит от:') && out.includes('T-001'), "T-002's dependency on T-001 is shown");
 }
 
+// ── restored from the DB: no pre-seeded selection (this is the real bug — a page reload renders
+// the card with _planSelections[messageId] never set, and checkboxes drew as checked while the
+// count and the button both read 0, because they defaulted an unset Set two different ways)
+{
+  delete globalThis._planSelections['m1b'];
+  const out = planReviewCardHtml(REVIEW(), 'm1b', null);
+  const checkedBoxes = (out.match(/data-task-id="[^"]*"\s+checked/g) || []).length;
+  assert.strictEqual(checkedBoxes, 2, 'both checkboxes are drawn checked, same as the "N selected" count below');
+  assert.ok(out.includes('2 из 2 выбрано') || out.includes('Утвердить (2)'), 'the count and the button agree with the checkboxes, not stuck at 0');
+  assert.ok(!/prc-approve-btn"[^>]*disabled/.test(out), 'approve is enabled, not disabled by an empty default selection');
+  assert.deepStrictEqual(globalThis._planSelections['m1b'], new Set(['T-001', 'T-002']), 'rendering it also populated the selection Set (self-healing), so a click right after works');
+}
+{
+  // and the click itself: on a card that was only ever rendered via the restore path (no _prRender
+  // call), _prTogglePlanTask must not silently no-op for lack of a Set to mutate. This is exactly
+  // the DB-restore call site's own job (set _planReviews[id] before rendering) — done here by hand
+  // to isolate the check to _prTogglePlanTask/_prDepMap themselves.
+  delete globalThis._planSelections['m1c'];
+  // independent tasks here — the cascade-to-dependents behaviour is a separate concern, not what
+  // this check is isolating (REVIEW()'s default T-002 depends on T-001, which would also unselect)
+  const review = REVIEW({ tasks: [T('T-001'), T('T-002')] });
+  globalThis._planReviews['m1c'] = review;
+  planReviewCardHtml(review, 'm1c', null);
+  globalThis._prDepMap = loadFn('_prDepMap');
+  globalThis._prTogglePlanTask = loadFn('_prTogglePlanTask');
+  globalThis._prRerenderTasks = () => {}; // the DOM half is exercised in the live-Chrome check, not here
+  globalThis._prTogglePlanTask('m1c', 'T-001', false);
+  assert.deepStrictEqual(globalThis._planSelections['m1c'], new Set(['T-002']), 'unchecking one task actually changes the Set after a DB-restored render');
+  delete globalThis._prDepMap; delete globalThis._prTogglePlanTask; delete globalThis._prRerenderTasks;
+}
+
 // ── errors block the whole approval; a task with its own error is disabled and unchecked
 {
   const withErr = REVIEW({ errors: ['duplicate id "T-001"'], canApprove: false, tasks: [T('T-001', { errors: ['duplicate id "T-001"'] }), T('T-002')] });
@@ -88,6 +119,10 @@ const planReviewCardHtml = loadFn('planReviewCardHtml');
 
 // ── wiring: WS cases, DB-restore path, ingestion-loop branch, exclusions, saveBot-style hidden state
 assert.ok(/case 'plan_review':[\s\S]{0,120}_prRender\(d\.review, d\.messageId\)/.test(html), "the WS 'plan_review' frame renders the live card");
+{
+  const m = /_planReviews\[String\(m\.id\)\] = review;[\s\S]{0,200}?planReviewCardHtml\(review, String\(m\.id\)/.exec(html);
+  assert.ok(m, '_planReviews is set BEFORE the DB-restore render, not after (the bug: a click on a restored card found nothing to toggle)');
+}
 assert.ok(/case 'plan_import_result':[\s\S]{0,60}_prShowResult\(d\)/.test(html), "the WS 'plan_import_result' frame updates it");
 assert.ok(/m\.role === 'assistant' && m\.type === 'plan_review'/.test(html), 'a reloaded session restores the card from its DB row');
 assert.ok(/m\.type === 'plan_review'\) \{ _allMsgs\.push\(m\); continue; \}/.test(html), 'the ingestion loop keeps plan_review rows for the restore pass');

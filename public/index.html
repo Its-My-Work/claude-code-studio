@@ -9491,17 +9491,27 @@ function _prRerenderTasks(messageId) {
   if (!card) return;
   const review = _planReviews[messageId], sel = _planSelections[messageId];
   card.querySelectorAll('.prc-task input[type=checkbox]').forEach(cb => { cb.checked = sel.has(cb.dataset.taskId); });
+  const n = sel.size;
+  const count = card.querySelector('.prc-count');
+  if (count) count.textContent = t('plan.selected.count').replace('{n}', n).replace('{total}', review ? review.tasks.length : n);
   const btn = card.querySelector('.prc-approve-btn');
-  if (btn) { const n = sel.size; btn.disabled = n === 0; btn.textContent = n ? t('plan.approve.btn').replace('{n}', n) : t('plan.approve.none'); }
+  if (btn) { btn.disabled = n === 0; btn.textContent = n ? t('plan.approve.btn').replace('{n}', n) : t('plan.approve.none'); }
 }
 function planReviewCardHtml(review, messageId, imported) {
+  // The one place a selection is defaulted: every task without a lint error of its own, starts
+  // picked. Self-healing on purpose — a card restored from the DB never went through _prRender,
+  // so nothing else guarantees _planSelections[messageId] exists yet; computing (and STORING) the
+  // default here, once, is what makes a checkbox drawn as checked and the "N selected" count
+  // agree, and what makes clicking that checkbox work on the very first render.
+  if (!_planSelections[messageId]) _planSelections[messageId] = new Set(review.tasks.filter(t => !t.errors.length).map(t => t.id));
+  const sel = _planSelections[messageId];
   const errBlock = review.errors.length
     ? `<div class="prc-errors">⚠️ ${escH(t('plan.errors.title'))}<ul>${review.errors.map(e => `<li>${escH(e)}</li>`).join('')}</ul></div>` : '';
   const warnBlock = (!imported && review.warnings.length)
     ? `<div class="prc-warnings">${escH(t('plan.warnings.title'))}<ul>${review.warnings.slice(0, 8).map(w => `<li>${escH(w)}</li>`).join('')}</ul></div>` : '';
   const depsTitle = (ids) => ids.length ? `${t('plan.deps')} ${ids.join(', ')}` : '';
   const rows = review.tasks.map(tk => {
-    const checked = imported ? true : (_planSelections[messageId] ? _planSelections[messageId].has(tk.id) : true);
+    const checked = imported ? true : sel.has(tk.id);
     const issues = [...tk.errors.map(m => `<span class="prc-e">⚠ ${escH(m)}</span>`), ...tk.warnings.map(m => `<span class="prc-w">${escH(m)}</span>`)];
     return `<label class="prc-task${tk.errors.length ? ' prc-task-err' : ''}" title="${escH(depsTitle(tk.depends_on))}">
       ${imported ? '' : `<input type="checkbox" data-task-id="${escH(tk.id)}" ${checked ? 'checked' : ''} ${tk.errors.length ? 'disabled' : ''} onchange="_prTogglePlanTask('${messageId}','${escH(tk.id)}',this.checked)">`}
@@ -9520,8 +9530,8 @@ function planReviewCardHtml(review, messageId, imported) {
   const footer = imported
     ? `<span class="prc-done">✅ ${escH(t('plan.imported.done'))}</span>
        <span class="prc-done-detail">${escH(t('plan.imported.detail').replace('{c}', imported.created).replace('{u}', imported.updated).replace('{s}', imported.skipped.length))}</span>`
-    : `<span class="prc-count">${escH(t('plan.selected.count').replace('{n}', (_planSelections[messageId] || new Set()).size).replace('{total}', review.tasks.length))}</span>
-       <button class="prc-approve-btn" ${!review.canApprove || !review.tasks.length ? 'disabled' : ''} onclick="_prApprove('${messageId}')">${escH(t('plan.approve.btn').replace('{n}', (_planSelections[messageId] || new Set()).size))}</button>`;
+    : `<span class="prc-count">${escH(t('plan.selected.count').replace('{n}', sel.size).replace('{total}', review.tasks.length))}</span>
+       <button class="prc-approve-btn" ${!review.canApprove || !review.tasks.length ? 'disabled' : ''} onclick="_prApprove('${messageId}')">${escH(t('plan.approve.btn').replace('{n}', sel.size))}</button>`;
   return `<div class="plan-review-card" data-message-id="${messageId}">
     <div class="prc-header">
       <div class="prc-icon">📋</div>
@@ -9536,8 +9546,7 @@ function planReviewCardHtml(review, messageId, imported) {
   </div>`;
 }
 function _prRender(review, messageId) {
-  _planReviews[messageId] = review;
-  if (!_planSelections[messageId]) _planSelections[messageId] = new Set(review.tasks.filter(t => !t.errors.length).map(t => t.id));
+  _planReviews[messageId] = review; // the default selection itself is now planReviewCardHtml's own job — one place, not two
   const old = document.querySelector(`.plan-review-card[data-message-id="${messageId}"]`);
   if (old) old.remove();
   const wrap = document.createElement('div');
@@ -13153,10 +13162,14 @@ function _renderMsgAt(idx, prepend = false) {
   if (m.role === 'assistant' && m.type === 'plan_review') {
     try {
       const review = JSON.parse(m.content);
+      // Set BEFORE rendering: planReviewCardHtml reads _planReviews[messageId] nowhere itself, but
+      // _prTogglePlanTask/_prApprove do once the user clicks something on this restored card, and
+      // without this they silently no-op (the bug this fixes: checkboxes drawn checked, the "N
+      // selected" count and the button both stuck at 0, because nothing had computed the default yet).
+      _planReviews[String(m.id)] = review;
       const wrap = document.createElement('div');
       wrap.innerHTML = planReviewCardHtml(review, String(m.id), review.imported || null);
       w.querySelector('.msg').before(wrap.firstElementChild);
-      if (!review.imported && !_planSelections[String(m.id)]) _planReviews[String(m.id)] = review;
     } catch {}
   }
   if (m.role === 'assistant' && m.type !== 'agent_plan' && m.type !== 'plan_review') {
