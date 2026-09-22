@@ -143,5 +143,18 @@ check('makeCard puts them in the footer', /\$\{cfgBadges\}/.test(makeCardBody), 
 check('the sess_model-only badge is gone from the task card',
   /tk\.sess_model\?`<span class="badge badge-muted">/.test(makeCardBody), false);
 
+// ── Resume a blocked task (the human side of report_result({blocked:true})) ──
+check('a blocked card gets a resume action', /tk\.status==='blocked'.*resumeBlockedTask/.test(makeCardBody), true);
+{
+  const fnStart = SRC.indexOf('async function resumeBlockedTask(');
+  check('resumeBlockedTask is defined', fnStart !== -1, true);
+  const fnBody = SRC.slice(fnStart, fnStart + 1200);
+  check('it moves the task back to todo', /status:\s*'todo'/.test(fnBody), true);
+  check('it appends to notes rather than replacing them', /tk\.notes\s*\?\s*tk\.notes\s*\+/.test(fnBody), true);
+  check('a cancelled prompt (null) leaves the task blocked — no PUT sent', /if\(reply===null\)return;/.test(fnBody), true);
+  check('it goes through the real PUT /api/tasks/:id endpoint, not a bespoke one',
+    new RegExp(String.raw`apiFetch\(\`/api/tasks/\$\{id\}\`,\{method:'PUT'`).test(fnBody), true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
