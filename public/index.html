@@ -13129,6 +13129,19 @@ function _renderMsgAt(idx, prepend = false) {
     } catch {
       w.querySelector('.msg').innerHTML = renderMd(m.content);
     }
+  } else if (m.role === 'assistant' && m.type === 'plan_review') {
+    // Same shape as the agent_plan branch above: the card REPLACES the raw-JSON message body, it
+    // does not sit next to it — an earlier version inserted the card in front of the bubble and
+    // left the raw JSON visible right under it ("что за странное сообщение под карточкой",
+    // reported live). review.imported (set once the card's own outcome is known) renders the
+    // done state on reload, same as a live plan_import_result would show.
+    try {
+      const review = JSON.parse(m.content);
+      _planReviews[String(m.id)] = review;
+      w.querySelector('.msg').innerHTML = planReviewCardHtml(review, String(m.id), review.imported || null);
+    } catch {
+      w.querySelector('.msg').innerHTML = renderMd(m.content);
+    }
   } else if (m.role === 'assistant') {
     w.querySelector('.msg').innerHTML = renderMd(m.content);
   } else {
@@ -13159,19 +13172,6 @@ function _renderMsgAt(idx, prepend = false) {
   }
   // Add "Done" footer for completed assistant messages in history
   // Show on the last assistant msg before a user msg or end of conversation
-  if (m.role === 'assistant' && m.type === 'plan_review') {
-    try {
-      const review = JSON.parse(m.content);
-      // Set BEFORE rendering: planReviewCardHtml reads _planReviews[messageId] nowhere itself, but
-      // _prTogglePlanTask/_prApprove do once the user clicks something on this restored card, and
-      // without this they silently no-op (the bug this fixes: checkboxes drawn checked, the "N
-      // selected" count and the button both stuck at 0, because nothing had computed the default yet).
-      _planReviews[String(m.id)] = review;
-      const wrap = document.createElement('div');
-      wrap.innerHTML = planReviewCardHtml(review, String(m.id), review.imported || null);
-      w.querySelector('.msg').before(wrap.firstElementChild);
-    } catch {}
-  }
   if (m.role === 'assistant' && m.type !== 'agent_plan' && m.type !== 'plan_review') {
     const next = _allMsgs[idx + 1];
     if (!next || next.role === 'user') {

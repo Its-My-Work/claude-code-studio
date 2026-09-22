@@ -106,11 +106,13 @@ const TOOLS = [
   },
   {
     name: 'report_result',
-    description: 'Store a structured result for this task. Other tasks that depend on you can read this via get_task_result. Use this to pass data to downstream tasks — issue lists, PR URLs, analysis results, etc.',
+    description: 'Store a structured result for this task. Other tasks that depend on you can read this via get_task_result. Use this to pass data to downstream tasks — issue lists, PR URLs, analysis results, etc. Also the ONLY correct way to escalate: if you genuinely cannot complete the task (a required resource is unavailable, you need a human decision, access is missing), pass blocked:true + reason instead of ending the turn silently or claiming success. A blocked task stays visible on the board, separate from both done and failed work, until a human resolves it.',
     inputSchema: {
       type: 'object',
       properties: {
-        data: { description: 'Structured result data (string or JSON object). This is what dependent tasks will receive.' },
+        data: { description: 'Structured result data (string or JSON object). This is what dependent tasks will receive. Still required even when blocked:true — summarize what you tried.' },
+        blocked: { type: 'boolean', description: 'Set true when you cannot complete this task right now and it needs a human to unblock it. Do not use this for an ordinary error you can retry past — only for a real external blocker.' },
+        reason: { type: 'string', description: 'Required with blocked:true — one or two sentences: what is blocking you, and what a human needs to do about it.' },
       },
       required: ['data'],
     },
@@ -249,7 +251,9 @@ async function handleMessage(msg) {
             text = JSON.stringify(result, null, 2);
             break;
           case 'report_result':
-            text = 'Result stored successfully. Dependent tasks will be able to read it.';
+            text = result.blocked
+              ? 'Result stored, task marked BLOCKED — a human will follow up. Finish your turn now; nothing further will run in this task.'
+              : 'Result stored successfully. Dependent tasks will be able to read it.';
             break;
           case 'get_task_result':
             text = JSON.stringify(result, null, 2);

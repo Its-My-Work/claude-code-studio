@@ -3228,6 +3228,9 @@ class TelegramBot extends EventEmitter {
     } else if (status === 'error') {
       icon = '❌';
       statusText = 'Failed';
+    } else if (status === 'blocked') {
+      icon = '⛔';
+      statusText = 'Blocked';
     } else {
       icon = 'ℹ️';
       statusText = status;
