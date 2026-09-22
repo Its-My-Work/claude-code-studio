@@ -88,4 +88,32 @@ async function reviewPlan({ workdir, botIds, existing = {}, fsImpl } = {}) {
   };
 }
 
-module.exports = { readPlanFiles, reviewPlan, isMissing };
+/**
+ * Moves each imported task's file from plan/tasks/ to plan/imported/, stamped with the card it
+ * became. Runs AFTER the board write, on tasks the caller already confirmed were created/updated
+ * — never on a skipped one, which has no card yet and would lose its only copy. Each entry is
+ * independent: one file that cannot be read/written is reported and does not stop the rest (the
+ * cards are already on the board by this point — a partial archive is a cosmetic loose end, not a
+ * reason to make the import look like it failed). `entries`: [{ file, taskId, cardId }].
+ * -> { moved: [taskId], errors: [{ taskId, message }] }
+ */
+async function archivePlanFiles({ workdir, entries, fsImpl = require('fs') }) {
+  const moved = [], errors = [];
+  const at = new Date().toISOString();
+  for (const { file, taskId, cardId } of entries || []) {
+    const from = path.join(workdir, file);
+    const to = path.join(workdir, 'plan', 'imported', path.basename(file));
+    try {
+      const content = await fsImpl.promises.readFile(from, 'utf8');
+      await fsImpl.promises.mkdir(path.dirname(to), { recursive: true });
+      await fsImpl.promises.writeFile(to, planLib.stampImported(content, { cardId, at }));
+      await fsImpl.promises.unlink(from);
+      moved.push(taskId);
+    } catch (e) {
+      errors.push({ taskId, message: String((e && e.message) || e).slice(0, 160) });
+    }
+  }
+  return { moved, errors };
+}
+
+module.exports = { readPlanFiles, reviewPlan, archivePlanFiles, isMissing };

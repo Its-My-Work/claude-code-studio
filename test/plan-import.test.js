@@ -3,7 +3,7 @@
 'use strict';
 const assert = require('assert');
 const path = require('path');
-const { readPlanFiles, reviewPlan } = require('../plan-import');
+const { readPlanFiles, reviewPlan, archivePlanFiles } = require('../plan-import');
 
 let pass = 0, fail = 0;
 function check(label, actual, expected) {
@@ -29,9 +29,13 @@ function fakeFs(files) {
   }
   const enoent = (p) => Object.assign(new Error(`ENOENT: ${p}`), { code: 'ENOENT' });
   return {
+    files, dirs,
     promises: {
       async readFile(p) { if (!(p in files)) throw enoent(p); return files[p]; },
       async readdir(p) { if (!dirs.has(p)) throw enoent(p); return [...dirs.get(p)]; },
+      async mkdir(p) { let d = p; while (!dirs.has(d)) { dirs.set(d, new Set()); const parent = path.dirname(d); if (parent === d) break; dirs.get(parent).add(path.basename(d)); d = parent; } },
+      async writeFile(p, content) { files[p] = content; const d = path.dirname(p); if (!dirs.has(d)) dirs.set(d, new Set()); dirs.get(d).add(path.basename(p)); },
+      async unlink(p) { if (!(p in files)) throw enoent(p); delete files[p]; },
     },
   };
 }
@@ -137,6 +141,24 @@ console.log('readPlanFiles:');
     check('a long task body is capped for the card description, the full text stays in context', [r.tasks[0].description.length <= 2000, r.tasks[0].context.length > 2000], [true, true]);
   }
 
+
+console.log('archivePlanFiles:');
+  {
+    const fs = fakeFs({ '/wd/plan/tasks/T-001.md': T1, '/wd/plan/tasks/T-002.md': T2 });
+    const r = await archivePlanFiles({ workdir: '/wd', entries: [{ file: 'plan/tasks/T-001.md', taskId: 'T-001', cardId: 'card-1' }], fsImpl: fs });
+    check('the file moved, none left behind', [r.moved, r.errors, '/wd/plan/tasks/T-001.md' in fs.files, '/wd/plan/imported/T-001.md' in fs.files], [['T-001'], [], false, true]);
+    check('the moved file is stamped', fs.files['/wd/plan/imported/T-001.md'].includes('imported_card: card-1'), true);
+    check('T-002 was never touched', '/wd/plan/tasks/T-002.md' in fs.files, true);
+  }
+  {
+    const fs = fakeFs({ '/wd/plan/tasks/T-001.md': T1 });
+    const r = await archivePlanFiles({ workdir: '/wd', entries: [{ file: 'plan/tasks/T-001.md', taskId: 'T-001', cardId: 'card-1' }, { file: 'plan/tasks/GONE.md', taskId: 'T-999', cardId: 'card-2' }], fsImpl: fs });
+    check('one missing file is reported by id, the other still archives', [r.moved, r.errors.map(e => e.taskId)], [['T-001'], ['T-999']]);
+  }
+  {
+    const r = await archivePlanFiles({ workdir: '/wd', entries: [], fsImpl: fakeFs({}) });
+    check('nothing to archive: no crash, empty result', r, { moved: [], errors: [] });
+  }
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();

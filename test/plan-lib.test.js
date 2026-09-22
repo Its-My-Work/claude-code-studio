@@ -3,7 +3,7 @@
 const assert = require('assert');
 const {
   parseScalar, parseTaskFile, extractHeadings, headingCovered,
-  lintPlan, buildImportPlan, pickReady, PLAN_TASK_ID_RE,
+  lintPlan, buildImportPlan, pickReady, PLAN_TASK_ID_RE, stampImported,
 } = require('../plan-lib');
 
 let pass = 0, fail = 0;
@@ -141,6 +141,18 @@ console.log('buildImportPlan:');
   check('a plan id already imported updates instead of creating a duplicate', [existing.toUpdate.map(t => t.id), existing.toCreate.map(t => t.id)], [['A'], ['B', 'C']]);
   check('lint errors refuse the whole import, every task named with a reason', buildImportPlan({ tasks, errors: [{ taskId: 'A', message: 'x' }] }),
     { toCreate: [], toUpdate: [], toSkip: [{ id: 'A', reason: 'plan has lint errors' }, { id: 'B', reason: 'plan has lint errors' }, { id: 'C', reason: 'plan has lint errors' }] });
+}
+
+console.log('stampImported:');
+{
+  const src = '---\nid: T-001\ntitle: x\nbot: kolya-prohramist\n---\nbody text\n';
+  const out = stampImported(src, { cardId: 'mucabc123', at: '2026-09-22T10:00:00.000Z' });
+  check('the two new lines are inside the front matter, before its closing ---', out,
+    '---\nid: T-001\ntitle: x\nbot: kolya-prohramist\nimported_card: mucabc123\nimported_at: 2026-09-22T10:00:00.000Z\n---\nbody text\n');
+  check('the body is untouched', out.endsWith('---\nbody text\n'), true);
+  check('re-parsing the stamped file still works and still gets the original fields', parseTaskFile(out, 'x.md').task.id, 'T-001');
+  check('a file with no front matter is returned unchanged, not corrupted', stampImported('no front matter', { cardId: 'x', at: 'y' }), 'no front matter');
+  check('empty input does not throw', stampImported('', { cardId: 'x', at: 'y' }), '');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

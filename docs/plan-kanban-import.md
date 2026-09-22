@@ -47,6 +47,16 @@ Posted automatically the moment a room's closing step changes `plan/tasks/*.md` 
 
 `POST /api/plans/review` is the dry run (no writes) — usable standalone, e.g. after hand-editing plan files, without re-running the room.
 
+## After import: plan/imported/
+
+A card's own status ('backlog' → 'todo' → 'done') is never written back into its source file — the file is a draft, the board is authoritative once a card exists. Instead, `applyPlanImport` moves each imported task's file from `plan/tasks/` to `plan/imported/`, stamping its front matter with `imported_card: <task id>` and `imported_at: <timestamp>` (`plan-lib.js: stampImported`, `plan-import.js: archivePlanFiles`).
+
+This is the answer to "how does an agent know not to re-propose a done task": during a room turn a bot has no `list_tasks` tool (only a queued background task gets `_ccs_task_manager` — see `TASK_MANAGER_INSTRUCTION`), so the board itself is not something it can check from inside a room. The file's *location* is the only cheap, reliable signal available there, and the room's own rules say so (`plan/imported/ holds ones already turned into Kanban cards... treat those as done`).
+
+Safety: only a plan id that actually landed a card (in `toCreate`/`toUpdate`, and — for an update — whose card still existed) is archived; a *skipped* task (not selected, or blocked by an unselected dependency) keeps its only copy in `plan/tasks/`, never touched. The move runs strictly after the board write commits — a failure to archive a file is logged and reported back (`archived`/`archiveErrors` in the response) but never undoes or fails the import itself, since the cards are already correctly on the board by that point. The move is committed via `room-git.js` the same way a room's own file changes are (`ROOM_GIT=off` disables it here too).
+
+Revising an already-imported task means writing a fresh file back into `plan/tasks/` (the planner can still read `plan/imported/T-00x.md` for context) — re-approving then updates the same card via `plan_task_id`, and archives it again.
+
 ## Known gap
 
 No manual "review this plan again" button in the UI yet — only the automatic trigger right after a room's closing step and the two HTTP endpoints. A project without a `planner` bot, or a closing step that touches no `plan/tasks/*.md` file, never shows a card.

@@ -190,8 +190,24 @@ function guessTzFile(names) {
   return hit[0] || null;
 }
 
+/**
+ * A task file's text with two lines appended to its front matter, recording where it landed.
+ * A file in plan/imported/ (server.js moves it there once its card exists) is how an agent —
+ * with no other way to ask "is this already on the board?" during a room turn — tells a done
+ * proposal apart from an open one: the id-shaped card reference in the text is only for a human
+ * or another tool that opens the file directly; the LOCATION is the actual, cheap-to-check signal.
+ * A file with no front-matter block (should not happen; parseTaskFile would have rejected it
+ * earlier) is returned unchanged rather than corrupted.
+ */
+function stampImported(content, { cardId, at }) {
+  const m = FRONT_MATTER_RE.exec(String(content ?? ''));
+  if (!m) return content;
+  const stamp = `imported_card: ${cardId}\nimported_at: ${at}\n`;
+  return `---\n${m[1]}\n${stamp}---\n${m[2]}`;
+}
+
 module.exports = {
   CARD_DESCRIPTION_MAX, PLAN_TASK_ID_RE, FRONT_MATTER_RE,
-  parseScalar, parseTaskFile, extractHeadings, headingCovered, guessTzFile,
+  parseScalar, parseTaskFile, extractHeadings, headingCovered, guessTzFile, stampImported,
   lintPlan, buildImportPlan, pickReady,
 };

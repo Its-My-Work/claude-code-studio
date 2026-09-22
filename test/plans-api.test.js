@@ -102,16 +102,25 @@ function clearPlan() { try { fs.rmSync(path.join(WORKDIR, 'plan'), { recursive: 
     check('titles round-trip', new Set(board.map(t => t.title)), new Set(['Задача']));
     const t2 = board.find(t => t.bot_id === 'taras-qa');
     check('depends_on is remapped to a real Kanban id (T-002 -> T-001s real id)', JSON.parse(t2.depends_on || '[]'), [board.find(t => t.bot_id === 'kolya-prohramist').id]);
+    check('the response says both were archived, no errors', [r.json.archived, r.json.archiveErrors], [2, []]);
+    check('the source files are gone from plan/tasks/', [fs.existsSync(path.join(WORKDIR, 'plan', 'tasks', 'T-001.md')), fs.existsSync(path.join(WORKDIR, 'plan', 'tasks', 'T-002.md'))], [false, false]);
+    check('...and moved to plan/imported/, stamped with the real card id', [
+      fs.readFileSync(path.join(WORKDIR, 'plan', 'imported', 'T-001.md'), 'utf8').includes(`imported_card: ${board.find(t => t.bot_id === 'kolya-prohramist').id}`),
+      fs.readFileSync(path.join(WORKDIR, 'plan', 'imported', 'T-002.md'), 'utf8').includes(`imported_card: ${t2.id}`),
+    ], [true, true]);
   }
 
   console.log('re-import: updates in place, no duplicates:');
+  // T-002's file was archived away by the first import; only a task actively re-proposed (its file
+  // put back in plan/tasks/) is reviewed again — the archived one is not touched by this import.
   writeTask('T-001', { covers: ['1. Введение'], title: 'Задача (переписана)' });
   {
     const r = await api('POST', '/api/plans/import', { workdir: WORKDIR });
-    check('T-001 updates, T-002 updates too (title text unchanged but still an update, not a dup)', [r.status, r.json.created, r.json.updated], [200, 0, 2]);
+    check('only T-001 (its file is back) updates; T-002 (still archived) is not part of this review', [r.status, r.json.created, r.json.updated], [200, 0, 1]);
     const board = (await api('GET', `/api/tasks?workdir=${encodeURIComponent(WORKDIR)}`)).json;
     check('still exactly two cards — no duplicate created', board.length, 2);
     check('the title change reached the card', board.some(t => t.title === 'Задача (переписана)'), true);
+    check('T-001 is archived again (overwriting the earlier copy), still stamped', fs.readFileSync(path.join(WORKDIR, 'plan', 'imported', 'T-001.md'), 'utf8').includes('Задача (переписана)'), true);
   }
 
   console.log('a card already moved along keeps its status:');
@@ -135,6 +144,10 @@ function clearPlan() { try { fs.rmSync(path.join(WORKDIR, 'plan'), { recursive: 
     check('only C is created; A and B (not selected) are skipped, B named why', [r.json.created, r.json.skipped.sort((x, y) => x.id.localeCompare(y.id))],
       [1, [{ id: 'A', reason: 'not selected' }, { id: 'B', reason: 'not selected' }]]);
     check('board grew by exactly one', (await api('GET', `/api/tasks?workdir=${encodeURIComponent(WORKDIR)}`)).json.length, before + 1);
+    check('C (imported) is archived; A and B (skipped, not on the board yet) keep their only copy in plan/tasks/', [
+      fs.existsSync(path.join(WORKDIR, 'plan', 'tasks', 'C.md')), fs.existsSync(path.join(WORKDIR, 'plan', 'imported', 'C.md')),
+      fs.existsSync(path.join(WORKDIR, 'plan', 'tasks', 'A.md')), fs.existsSync(path.join(WORKDIR, 'plan', 'tasks', 'B.md')),
+    ], [false, true, true, true]);
   }
   {
     // deselecting A (a dependency of B) while selecting B: B must not import with a dangling depends_on
