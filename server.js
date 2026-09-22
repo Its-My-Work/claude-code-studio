@@ -5160,6 +5160,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         + `- Read a file before you change it. Change the parts that need changing; do not rewrite a whole document from scratch, `
         + `and do not make one shorter unless the user asked you to.\n`)
     + `- The project's working directory is ${workdir || WORKDIR}. Paths are relative to it; do not invent paths such as /workspace/....\n`
+    + `- plan/tasks/ holds proposed tasks awaiting approval; plan/imported/ holds ones already turned into Kanban cards (each stamped with which one) — treat those as done, not as open work, and do not re-propose them.\n`
     + `- You have about ${turnCap} steps (tool calls). Do the research you need, then answer: a run that ends on a tool call `
     + `has no answer and is lost.\n`
     + `- Keep it short: about ten lines at most, unless you are writing a file. A report format from your role description is for written deliverables, not for a turn here. You are ${self}.`;
@@ -8124,7 +8125,7 @@ const PLAN_IMPORT_MAX = 200; // a plan is user-approved, not agent-spawned — n
  * every card lands as 'backlog'. -> { created, updated, skipped: [{id,reason}] } or throws if the
  * review itself has lint errors (the caller must not have offered Approve in that case).
  */
-function applyPlanImport({ workdir, review, selected }) {
+async function applyPlanImport({ workdir, review, selected }) {
   if (!review.canApprove) { const e = new Error('plan has lint errors'); e.code = 'PLAN_LINT'; throw e; }
   if (review.tasks.length > PLAN_IMPORT_MAX) { const e = new Error(`plan has ${review.tasks.length} tasks, over the ${PLAN_IMPORT_MAX}-task import limit`); e.code = 'PLAN_TOO_BIG'; throw e; }
   const existing = existingPlanTaskMap(workdir);
@@ -8132,6 +8133,10 @@ function applyPlanImport({ workdir, review, selected }) {
   const graph = planLib.buildImportPlan({ tasks: review.tasks, errors: [], existing, selected });
 
   const idMap = { ...Object.fromEntries(graph.toUpdate.map(t => [t.id, existing[t.id]])) };
+  // Which plan ids really got a card this run — toCreate always does; a toUpdate whose card was
+  // deleted from under us does not, and its file (still the only copy of that proposal) must not
+  // be archived as if it had one.
+  const landed = new Set();
   let created = 0, updated = 0;
   db.transaction(() => {
     for (const t of graph.toCreate) {
@@ -8143,7 +8148,7 @@ function applyPlanImport({ workdir, review, selected }) {
         '', 'backlog', 0, null, workdir, sqlVal(full.model), 'auto', 'single', full.max_turns || UNATTENDED_MAX_TURNS,
         null, null /* depends_on: filled in the remap pass below */, null, null, null, null, null, null, null, full.bot,
       );
-      created++;
+      created++; landed.add(t.id);
     }
     for (const t of graph.toUpdate) {
       const full = byId.get(t.id);
@@ -8157,11 +8162,12 @@ function applyPlanImport({ workdir, review, selected }) {
         row.source_session_id, row.scheduled_at, row.recurrence, row.recurrence_end_at, row.effort, row.run_engine,
         full.bot, taskId,
       );
-      updated++;
+      updated++; landed.add(t.id);
     }
     // Second pass: depends_on remapped to real Kanban ids, now that every id in this batch has one
     // (mirrors /api/tasks/dispatch's own two-pass id assignment, for the same forward-reference reason).
     for (const t of [...graph.toCreate, ...graph.toUpdate]) {
+      if (!landed.has(t.id)) continue;
       const full = byId.get(t.id);
       const taskId = idMap[t.id];
       const deps = (full.depends_on || []).map(d => idMap[d]).filter(Boolean);
@@ -8170,7 +8176,24 @@ function applyPlanImport({ workdir, review, selected }) {
       db.prepare(`UPDATE tasks SET plan_task_id=? WHERE id=?`).run(full.id, taskId);
     }
   })();
-  return { created, updated, skipped: graph.toSkip };
+
+  // The board write is done and committed — everything below is best-effort. archivePlanFiles
+  // moves plan/tasks/T-00x.md to plan/imported/, stamped with the card it became: an agent has no
+  // other way to tell "already on the board" from "still a proposal" during a room turn (it has no
+  // list_tasks tool there — only the ones a queued background task gets), so the file's own
+  // location has to say it. Only files whose plan id actually landed a card; never a skipped one,
+  // which has no card yet and would lose its only copy.
+  const archiveEntries = [...graph.toCreate, ...graph.toUpdate].filter(t => landed.has(t.id))
+    .map(t => ({ file: byId.get(t.id).file, taskId: t.id, cardId: idMap[t.id] }));
+  let archived = { moved: [], errors: [] };
+  if (archiveEntries.length) {
+    try {
+      archived = await planImport.archivePlanFiles({ workdir, entries: archiveEntries });
+      if (archived.moved.length && ROOM_GIT) roomGit.checkpoint(workdir, `plan: archived ${archived.moved.length} imported task file(s)`, WM);
+      if (archived.errors.length) log.warn('plan archive had errors', { workdir, errors: archived.errors });
+    } catch (e) { log.warn('plan archive failed', { workdir, err: e.message }); }
+  }
+  return { created, updated, skipped: graph.toSkip, archived: archived.moved.length, archiveErrors: archived.errors };
 }
 
 // Dry run: parse + lint the plan/ package of a workdir, no writes. Used by the approval card and
@@ -8191,7 +8214,7 @@ app.post('/api/plans/import', express.json(), async (req, res) => {
   try {
     const review = await buildPlanReview(workdir);
     if (!review.canApprove) return res.status(409).json({ error: 'the plan has lint errors and cannot be approved', review });
-    const result = applyPlanImport({ workdir, review, selected });
+    const result = await applyPlanImport({ workdir, review, selected });
     log.info('Plan imported', { workdir, ...result, skipped: result.skipped.length });
     res.json(result);
   } catch (e) {
@@ -13656,7 +13679,7 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'plan_import_result', ok: false, error: 'the plan has lint errors and cannot be approved', review, ...(tabId ? { tabId } : {}) }));
             return;
           }
-          const result = applyPlanImport({ workdir: wd, review, selected: Array.isArray(selected) ? selected : null });
+          const result = await applyPlanImport({ workdir: wd, review, selected: Array.isArray(selected) ? selected : null });
           log.info('Plan imported via WS', { workdir: wd, ...result, skipped: result.skipped.length });
           // The persisted card is patched with the outcome, so a page reload shows "imported", not an
           // approve button that would re-run the import a second time.
