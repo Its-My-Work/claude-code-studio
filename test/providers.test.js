@@ -65,6 +65,26 @@ console.log('resolution:');
   check('effectiveEngine mirrors it', [P.effectiveEngine('subscription', 'deepseek::deepseek-chat', reg), P.effectiveEngine('subscription', 'opus', reg), P.effectiveEngine('api', 'opus', reg)], ['api', 'subscription', 'api']);
 }
 {
+  // No engine dial: the model's provider decides (server.js runEngineFor).
+  const E = (v, r = reg, tmux = true) => P.engineForModel(v, r, { tmux });
+  check('a model of the CLI login runs on the subscription', [E('claude::opus'), E('claude::claude-sonnet-5')], ['subscription', 'subscription']);
+  check('a bare alias is the DEFAULT provider\'s: a gateway default runs it on the API', E('sonnet'), 'api');
+  check('…and the CLI login as the default runs it on the subscription', E('sonnet', { ...reg, defaultProviderId: 'claude' }), 'subscription');
+  check('every other provider runs on the API', [E('deepseek::deepseek-chat'), E('gateway::opus')], ['api', 'api']);
+  check('without tmux the CLI login runs headless', E('claude::opus', reg, false), 'api');
+  check('a ref to a deleted provider follows the default it falls back to', E('ghost::gpt-9'), 'api');
+  check('providerMode marks the CLI login "subscription", the rest "api"',
+    [P.providerMode({ type: 'claude-subscription' }), P.providerMode({ type: 'anthropic' }), P.providerMode({ type: 'openai-compatible' })], ['subscription', 'api', 'api']);
+  check('listChoices carries each provider\'s mode', P.listChoices(reg).providers.map(p => [p.id, p.mode]).find(x => x[0] === 'claude'), ['claude', 'subscription']);
+  // The boot migration and older clients: "Subscription" + a model → that model on the CLI login.
+  check('toClaudeRef pins an alias or a Claude id to the CLI login',
+    [P.toClaudeRef('opus'), P.toClaudeRef('claude-sonnet-5'), P.toClaudeRef(''), P.toClaudeRef(null)],
+    ['claude::opus', 'claude::claude-sonnet-5', 'claude::sonnet', 'claude::sonnet']);
+  check('…and leaves a ref alone, whichever provider it names',
+    [P.toClaudeRef('claude::haiku'), P.toClaudeRef('deepseek::deepseek-chat')], ['claude::haiku', 'deepseek::deepseek-chat']);
+  check('…and a bare non-Claude id too (it is not a Claude model to pin)', P.toClaudeRef('vendor/model:free'), 'vendor/model:free');
+}
+{
   const r = P.resolveModel('ghost::gpt-9', reg, { engine: 'api' });
   check('a deleted provider falls back to the default, flagged', [r.ok, r.provider.id, r.cliModel, r.fallback], [true, 'gateway', 'sonnet', 'provider_missing']);
   const o = P.resolveModel('off::m', reg, { engine: 'api' });

@@ -2124,12 +2124,11 @@ async function startTask(task) {
       },
     };
 
-    // Engine selection: subscription tasks run via the persistent interactive
-    // tmux Claude session (billed on Claude Max), one-shot, no auto-continue.
-    const _taskEngineDial = (task.run_engine === 'subscription') ? 'subscription' : 'api';
-    // The tmux engine runs the CLI's own login only (providers.effectiveEngine): a task
-    // whose model belongs to another provider runs headless instead of silently on Claude.
-    const _taskEngine = engineForModel(_taskEngineDial, taskBot?.model || session?.model || task.model || 'sonnet');
+    // Engine selection follows the model's provider (runEngineFor): a model of the CLI
+    // login runs via the persistent interactive tmux Claude session (billed on the
+    // subscription), one-shot, no auto-continue; every other provider headless.
+    // `task.run_engine` is no longer read — the dial it stored is gone (boot migration).
+    const _taskEngine = runEngineFor(taskBot?.model || session?.model || task.model || 'sonnet');
 
     while (true) {
       lastTaskResult = null;
@@ -3612,9 +3611,8 @@ function loadMergedConfig() {
     skills:        { ...(g.skills||{}),     ...(l.skills||{})     },
     slashCommands: [...(l.slashCommands||[])],
     lang:          l.lang || g.lang || 'en',
-    defaultEngine: l.defaultEngine || g.defaultEngine || 'api',
-    // Which desktop editor "Open in …" targets (#63). `||`, like lang and
-    // defaultEngine: an empty string in a config file means "unset", and
+    // Which desktop editor "Open in …" targets (#63). `||`, like lang: an empty
+    // string in a config file means "unset", and
     // editorFor() falls back once more on an unknown id.
     editor:        l.editor || g.editor || editorLinks.DEFAULT_EDITOR,
     // Per KEY, not per object: a local config that pins only `model` must not
@@ -4208,6 +4206,38 @@ try { providerStore.seedFromEnv(process.env); } catch (e) { log.warn('provider s
 providerStore.pruneUsage();
 { const _t = setInterval(() => providerStore.pruneUsage(), 24 * 3600 * 1000); if (_t.unref) _t.unref(); }
 
+// One-time: the engine dial is gone — the model's provider decides the engine now
+// (runEngineFor). A chat, task or bot that was explicitly set to "Subscription" keeps
+// running there by pinning its model to the CLI login (`claude::<model>`). Tasks and bots
+// drop the dead column value; a session keeps it (it records the engine the chat ran on).
+// Guarded by a provider_settings flag so a user's later choices are never rewritten.
+function migrateEngineDial() {
+  if (providerStore.getSetting('engineDialMigrated')) return;
+  const n = { sessions: 0, tasks: 0, bots: 0 };
+  try {
+    db.transaction(() => {
+      for (const r of db.prepare(`SELECT id, model FROM sessions WHERE run_engine = 'subscription'`).all()) {
+        const m = providersLib.toClaudeRef(r.model);
+        if (m !== r.model) { db.prepare(`UPDATE sessions SET model = ? WHERE id = ?`).run(m, r.id); n.sessions++; }
+      }
+      for (const r of db.prepare(`SELECT id, model FROM tasks WHERE run_engine = 'subscription'`).all()) {
+        db.prepare(`UPDATE tasks SET model = ?, run_engine = NULL WHERE id = ?`).run(providersLib.toClaudeRef(r.model), r.id); n.tasks++;
+      }
+      for (const r of db.prepare(`SELECT id, model FROM bots WHERE run_engine = 'subscription'`).all()) {
+        db.prepare(`UPDATE bots SET model = ?, run_engine = NULL WHERE id = ?`).run(providersLib.toClaudeRef(r.model), r.id); n.bots++;
+      }
+      db.exec(`UPDATE tasks SET run_engine = NULL WHERE run_engine IS NOT NULL`);
+      db.exec(`UPDATE bots SET run_engine = NULL WHERE run_engine IS NOT NULL`);
+    })();
+  } catch (e) {
+    log.warn('engine-dial migration failed', { err: e.message });
+    return;
+  }
+  providerStore.setSetting('engineDialMigrated', '1');
+  if (n.sessions || n.tasks || n.bots) log.info('engine dial migrated: Subscription choices pinned to claude:: models', n);
+}
+migrateEngineDial();
+
 // The child holds provider keys (over IPC) but needs none of the server's own secrets —
 // only what makes a node process work: TLS trust (a gateway behind a private CA worked
 // through the CLI's NODE_EXTRA_CA_CERTS and must keep working), proxies, and on Windows
@@ -4328,9 +4358,15 @@ function resolveModelFor(model, engine) {
   return providersLib.resolveModel(model, providerStore.registry(), { engine: engine || 'api' });
 }
 
-/** The tmux Subscription engine runs the CLI's own login only; anything else goes headless. */
-function engineForModel(engine, model) {
-  return providersLib.effectiveEngine(engine, model, providerStore.registry());
+/**
+ * The engine a run uses is decided by its MODEL, not by a separate dial: a model of the
+ * CLI-login provider ("Claude (subscription)", type claude-subscription) runs on the tmux
+ * Subscription engine whenever tmux exists; every other provider — an Anthropic key, a
+ * gateway, anything OpenAI-compatible — runs headless. Without tmux the CLI login still
+ * works, headless. One rule for chats, tasks, bots and Telegram (providers.engineForModel).
+ */
+function runEngineFor(model) {
+  return providersLib.engineForModel(model, providerStore.registry(), { tmux: tmuxAvailable() });
 }
 
 /** Model the utility calls use (classifier/titles, compact, translate). */
@@ -5332,9 +5368,10 @@ function seatingNote({ room, skipped }) {
 
 async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent, engine, mode } = p;
-  // The engine THIS bot's turn runs on: its own choice (web chat only, see botsLogic.botEngine), else the chat's.
-  // …and never the tmux engine for a model of another provider (providers.effectiveEngine).
-  const botEngine = (bot) => engineForModel(botsLogic.botEngine(bot, engine, { enabled: !!p.perBotEngine, tmux: tmuxAvailable() }), (bot && bot.model) || model);
+  // The engine THIS bot's turn runs on follows its model (runEngineFor) — its own, else the
+  // chat's. Web chat only (perBotEngine): Telegram hands the runner a stand-in socket, and a
+  // tmux pane must not start behind it, so there every bot follows the chat's engine.
+  const botEngine = (bot) => (p.perBotEngine ? runEngineFor((bot && bot.model) || model) : (engine === 'subscription' ? 'subscription' : 'api'));
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   const send = (o) => { try { ws.send(JSON.stringify({ ...o, ...(tabId ? { tabId } : {}) })); } catch {} };
   const save = (text, agentId) => { try { stmts.addMsg.run(sessionId, 'assistant', 'text', text, null, agentId, null, null); } catch {} };
@@ -5683,8 +5720,8 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
 
 async function runBotTurns(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent, engine } = p;
-  // …and never the tmux engine for a model of another provider (providers.effectiveEngine).
-  const botEngine = (bot) => engineForModel(botsLogic.botEngine(bot, engine, { enabled: !!p.perBotEngine, tmux: tmuxAvailable() }), (bot && bot.model) || model);
+  // Same rule as the room: the bot's model decides its engine (web chat only).
+  const botEngine = (bot) => (p.perBotEngine ? runEngineFor((bot && bot.model) || model) : (engine === 'subscription' ? 'subscription' : 'api'));
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   // Same tool set as a normal turn, plus the internal MCP tools — without
   // check_user_messages a bot cannot see a clarification the user sends mid-run.
@@ -7182,8 +7219,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/lang', (req, res) => {
   // Merged, not local: the settings catalog documents `lang` as merge:'merged' and
   // the resolver reports it that way, so a value living only in the global
-  // ~/.claude/config.json has to reach the browser too. `defaultEngine` at
-  // /api/default-engine already reads it merged; this endpoint did not.
+  // ~/.claude/config.json has to reach the browser too.
   const c = loadMergedConfig();
   res.json({ lang: c.lang || 'en' });
 });
@@ -7197,16 +7233,6 @@ app.put('/api/lang', express.json(), (req, res) => {
   // Update bot language if running
   if (telegramBot) telegramBot.lang = lang;
   res.json({ ok: true });
-});
-
-// Global default engine for NEW chats/tasks ('api' | 'subscription'). Per-item
-// run_engine override still persists; this only seeds fresh selectors.
-app.put('/api/default-engine', express.json(), (req, res) => {
-  const e = req.body.engine === 'subscription' ? 'subscription' : 'api';
-  const c = loadConfig();
-  c.defaultEngine = e;
-  saveConfig(c);
-  res.json({ ok: true, defaultEngine: e });
 });
 
 // ─── Translate via Claude CLI ─────────────────────────────────────────────────
@@ -7317,7 +7343,7 @@ app.get('/api/version', (_, res) => {
   // claudeCli: same up-front-capability idea as tmuxAvailable — lets the UI warn
   // before a chat send fails on a missing/unauthenticated local `claude` binary.
   const _ed = editorLinks.editorFor(loadMergedConfig().editor);
-  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), gitAvailable: WM.gitAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api'), editor: { id: _ed.id, label: _ed.label }, claudeCli: ClaudeCLI.claudeCliStatus() });
+  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), gitAvailable: WM.gitAvailable(), editor: { id: _ed.id, label: _ed.label }, claudeCli: ClaudeCLI.claudeCliStatus() });
 });
 
 // Capability-checked, never OS-sniffed — the same pattern as tmuxAvailable for the
@@ -8549,7 +8575,7 @@ app.post('/api/sessions', (req, res) => {
   catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
   if (kind === 'terminal') {
     // loadConfig(), not loadMergedConfig(): the merged view is a whitelist of
-    // mcpServers/skills/slashCommands/lang/defaultEngine and does NOT carry
+    // mcpServers/skills/slashCommands/lang and does NOT carry
     // externalAgents — same reason /api/external-agents reads loadConfig().
     const agents = loadConfig().externalAgents || {};
     if (!terminalAgent || !supportsTerminal(agents[terminalAgent])) {
@@ -11017,8 +11043,8 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
 
     // Check if the active project is a remote SSH project
     const _activeProj = findRemoteProject(workdir);
-    // Same rule as the web chat: the tmux engine is the CLI login only.
-    const _isSubscriptionEngine = engineForModel((session.run_engine || 'api') === 'subscription' ? 'subscription' : 'api', model) === 'subscription';
+    // Same rule as the web chat: the model's provider decides the engine.
+    const _isSubscriptionEngine = runEngineFor(model) === 'subscription';
     const _botsAvail = botsLogic.botsAvailability({ remote: !!_activeProj, runEngine: _isSubscriptionEngine ? 'subscription' : 'api' });
     if (tgBots.length && !_botsAvail.available) {
       // Bots run through the headless `api` engine only (runBotTurns spawns its own
@@ -12075,12 +12101,17 @@ function saveBot(req, res, mode) {
     const prev = stmts.getBot.get(handle) || {};
     const keep = (key, fallback) => (body[key] === undefined ? fallback : body[key]);
     const jsonList = (v) => JSON.stringify(Array.isArray(v) ? v : []);
+    // There is no engine field any more — the model's provider decides (runEngineFor). An
+    // older client that still says "subscription" gets the same thing the boot migration
+    // gives stored bots: the model pinned to the CLI login.
+    let botModelVal = keep('model', prev.model) ? String(keep('model', prev.model)) : null;
+    if (runEngine === 'subscription') botModelVal = providersLib.toClaudeRef(botModelVal);
     stmts.upsertBot.run(
       handle,
       cleanLabel.substring(0, BOT_LABEL_MAX),
       String(keep('description', prev.description || '')).substring(0, BOT_DESC_MAX),
       engine,
-      keep('model', prev.model) ? String(keep('model', prev.model)) : null,
+      botModelVal,
       body.systemPrompt === undefined ? (prev.system_prompt || '') : prompt,
       body.activeSkills === undefined ? (prev.active_skills || '[]') : jsonList(body.activeSkills),
       body.activeMcp === undefined ? (prev.active_mcp || '[]') : jsonList(body.activeMcp),
@@ -12089,7 +12120,7 @@ function saveBot(req, res, mode) {
       Array.from(String(keep('avatar', prev.avatar || ''))).slice(0, 8).join(''),
       (body.isGlobal === undefined ? (prev.is_global ? 1 : 0) : (body.isGlobal ? 1 : 0)),
       (body.roomPriority === undefined ? (prev.room_priority ?? null) : (Number.isInteger(body.roomPriority) ? body.roomPriority : null)),
-      runEngine === undefined ? (prev.run_engine || null) : runEngine,
+      null,   // run_engine: no longer read (see above)
       roomTools === undefined ? (prev.room_tools || null) : roomTools,
     );
   } catch (e) {
@@ -12900,14 +12931,10 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=_cd.effort, engine: engineDial='api' } = msg;
-      // What the toolbar says (persisted as the chat's run_engine) vs what the run can
-      // use: the tmux Subscription engine is the CLI's own login, so a model of another
-      // provider runs headless (providers.effectiveEngine) — and the user is told once.
-      const engine = engineForModel(engineDial === 'subscription' ? 'subscription' : 'api', model);
-      if (engineDial === 'subscription' && engine !== 'subscription') {
-        try { ws.send(JSON.stringify({ type: 'provider_notice', kind: 'engine_api', ref: model, ...(effectiveTabId ? { tabId: effectiveTabId } : {}) })); } catch {}
-      }
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=_cd.effort } = msg;
+      // The engine is not a dial any more: the model's provider decides it (runEngineFor).
+      // A frame's `engine` field — older cached SPAs still send one — is ignored.
+      const engine = runEngineFor(model);
       // Two different things, deliberately kept apart: `effort` is what the chat is
       // SET to (may be the spelled-out 'auto'), `_effortFlag` is what the CLI gets
       // (no flag at all for auto). Storing the flag would erase the difference
@@ -12997,8 +13024,9 @@ wss.on('connection', (ws) => {
         (effort === '' || effort == null) ? 'auto' : sqlVal(effort),   // '' only from an older client
         localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
-      // Persist engine choice (coerce anything other than 'subscription' to 'api')
-      try { db.prepare(`UPDATE sessions SET run_engine=? WHERE id=?`).run(engineDial === 'subscription' ? 'subscription' : 'api', localSessionId); } catch {}
+      // Persist the engine this turn ran on (derived from the model) — the session bar's
+      // Max badge and the engine-pane entry point read it.
+      try { db.prepare(`UPDATE sessions SET run_engine=? WHERE id=?`).run(engine, localSessionId); } catch {}
 
       // Auto-title: use LLM-generated title if available, otherwise smart-truncate message
       if (isNewSession || DEFAULT_SESSION_TITLES.has(existSess?.title)) {
@@ -13602,9 +13630,8 @@ wss.on('connection', (ws) => {
           workdir:    msg.workdir || _isess?.workdir     || undefined,
           mode:       _isess?.mode       || undefined,
           agentMode:  _isess?.agent_mode || undefined,
-          // Engine deliberately omitted — see the note on resume_interrupted. The client's
-          // interrupt frame is api-only by construction; a stored 'subscription' must not
-          // reroute it through the tmux engine behind the user's back.
+          // Engine deliberately omitted — it follows the model replayed above (runEngineFor),
+          // see the note on resume_interrupted.
           skills:     _isessSkills,
           mcpServers: _isessMcp,
         }).catch(err => log.error('processChat error', { message: err.message }));
@@ -14297,11 +14324,9 @@ wss.on('connection', (ws) => {
         mode: sess.mode || 'auto', agentMode: sess.agent_mode || 'single',
         model: sess.model || 'sonnet',
         workdir: sess.workdir || undefined,
-        // Engine is deliberately NOT taken from the session row. The client sends
-        // `engine: 'api'` on every chat (Subscription is paused per-turn in the UI), so
-        // replaying a stored 'subscription' here would silently route the turn through the
-        // tmux engine for a message the UI considers API-only — and updateConfig would then
-        // write that engine back onto the row.
+        // No engine here: it follows the model (runEngineFor), so replaying the chat's
+        // own model is what keeps a subscription chat on the subscription and an API one
+        // on the API. The stored run_engine is only a record of the last turn.
       }).catch(err => log.error('resume_interrupted processChat error', { message: err.message }));
       return;
     }

@@ -1212,22 +1212,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .emoji-grid button:active { scale: .92; }
 .emoji-grid button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* Starter-prompt chips in the bot modal. Self-sufficient on purpose: these used
-   class="cfg", which is only ever defined as a descendant (.ci .cfg), so on their
-   own they rendered as default browser buttons — white pills on a dark modal. */
-.tpl-chip {
-  font-family: inherit; font-size: 12px; line-height: 1;
-  padding: 8px 13px; border: none; border-radius: 999px; cursor: pointer;
-  background: var(--s2); color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--border);
-  transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
-}
-.tpl-chip { position: relative; }
-.tpl-chip::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 40px; transform: translateY(-50%); }
-.tpl-chip:hover { background: var(--s3); box-shadow: inset 0 0 0 1px var(--accent2); }
-.tpl-chip:active { scale: .96; }
-.tpl-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
 /* New-tab chooser: two ways to start work, each speaking its own visual dialect.
    A bare '+' that always meant 'chat' hid the terminal entirely — the owner had to
    ask how to open one. Chat is the warm, rounded, conversational surface; the
@@ -1372,8 +1356,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .bot-seg-btn { padding: 4px 11px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 500; white-space: nowrap; transition: background .12s, color .12s, box-shadow .12s; }
 .bot-seg-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
 .bot-seg-btn.on { background: var(--accent); color: white; box-shadow: 0 1px 6px rgba(124,106,239,.4); }
-.bot-seg-gw { margin-top: 6px; width: 100%; }
-.bot-seg-gw[hidden] { display: none; }
+/* The bot's model: one button opening the toolbar's picker (openBotModelPicker). */
+.bot-mdl-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; text-align: left; transition: border-color .12s, background-color .12s; }
+.bot-mdl-btn:hover { border-color: var(--accent2); background: var(--s3); }
+.bot-mdl-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bot-mdl-btn .mdl-cur-name { flex: 1; }
+.bot-mdl-btn.inherit .mdl-cur-name { color: var(--muted); }
+.bot-mdl-btn .mdl-cur-prov { background: var(--s3); }
 .bot-mcp-list { display: flex; flex-direction: column; gap: 6px; max-height: 168px; overflow: auto; }
 .bot-mcp-row { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
 .bot-mcp-row input { margin-top: 3px; flex-shrink: 0; }
@@ -3010,6 +2999,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 .prov-dot.ok { background: var(--green); opacity: 1; }
 .prov-dot.err { background: var(--red); opacity: 1; }
 .prov-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--abg); color: var(--accent2); flex-shrink: 0; }
+/* How a provider is billed — the engine follows it: the CLI login is the subscription, the rest API. */
+.prov-mode { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; flex-shrink: 0; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.prov-mode.subscription { background: color-mix(in srgb, var(--orange) 16%, transparent); color: var(--orange); }
+.prov-mode.api { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
 .prov-warn { font-size: 11.5px; color: var(--orange); padding: 2px 2px 6px; line-height: 1.45; }
 .prov-warn[hidden] { display: none; }
 .prov-util { padding: 8px 2px 2px; font-size: 11.5px; color: var(--muted); }
@@ -3403,14 +3396,6 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
       <div class="mob-sheet-section">
-        <div class="mob-sheet-label" data-i18n="tb.engine">Engine</div>
-        <div class="mob-sheet-chips">
-          <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')" data-i18n-title="engine.api.title" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
-          <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')" data-i18n="engine.sub" data-i18n-title="engine.sub.title" title="Subscription engine — persistent tmux session, billed on the Claude Max subscription (no API credits). Requires tmux + Claude Max.">Subscription</button>
-          <button class="mob-chip" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Make the current engine the default for new chats" data-i18n="engine.default.btn">★ Set as default</button>
-        </div>
-      </div>
-      <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
         <div class="mob-sheet-turns">
           <input type="number" id="mobMaxTurns" value="50" min="1" max="200" data-i18n-tip="turns.tip">
@@ -3545,13 +3530,6 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <span class="label" data-i18n="tb.model">Model</span>
       <!-- One button: the chat's current model; the popup lists every provider's models (syncModelMore / openModelPicker). -->
       <button class="tb-btn mdl-cur on" id="mdlMoreBtn" data-v="__model" onclick="openModelPicker(this)" aria-haspopup="dialog">Sonnet</button>
-    </div>
-    <div class="tb-sep"></div>
-    <div class="tb-group">
-      <span class="label" data-i18n="tb.engine">Engine</span>
-      <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')" data-i18n-title="engine.api.title" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
-      <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')" data-i18n-title="engine.sub.title" title="Subscription engine — persistent tmux session, billed on Claude Max subscription (no API credits). Requires: tmux + Claude Max." data-i18n="engine.sub">Subscription</button>
-      <button class="tb-btn" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Make the current engine the default for new chats" style="padding:0 8px">★</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="effort">
@@ -4278,27 +4256,11 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">One line. Other bots see this, so they know who to hand work to.</div>
       </div>
       <div class="cmd-field">
-        <label data-i18n="bot.modal.engine.label">Engine</label>
-        <div class="bot-seg" id="botEngineSeg" role="group">
-          <button type="button" class="bot-seg-btn on" data-v="" onclick="setBotEngine('')" data-i18n="bot.engine.inherit">Same as chat</button>
-          <button type="button" class="bot-seg-btn" data-v="api" onclick="setBotEngine('api')" data-i18n="bot.engine.api" data-i18n-title="engine.api.title">API</button>
-          <button type="button" class="bot-seg-btn" data-v="subscription" onclick="setBotEngine('subscription')" data-i18n="bot.engine.subscription" data-i18n-title="engine.sub.title">Claude subscription</button>
-        </div>
-        <input type="hidden" id="botEngine">
-        <div class="cmd-name-hint" data-i18n="bot.modal.engine.hint">Applies to this bot only, even when the chat runs on the other engine. Subscription needs a Claude login inside the server and tmux.</div>
-      </div>
-      <div class="cmd-field">
         <label data-i18n="bot.modal.model.label">Model</label>
-        <div class="bot-seg" id="botModelSeg" role="group">
-          <button type="button" class="bot-seg-btn on" data-v="" onclick="setBotModel('')" data-i18n="bot.model.inherit">Same as chat</button>
-          <button type="button" class="bot-seg-btn" data-v="haiku" onclick="setBotModel('haiku')" data-i18n-tip="model.haiku.tip">Haiku</button>
-          <button type="button" class="bot-seg-btn" data-v="sonnet" onclick="setBotModel('sonnet')" data-i18n-tip="model.sonnet.tip">Sonnet</button>
-          <button type="button" class="bot-seg-btn" data-v="opus" onclick="setBotModel('opus')" data-i18n-tip="model.opus.tip">Opus</button>
-          <button type="button" class="bot-seg-btn" data-v="fable" onclick="setBotModel('fable')" data-i18n-tip="model.fable.tip">Fable</button>
-        </div>
-        <select id="botModelGw" class="bot-seg-gw" onchange="setBotModel(this.value)" hidden></select>
+        <!-- One button, the toolbar's picker (openModelPicker with a target): the model's provider decides the engine. -->
+        <button type="button" class="bot-mdl-btn" id="botModelBtn" onclick="openBotModelPicker(this)" aria-haspopup="dialog"></button>
         <input type="hidden" id="botModel">
-        <div class="cmd-name-hint" data-i18n="bot.modal.model.hint">Haiku, Sonnet, Opus, Fable, as on the new-chat bar. On the subscription these are Claude CLI aliases; on the API, whatever the gateway maps them to.</div>
+        <div class="cmd-name-hint" data-i18n="bot.modal.model.hint">"Same as chat" follows the chat the bot answers in. A model of the Claude (subscription) provider runs on the subscription, every other one through its API.</div>
       </div>
       <div class="cmd-field">
         <label data-i18n="bot.modal.tools.label">Files in a discussion</label>
@@ -4328,7 +4290,6 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </div>
       <div class="cmd-field">
         <label for="botPrompt" data-i18n="bot.modal.prompt.label">System prompt</label>
-        <div id="botTemplates" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px"></div>
         <textarea id="botPrompt" rows="7" data-i18n-ph="bot.modal.prompt.ph" placeholder="You are a crypto market analyst..."></textarea>
         <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Who this bot is and how it works. Up to 8000 characters.</div>
       </div>
@@ -4762,10 +4723,8 @@ let cfgFiles = {}, activeCfgTab = null;
 // Settings form (issue #40): last /api/config/resolved payload + collapsed sections.
 let cfgResolved = null;
 const cfgCollapsedSections = new Set();
+// curEngine is DERIVED from curModel (engineOfModel) — the model's provider decides it.
 let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curEngine = 'api';
-// Global default engine for NEW chats (server-backed via /api/default-engine).
-// _curSessionRunEngine = the open chat's explicit run_engine (null = inherit default).
-let _globalDefaultEngine = 'api', _curSessionRunEngine = null;
 // Server truth for the currently-open session, snapshotted by loadSess() — an
 // 'interrupt' row still undelivered only means "lost" if the task has actually
 // ended; while it's running, the same row is still sitting in the server's queue.
@@ -4964,6 +4923,9 @@ document.addEventListener('keydown', e => {
     // listener could never take precedence; the check belongs here.
     const pop = $i('emojiPop');
     if (pop && !pop.classList.contains('hidden')) { closeEmojiPicker(); return; }
+    // …and so does the model picker the bot editor borrows.
+    const mp = $i('mdlPick');
+    if (mp && mp.classList.contains('open')) { closeModelPicker(); return; }
     if (typeof top.onEscape === 'function') top.onEscape();
     return;
   }
@@ -5030,7 +4992,6 @@ const TRANSLATIONS = {
     'cfg.reset.title':'Прибрати значення з файлу, щоб знову діяло вбудоване',
     'cfg.reset.done':'Скинуто до вбудованого значення',
     'cfg.saved_restart':'Збережено — перезапустіть сервер, щоб застосувати',
-    'cfg.h.defaultEngine':'Рушій, попередньо вибраний для нових чатів і задач: API (без інтерфейсу) або Subscription (Claude Max).',
     'cfg.h.chatDefaults.mode':'Режим, на якому відкривається новий чат. Проєкт може перевизначити його кнопкою ★ на панелі.','cfg.h.chatDefaults.agent':'Режим агента для нового чату: single, multi, dispatch або conversation.','cfg.h.chatDefaults.model':'Модель, попередньо вибрана для нового чату.','cfg.h.chatDefaults.effort':'Рівень обдумування для нового чату; auto — без прапорця --effort.','cfg.h.chatDefaults.turns':'Ліміт кроків для нового чату (1–200).',
     'cfg.h.ANTHROPIC_BASE_URL':'Шлюз, з якого на першому запуску створюється провайдер за замовчуванням (розділ «Провайдери»). Поки цього провайдера не змінено в інтерфейсі, він слідує за цим значенням після перезапуску.',
     'cfg.h.ANTHROPIC_API_KEY':'Ключ API для рушія API, коли claude CLI не має входу в акаунт.',
@@ -5080,11 +5041,11 @@ const TRANSLATIONS = {
     'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','newtab.or':'або','term.tab':'термінал',
     'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
     'agent.cap.delegate':'делегування','agent.cap.terminal':'термінал',
-    'bots.empty.what':'Бот — це named учасник чату зі своїм промптом, моделлю і памʼяттю. Аналітик, редактор, рецензент — кожен знає своє.','bots.empty.how':'Створіть бота і покличте його в повідомленні:','bots.empty.cta':'Створити першого бота','bot.tpl.replace':'Замінити те, що вже написано в промпті?','bot.tpl.analyst.name':'Аналітик','bot.tpl.analyst.desc':'аналіз даних і висновки','bot.tpl.analyst.prompt':'Ти аналітик. Розбираєш дані й даєш висновки, на які можна спертися.\n\nПравила:\n- Спершу цифри, потім інтерпретація.\n- Кожен висновок має спиратися на конкретне джерело.\n- Якщо даних бракує — скажи прямо, чого саме бракує.\n- Без води: короткі абзаци, ключове винось у список.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексти і звіти','bot.tpl.writer.prompt':'Ти редактор. Перетворюєш чернетки й дані на текст, який приємно читати.\n\nПравила:\n- Пиши для людини, не для галочки.\n- Структура: заголовок, суть у першому абзаці, деталі нижче.\n- Не вигадуй фактів. Якщо чогось нема у вихідних даних — постав питання.\n- Прибирай канцелярит і повтори.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'перевірка коду і рішень','bot.tpl.reviewer.prompt':'Ти рецензент. Шукаєш, де рішення ламається, а не де воно гарне.\n\nПравила:\n- Кожна знахідка: що саме зламається, за яких вхідних даних, з посиланням на файл і рядок.\n- Розділяй «це помилка» і «мені так не подобається».\n- Якщо не впевнений — кажи, що це припущення.\n- Наприкінці: найважливіше першим.','bot.tpl.explainer.name':'Пояснювач','bot.tpl.explainer.desc':'пояснює складне просто','bot.tpl.explainer.prompt':'Ти пояснюєш складні речі простими словами.\n\nПравила:\n- Спочатку одне речення суті, потім деталі.\n- Приклад важливіший за визначення.\n- Терміни розшифровуй при першій згадці.\n- Не спрощуй до неправди: якщо є важливий нюанс — назви його.',
+    'bots.empty.what':'Бот — це named учасник чату зі своїм промптом, моделлю і памʼяттю. Аналітик, редактор, рецензент — кожен знає своє.','bots.empty.how':'Створіть бота і покличте його в повідомленні:','bots.empty.cta':'Створити першого бота',
     'bot.state.queued':'у черзі','bot.state.running':'працює','bot.state.done':'готово','bot.state.failed':'помилка','bot.state.stopped':'зупинено','bot.state.skipped':'пропущено','bot.stop.all':'Зупинити',
     'at.no_bots':'Ботів не знайдено',
     'bot.modal.mcp.label':'MCP-сервери','bot.modal.mcp.hint':'Інструменти, які бот отримує понад увімкнені для чату. Вебпошук давайте лише тим, хто читає, а не тим, хто ще запускає команди чи змінює файли.','bot.modal.mcp.none':'MCP-сервери не налаштовано.',
-    'sec.bots':'Боти','bots.hint':'Учасники цього проєкту. Згадайте бота через @@ у повідомленні.','bot.add.new':'Створити бота','bot.add.btn':'Створити','bot.use.title':'Вставити згадку','bot.modal.add.title':'Новий бот','bot.modal.edit.title':'Редагувати бота','bot.modal.label.label':'Ім\'я','bot.modal.handle.hint':'Звертання у чаті:','bot.modal.avatar.label':'Емодзі','bot.modal.desc.label':'Призначення','bot.modal.desc.hint':'Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.','bot.modal.model.label':'Модель','bot.model.inherit':'Як у чаті','bot.model.group.gateway':'Шлюз (API)','bot.model.no_tools':'без інструментів','bot.modal.model.hint':'Haiku, Sonnet, Opus, Fable — як на панелі нового чату, на провайдері за замовчуванням. У списку нижче — моделі всіх інших провайдерів.','bot.model.gateway.ph':'Інша модель шлюзу…','bot.modal.tools.label':'Файли в обговоренні','bot.tools.default':'За замовчуванням','bot.tools.read':'Читання','bot.tools.run':'Читання + команди','bot.tools.work':'Читання + запис','bot.modal.tools.hint':'Що бот може робити з файлами, поки бере участь у кімнаті. За замовчуванням — читання й запис. У картці Kanban і при прямому зверненні @@ він має повний доступ. На рушії «Підписка» це прохання в промпті, а не заборона.','bot.modal.engine.label':'Рушій','bot.engine.inherit':'Як у чаті','bot.engine.api':'API','bot.engine.subscription':'Підписка Claude','bot.modal.engine.hint':'Діє лише для цього бота, навіть якщо чат працює на іншому рушії. Підписці потрібен вхід у Claude на сервері та tmux.','bot.modal.prompt.label':'Системний промпт','bot.modal.prompt.hint':'Хто цей бот і як він працює. До 8000 символів.','bot.err.label':'Вкажіть імʼя бота','bot.del.confirm':'Видалити бота','bot.del.note':'Його минулі повідомлення лишаться, а звертання більше ніколи не дістанеться іншому боту.','bot.deleted':'видалений бот','toast.bot_added':'✓ Бота створено','toast.bot_updated':'✓ Бота оновлено','toast.bot_deleted':'✓ Бота видалено','bot.modal.global.label':'Доступний у всіх проєктах','bot.modal.global.hint':'Роль на кшталт програміста потрібна скрізь. Увімкніть — і бот зʼявиться в кожному проєкті без окремого додавання.','bot.modal.also_in':'Також у проєктах:','bot.modal.delete':'Видалити бота','bot.global.badge':'Доступний у всіх проєктах','bot.unlink.title':'Прибрати з цього проєкту','bot.unlink.confirm':'Прибрати з цього проєкту','bot.unlink.note':'Бот лишиться в інших проєктах, його повідомлення нікуди не зникнуть.','bot.del.everywhere':'Він доступний у всіх проєктах — зникне звідусіль.','bot.del.in_n':'Він доступний у {n} проєктах — зникне з усіх.','toast.bot_unlinked':'✓ Прибрано з проєкту','bots.import.title':'Імпортувати ботів з JSON файлу','bots.export.title':'Експортувати ботів у JSON файл','bots.import.conflict':'Ботів із такими звертаннями вже є: {n}. Перезаписати їх даними з файлу? Локальні зміни в них буде втрачено.','toast.bots_imported':'✓ Імпортовано ботів: {n}, пропущено: {s}','toast.bots_import_err':'Не вдалося імпортувати: ','toast.bots_import_parse':'Файл не є коректним JSON','toast.bots_import_empty':'У файлі немає жодного бота','toast.bots_import_reserved':'Пропущено через видалених ботів: {n} ({list}) — ці звертання зарезервовані назавжди','toast.bots_export_err':'Не вдалося експортувати ботів','toast.bots_export_empty':'Немає кого експортувати','at.group.bots':'Боти','at.group.files':'Файли',
+    'sec.bots':'Боти','bots.hint':'Учасники цього проєкту. Згадайте бота через @@ у повідомленні.','bot.add.new':'Створити бота','bot.add.btn':'Створити','bot.use.title':'Вставити згадку','bot.modal.add.title':'Новий бот','bot.modal.edit.title':'Редагувати бота','bot.modal.label.label':'Ім\'я','bot.modal.handle.hint':'Звертання у чаті:','bot.modal.avatar.label':'Емодзі','bot.modal.desc.label':'Призначення','bot.modal.desc.hint':'Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.','bot.modal.model.label':'Модель','bot.model.inherit':'Як у чаті','bot.modal.model.hint':'«Як у чаті» — модель чату, в якому бот відповідає. Модель провайдера з позначкою «підписка» працює з підписки Claude, решта — через API свого провайдера.','bot.modal.tools.label':'Файли в обговоренні','bot.tools.default':'За замовчуванням','bot.tools.read':'Читання','bot.tools.run':'Читання + команди','bot.tools.work':'Читання + запис','bot.modal.tools.hint':'Що бот може робити з файлами, поки бере участь у кімнаті. За замовчуванням — читання й запис. У картці Kanban і при прямому зверненні @@ він має повний доступ. Для моделі з підписки це прохання в промпті, а не заборона.','bot.modal.prompt.label':'Системний промпт','bot.modal.prompt.hint':'Хто цей бот і як він працює. До 8000 символів.','bot.err.label':'Вкажіть імʼя бота','bot.del.confirm':'Видалити бота','bot.del.note':'Його минулі повідомлення лишаться, а звертання більше ніколи не дістанеться іншому боту.','bot.deleted':'видалений бот','toast.bot_added':'✓ Бота створено','toast.bot_updated':'✓ Бота оновлено','toast.bot_deleted':'✓ Бота видалено','bot.modal.global.label':'Доступний у всіх проєктах','bot.modal.global.hint':'Роль на кшталт програміста потрібна скрізь. Увімкніть — і бот зʼявиться в кожному проєкті без окремого додавання.','bot.modal.also_in':'Також у проєктах:','bot.modal.delete':'Видалити бота','bot.global.badge':'Доступний у всіх проєктах','bot.unlink.title':'Прибрати з цього проєкту','bot.unlink.confirm':'Прибрати з цього проєкту','bot.unlink.note':'Бот лишиться в інших проєктах, його повідомлення нікуди не зникнуть.','bot.del.everywhere':'Він доступний у всіх проєктах — зникне звідусіль.','bot.del.in_n':'Він доступний у {n} проєктах — зникне з усіх.','toast.bot_unlinked':'✓ Прибрано з проєкту','bots.import.title':'Імпортувати ботів з JSON файлу','bots.export.title':'Експортувати ботів у JSON файл','bots.import.conflict':'Ботів із такими звертаннями вже є: {n}. Перезаписати їх даними з файлу? Локальні зміни в них буде втрачено.','toast.bots_imported':'✓ Імпортовано ботів: {n}, пропущено: {s}','toast.bots_import_err':'Не вдалося імпортувати: ','toast.bots_import_parse':'Файл не є коректним JSON','toast.bots_import_empty':'У файлі немає жодного бота','toast.bots_import_reserved':'Пропущено через видалених ботів: {n} ({list}) — ці звертання зарезервовані назавжди','toast.bots_export_err':'Не вдалося експортувати ботів','toast.bots_export_empty':'Немає кого експортувати','at.group.bots':'Боти','at.group.files':'Файли',
     'term.open.title':'Відкрити живий термінал цього агента у вкладці','term.kill':'Завершити','term.killConfirm':'Завершити цю термінальну сесію? Розмову можна буде відновити пізніше.','term.unavailable':'Термінальні сесії недоступні','term.state.attached':'підключено','term.state.started':'запущено','term.state.restored':'відновлено','term.state.restoredLast':'відновлено останню розмову агента','term.state.restoreFailed':'відновлювати не було чого — почато заново','term.state.exited':'агент завершився','term.state.error':'помилка','term.state.disconnected':'з’єднання втрачено — перепідключення...','term.state.reconnecting':'перепідключення...','term.paste.title':'Вставити в термінал','term.paste.notarget':'Немає відкритого термінала для вставки','term.paste.notconnected':'Термінал не підключений','term.paste.done':'Вставлено в термінал','term.refresh.title':'Перепідключити цей термінал','term.send.ph':'Надіслати рядок у термінал…','term.send.title':'Надіслати (Enter)',
     'agent.modal.newIdCommand.label':'Команда створення розмови','agent.modal.newIdCommand.hint':'Альтернатива прапорцю: команда, що створює розмову і друкує її id. Виконується один раз при створенні сесії.',
     'agent.modal.interactive.label':'Інтерактивна команда','agent.modal.interactive.hint':'Запускає TUI агента для термінальної сесії. Порожньо — агент лише для делегування.','agent.modal.resume.label':'Команда відновлення','agent.modal.resume.hint':'{sid} — ідентифікатор розмови. Використовується для відновлення сесії після перезавантаження.','agent.modal.resumeLast.label':'Відновити останню (запасний варіант)','agent.modal.resumeLast.hint':'Використовується, коли ідентифікатор невідомий. Може відновити іншу розмову.','agent.modal.newIdFlag.label':'Прапорець id нової розмови','agent.modal.newIdFlag.hint':'Якщо CLI дозволяє задати id НОВОЇ розмови, відновлення стає точним. Порожньо — не підтримується.',
@@ -5357,12 +5318,9 @@ const TRANSLATIONS = {
     'model.opus.tip':'Opus — найпотужніша модель; вибирайте для складних завдань, де важлива глибина аналізу, а не швидкість чи вартість.',
     'model.fable.tip':'Fable — найтворчіша й найглибша модель у міркуваннях (контекст 1М токенів, як у Sonnet/Opus); обирайте для складного планування й глибокого аналізу.',
     'turns.tip':'Максимальна кількість кроків Claude в одному запуску. Після ліміту Claude до 3 разів автоматично продовжує сесію («Continue where you left off») — реальна витрата може сягати ~4× заданого числа, перш ніж з\'явиться повідомлення про незавершення. Діапазон 1–200.',
-    'tb.engine':'Рушій','engine.sub':'Підписка',
-    'engine.api.title':'Рушій API — headless claude -p, оплата за токени (Claude Pro / ключ API)',
-    'engine.sub.title':'Рушій підписки — постійна сесія tmux, оплата з підписки Claude Max (без кредитів API). Потрібні tmux і Claude Max.',
-    'engine.default.btn':'★ Зробити типовим','engine.default.title':'Зробити поточний рушій типовим для нових чатів',
-    'engine.default.set':'Зробити поточний рушій ({engine}) типовим для нових чатів','engine.default.is':'{engine} — типовий рушій для нових чатів',
-    'engine.default.toast':'★ {engine} — типовий рушій для нових чатів','engine.default.err':'⚠ Не вдалося зберегти типовий рушій',
+    
+    
+    
     'tb.effort':'Зусилля','effort.title':'Рівень обдумування (claude --effort): Авто — типове значення CLI, вищі рівні — глибші міркування',
     'effort.auto':'Авто','effort.low':'Низьке','effort.med':'Середнє','effort.high':'Високе','effort.xhigh':'Дуже високе','effort.max':'Максимальне',
     'tb.defaults':'Типове','defaults.pin.title':'Зберегти поточні Режим / Агент / Модель / Effort / Кроки як типові для цього проєкту','defaults.reset.title':'Прибрати перевизначення проєкту й успадкувати глобальні типові значення','defaults.noproject':'Спершу відкрийте проєкт','defaults.pinned':'Типові значення проєкту збережено','defaults.reset.done':'Проєкт успадковує глобальні типові значення',
@@ -5400,6 +5358,9 @@ const TRANSLATIONS = {
     'prov.utility.hint':'Заголовки чатів, вибір навичок, стиснення історії, переклад.',
     'prov.utility.default':'haiku на провайдері за замовчуванням',
     'prov.builtin.claude':'Claude (вхід CLI)',
+    'prov.mode.subscription':'підписка','prov.mode.api':'API',
+    'prov.mode.subscription.tip':'Вхід Claude CLI: відповідає постійна сесія tmux, витрати — з підписки Claude. Без tmux — headless, з того ж входу.',
+    'prov.mode.api.tip':'Запити йдуть за API-ключем провайдера (headless claude -p), оплата за токени.',
     'prov.default':'за замовч.',
     'prov.make_default':'Зробити провайдером за замовчуванням',
     'prov.test':'Перевірити',
@@ -5488,16 +5449,13 @@ const TRANSLATIONS = {
     'prov.usage.none':'Поки немає запитів через міст.',
     'prov.notice.provider_missing':'Провайдера моделі «{ref}» більше немає — відповідь іде через провайдера за замовчуванням.',
     'prov.notice.provider_disabled':'Провайдера моделі «{ref}» вимкнено — відповідь іде через провайдера за замовчуванням.',
-    'prov.notice.engine_api':'Модель «{ref}» — не Claude: рушій «Підписка» її не запустить, відповідь іде через API.',
-    'model.more':'Інші моделі…',
-    'model.more.tip':'Моделі всіх провайдерів',
+    
     'model.pick.change':'натисніть, щоб змінити модель',
     'model.pick.search':'Знайти модель…',
     'model.pick.empty':'Нічого не знайдено',
     'model.pick.manage':'⚙ Керувати провайдерами',
     'model.pick.notools':'Без інструментів — не зможе читати й змінювати файли',
-    'engine.sub.only_claude':'Рушій «Підписка» працює лише з моделями Claude (вхід CLI)',
-    'engine.switched_api':'Модель іншого провайдера — рушій перемкнено на API',
+    
     'effort.unsupported':'Ця модель не підтримує міркування',
   },
   en: {
@@ -5542,7 +5500,6 @@ const TRANSLATIONS = {
     'cfg.reset.title':'Remove the value from the file so the built-in default applies again',
     'cfg.reset.done':'Reset to the built-in default',
     'cfg.saved_restart':'Saved — restart the server to apply',
-    'cfg.h.defaultEngine':'Engine preselected for new chats and tasks: API (headless) or Subscription (Claude Max).',
     'cfg.h.chatDefaults.mode':'Mode a new chat opens on. A project can pin its own with the \u2605 button in the toolbar.','cfg.h.chatDefaults.agent':'Agent mode for a new chat: single, multi, dispatch or conversation.','cfg.h.chatDefaults.model':'Model preselected for a new chat.','cfg.h.chatDefaults.effort':'Thinking effort for a new chat; auto means no --effort flag is passed.','cfg.h.chatDefaults.turns':'Turn limit for a new chat (1\u2013200).',
     'cfg.h.ANTHROPIC_BASE_URL':'The gateway the default provider is created from on first start (see Providers). Until that provider is edited in the UI, it follows this value after a restart.',
     'cfg.h.ANTHROPIC_API_KEY':'API key for the API engine when the claude CLI is not signed in.',
@@ -5592,11 +5549,11 @@ const TRANSLATIONS = {
     'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'newtab.or':'or','term.tab':'terminal',
     'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
     'agent.cap.delegate':'delegation','agent.cap.terminal':'terminal',
-    'bots.empty.what':'A bot is a named chat participant with its own prompt, model and memory. An analyst, an editor, a reviewer — each one knows its job.','bots.empty.how':'Create a bot, then call it in a message:','bots.empty.cta':'Create your first bot','bot.tpl.replace':'Replace what is already written in the prompt?','bot.tpl.analyst.name':'Analyst','bot.tpl.analyst.desc':'data analysis and conclusions','bot.tpl.analyst.prompt':'You are an analyst. You work through data and give conclusions someone can rely on.\n\nRules:\n- Numbers first, interpretation second.\n- Every conclusion names the source it rests on.\n- If the data is not enough, say exactly what is missing.\n- No padding: short paragraphs, key points as a list.','bot.tpl.writer.name':'Editor','bot.tpl.writer.desc':'documents and reports','bot.tpl.writer.prompt':'You are an editor. You turn drafts and data into text people actually want to read.\n\nRules:\n- Write for a reader, not for the record.\n- Structure: title, the point in the first paragraph, detail below.\n- Invent nothing. If a fact is not in the source, ask for it.\n- Cut jargon and repetition.','bot.tpl.reviewer.name':'Reviewer','bot.tpl.reviewer.desc':'reviews code and decisions','bot.tpl.reviewer.prompt':'You are a reviewer. You look for where a solution breaks, not where it is nice.\n\nRules:\n- Each finding: what breaks, on which input, with the file and line.\n- Separate \'this is a bug\' from \'I would have done it differently\'.\n- If you are unsure, say it is a guess.\n- Most severe first.','bot.tpl.explainer.name':'Explainer','bot.tpl.explainer.desc':'makes hard things clear','bot.tpl.explainer.prompt':'You explain difficult things in plain language.\n\nRules:\n- One sentence of the point first, then the detail.\n- An example beats a definition.\n- Unpack a term the first time it appears.\n- Do not simplify into being wrong: if a caveat matters, name it.',
+    'bots.empty.what':'A bot is a named chat participant with its own prompt, model and memory. An analyst, an editor, a reviewer — each one knows its job.','bots.empty.how':'Create a bot, then call it in a message:','bots.empty.cta':'Create your first bot',
     'bot.state.queued':'queued','bot.state.running':'working','bot.state.done':'done','bot.state.failed':'failed','bot.state.stopped':'stopped','bot.state.skipped':'skipped','bot.stop.all':'Stop',
     'at.no_bots':'No bots found',
     'bot.modal.mcp.label':'MCP servers','bot.modal.mcp.hint':'Tools this bot gets on top of the ones switched on for the chat. Give web search only to bots that read, not to ones that also run commands or edit files.','bot.modal.mcp.none':'No MCP servers configured.',
-    'sec.bots':'Bots','bots.hint':'Participants in this project. Mention one with @@ in a message.','bot.add.new':'Create bot','bot.add.btn':'Create','bot.use.title':'Insert mention','bot.modal.add.title':'New bot','bot.modal.edit.title':'Edit bot','bot.modal.label.label':'Name','bot.modal.handle.hint':'Addressed in chat as:','bot.modal.avatar.label':'Emoji','bot.modal.desc.label':'Purpose','bot.modal.desc.hint':'One line. Other bots see this, so they know who to hand work to.','bot.modal.model.label':'Model','bot.model.inherit':'Same as chat','bot.model.group.gateway':'Gateway (API)','bot.model.no_tools':'no tools','bot.modal.model.hint':'Haiku, Sonnet, Opus, Fable — as on the new-chat bar, on the default provider. The list below holds every other provider\'s models.','bot.model.gateway.ph':'Another gateway model…','bot.modal.tools.label':'Files in a discussion','bot.tools.default':'Default','bot.tools.read':'Read','bot.tools.run':'Read + run','bot.tools.work':'Read + write','bot.modal.tools.hint':'What this bot may do to files while it takes part in a room. Default = read and write. On a Kanban card and when you address it with @@ it has full access. On the Subscription engine this is a request in the prompt, not a lock.','bot.modal.engine.label':'Engine','bot.engine.inherit':'Same as chat','bot.engine.api':'API','bot.engine.subscription':'Claude subscription','bot.modal.engine.hint':'Applies to this bot only, even when the chat runs on the other engine. Subscription needs a Claude login inside the server and tmux.','bot.modal.prompt.label':'System prompt','bot.modal.prompt.hint':'Who this bot is and how it works. Up to 8000 characters.','bot.err.label':'Give the bot a name','bot.del.confirm':'Delete bot','bot.del.note':'Its past messages stay, and its handle can never be taken by another bot.','bot.deleted':'deleted bot','toast.bot_added':'✓ Bot created','toast.bot_updated':'✓ Bot updated','toast.bot_deleted':'✓ Bot deleted','bot.modal.global.label':'Available in every project','bot.modal.global.hint':'A role like a programmer is wanted everywhere. Turn this on and the bot shows up in every project without being added to each one.','bot.modal.also_in':'Also in projects:','bot.modal.delete':'Delete bot','bot.global.badge':'Available in every project','bot.unlink.title':'Remove from this project','bot.unlink.confirm':'Remove from this project','bot.unlink.note':'The bot stays in other projects and keeps all of its messages.','bot.del.everywhere':'It is available in every project and will disappear from all of them.','bot.del.in_n':'It is available in {n} projects and will disappear from all of them.','toast.bot_unlinked':'✓ Removed from project','bots.import.title':'Import bots from a JSON file','bots.export.title':'Export bots to a JSON file','bots.import.conflict':'{n} of these handles already exist here. Overwrite them from the file? Local edits to those bots will be lost.','toast.bots_imported':'✓ Imported {n} bots, skipped {s}','toast.bots_import_err':'Could not import: ','toast.bots_import_parse':'That file is not valid JSON','toast.bots_import_empty':'No bots in that file','toast.bots_import_reserved':'Skipped {n} handle(s) belonging to deleted bots ({list}) — those are reserved forever','toast.bots_export_err':'Could not export the bots','toast.bots_export_empty':'Nothing to export','at.group.bots':'Bots','at.group.files':'Files',
+    'sec.bots':'Bots','bots.hint':'Participants in this project. Mention one with @@ in a message.','bot.add.new':'Create bot','bot.add.btn':'Create','bot.use.title':'Insert mention','bot.modal.add.title':'New bot','bot.modal.edit.title':'Edit bot','bot.modal.label.label':'Name','bot.modal.handle.hint':'Addressed in chat as:','bot.modal.avatar.label':'Emoji','bot.modal.desc.label':'Purpose','bot.modal.desc.hint':'One line. Other bots see this, so they know who to hand work to.','bot.modal.model.label':'Model','bot.model.inherit':'Same as chat','bot.modal.model.hint':'"Same as chat" follows the chat the bot answers in. A model of a provider marked "subscription" runs on the Claude subscription, any other one through its provider\'s API.','bot.modal.tools.label':'Files in a discussion','bot.tools.default':'Default','bot.tools.read':'Read','bot.tools.run':'Read + run','bot.tools.work':'Read + write','bot.modal.tools.hint':'What this bot may do to files while it takes part in a room. Default = read and write. On a Kanban card and when you address it with @@ it has full access. For a subscription model this is a request in the prompt, not a lock.','bot.modal.prompt.label':'System prompt','bot.modal.prompt.hint':'Who this bot is and how it works. Up to 8000 characters.','bot.err.label':'Give the bot a name','bot.del.confirm':'Delete bot','bot.del.note':'Its past messages stay, and its handle can never be taken by another bot.','bot.deleted':'deleted bot','toast.bot_added':'✓ Bot created','toast.bot_updated':'✓ Bot updated','toast.bot_deleted':'✓ Bot deleted','bot.modal.global.label':'Available in every project','bot.modal.global.hint':'A role like a programmer is wanted everywhere. Turn this on and the bot shows up in every project without being added to each one.','bot.modal.also_in':'Also in projects:','bot.modal.delete':'Delete bot','bot.global.badge':'Available in every project','bot.unlink.title':'Remove from this project','bot.unlink.confirm':'Remove from this project','bot.unlink.note':'The bot stays in other projects and keeps all of its messages.','bot.del.everywhere':'It is available in every project and will disappear from all of them.','bot.del.in_n':'It is available in {n} projects and will disappear from all of them.','toast.bot_unlinked':'✓ Removed from project','bots.import.title':'Import bots from a JSON file','bots.export.title':'Export bots to a JSON file','bots.import.conflict':'{n} of these handles already exist here. Overwrite them from the file? Local edits to those bots will be lost.','toast.bots_imported':'✓ Imported {n} bots, skipped {s}','toast.bots_import_err':'Could not import: ','toast.bots_import_parse':'That file is not valid JSON','toast.bots_import_empty':'No bots in that file','toast.bots_import_reserved':'Skipped {n} handle(s) belonging to deleted bots ({list}) — those are reserved forever','toast.bots_export_err':'Could not export the bots','toast.bots_export_empty':'Nothing to export','at.group.bots':'Bots','at.group.files':'Files',
     'term.open.title':"Open this agent's live terminal in a tab",'term.kill':'Kill','term.killConfirm':'Kill this terminal session? The conversation can be resumed later.','term.unavailable':'Terminal sessions are unavailable','term.state.attached':'attached','term.state.started':'started','term.state.restored':'restored','term.state.restoredLast':"restored the agent's last conversation",'term.state.restoreFailed':'nothing to resume — started fresh','term.state.exited':'agent exited','term.state.error':'error','term.state.disconnected':'connection lost — reconnecting…','term.state.reconnecting':'reconnecting…','term.paste.title':'Paste into terminal','term.paste.notarget':'No open terminal to paste into','term.paste.notconnected':'Terminal is not connected','term.paste.done':'Pasted into terminal','term.refresh.title':'Reconnect this terminal','term.send.ph':'Send a line to the terminal…','term.send.title':'Send (Enter)',
     'agent.modal.newIdCommand.label':'New-conversation command','agent.modal.newIdCommand.hint':'Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.',
     'agent.modal.interactive.label':'Interactive command','agent.modal.interactive.hint':"Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.",'agent.modal.resume.label':'Resume command','agent.modal.resume.hint':'{sid} — the conversation id. Used to restore the session after a reboot.','agent.modal.resumeLast.label':'Resume last (fallback)','agent.modal.resumeLast.hint':'Used when no conversation id is known. May restore a different conversation.','agent.modal.newIdFlag.label':'New-conversation id flag','agent.modal.newIdFlag.hint':'If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.',
@@ -5869,12 +5826,9 @@ const TRANSLATIONS = {
     'model.opus.tip':'Opus — the most capable model; pick it for hard tasks where depth of reasoning matters more than speed or cost.',
     'model.fable.tip':'Fable — the most creative, deepest-reasoning model (1M token context, same as Sonnet/Opus); pick it for complex planning and deep analysis.',
     'turns.tip':'Maximum steps Claude may take in one run. On hitting the limit, Claude auto-continues the session up to 3 more times ("Continue where you left off") — actual usage can reach ~4x this number before you see an incomplete-run notice. Range 1–200.',
-    'tb.engine':'Engine','engine.sub':'Subscription',
-    'engine.api.title':'API engine — headless claude -p, billed per token (Claude Pro / API key)',
-    'engine.sub.title':'Subscription engine — persistent tmux session, billed on the Claude Max subscription (no API credits). Requires tmux + Claude Max.',
-    'engine.default.btn':'★ Set as default','engine.default.title':'Make the current engine the default for new chats',
-    'engine.default.set':'Make the current engine ({engine}) the default for new chats','engine.default.is':'{engine} — default engine for new chats',
-    'engine.default.toast':'★ {engine} — default engine for new chats','engine.default.err':'⚠ Could not save the default engine',
+    
+    
+    
     'tb.effort':'Effort','effort.title':'Thinking effort dial (claude --effort): Auto = CLI default, higher levels = deeper reasoning',
     'effort.auto':'Auto','effort.low':'Low','effort.med':'Med','effort.high':'High','effort.xhigh':'X-High','effort.max':'Max',
     'tb.defaults':'Defaults','defaults.pin.title':'Save the current Mode / Agent / Model / Effort / Turns as this project\u2019s defaults','defaults.reset.title':'Drop this project\u2019s overrides and inherit the global defaults','defaults.noproject':'Open a project first','defaults.pinned':'Project defaults saved','defaults.reset.done':'Project inherits the global defaults',
@@ -5912,6 +5866,9 @@ const TRANSLATIONS = {
     'prov.utility.hint':'Chat titles, skill selection, history compaction, translation.',
     'prov.utility.default':'haiku on the default provider',
     'prov.builtin.claude':'Claude (CLI login)',
+    'prov.mode.subscription':'subscription','prov.mode.api':'API',
+    'prov.mode.subscription.tip':'Claude CLI login: a persistent tmux session answers, billed on the Claude subscription. Without tmux it runs headless on the same login.',
+    'prov.mode.api.tip':'Requests go with the provider’s API key (headless claude -p), billed per token.',
     'prov.default':'default',
     'prov.make_default':'Make it the default provider',
     'prov.test':'Test',
@@ -6000,16 +5957,13 @@ const TRANSLATIONS = {
     'prov.usage.none':'No bridge requests yet.',
     'prov.notice.provider_missing':'The provider of "{ref}" no longer exists — running on the default provider.',
     'prov.notice.provider_disabled':'The provider of "{ref}" is switched off — running on the default provider.',
-    'prov.notice.engine_api':'Model "{ref}" is not Claude: the Subscription engine cannot run it, so it runs on the API engine.',
-    'model.more':'Other models…',
-    'model.more.tip':'Models of every provider',
+    
     'model.pick.change':'click to change the model',
     'model.pick.search':'Find a model…',
     'model.pick.empty':'Nothing found',
     'model.pick.manage':'⚙ Manage providers',
     'model.pick.notools':'No tools — cannot read or change files',
-    'engine.sub.only_claude':'The Subscription engine runs Claude models (CLI login) only',
-    'engine.switched_api':'A model of another provider — engine switched to API',
+    
     'effort.unsupported':'This model does not reason',
   },
   ru: {
@@ -6054,7 +6008,6 @@ const TRANSLATIONS = {
     'cfg.reset.title':'Убрать значение из файла, чтобы снова действовало встроенное',
     'cfg.reset.done':'Сброшено до встроенного значения',
     'cfg.saved_restart':'Сохранено — перезапустите сервер, чтобы применить',
-    'cfg.h.defaultEngine':'Движок, предварительно выбранный для новых чатов и задач: API (без интерфейса) или Subscription (Claude Max).',
     'cfg.h.chatDefaults.mode':'Режим, с которым открывается новый чат. Проект может переопределить его кнопкой ★ на панели.','cfg.h.chatDefaults.agent':'Режим агента для нового чата: single, multi, dispatch или conversation.','cfg.h.chatDefaults.model':'Модель, предварительно выбранная для нового чата.','cfg.h.chatDefaults.effort':'Уровень обдумывания для нового чата; auto — без флага --effort.','cfg.h.chatDefaults.turns':'Лимит шагов для нового чата (1–200).',
     'cfg.h.ANTHROPIC_BASE_URL':'Шлюз, из которого при первом запуске создаётся провайдер по умолчанию (раздел «Провайдеры»). Пока этот провайдер не изменён в интерфейсе, он следует за этим значением после перезапуска.',
     'cfg.h.ANTHROPIC_API_KEY':'Ключ API для движка API, когда claude CLI не выполнил вход.',
@@ -6104,11 +6057,11 @@ const TRANSLATIONS = {
     'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','newtab.or':'или','term.tab':'терминал',
     'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
     'agent.cap.delegate':'делегирование','agent.cap.terminal':'терминал',
-    'bots.empty.what':'Бот — это именованный участник чата со своим промптом, моделью и памятью. Аналитик, редактор, рецензент — каждый знает своё.','bots.empty.how':'Создайте бота и позовите его в сообщении:','bots.empty.cta':'Создать первого бота','bot.tpl.replace':'Заменить то, что уже написано в промпте?','bot.tpl.analyst.name':'Аналитик','bot.tpl.analyst.desc':'анализ данных и выводы','bot.tpl.analyst.prompt':'Ты аналитик. Разбираешь данные и даёшь выводы, на которые можно опереться.\n\nПравила:\n- Сначала цифры, потом интерпретация.\n- Каждый вывод опирается на конкретный источник.\n- Если данных не хватает — скажи, чего именно.\n- Без воды: короткие абзацы, ключевое списком.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексты и отчёты','bot.tpl.writer.prompt':'Ты редактор. Превращаешь черновики и данные в текст, который приятно читать.\n\nПравила:\n- Пиши для человека.\n- Структура: заголовок, суть в первом абзаце, детали ниже.\n- Не выдумывай фактов. Чего нет в источнике — спроси.\n- Убирай канцелярит и повторы.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'проверка кода и решений','bot.tpl.reviewer.prompt':'Ты рецензент. Ищешь, где решение ломается.\n\nПравила:\n- Каждая находка: что ломается, при каких данных, файл и строка.\n- Разделяй «это ошибка» и «мне не нравится».\n- Не уверен — скажи, что это предположение.\n- Самое важное первым.','bot.tpl.explainer.name':'Объяснятель','bot.tpl.explainer.desc':'объясняет сложное просто','bot.tpl.explainer.prompt':'Ты объясняешь сложное простыми словами.\n\nПравила:\n- Сначала суть одним предложением, потом детали.\n- Пример важнее определения.\n- Термин расшифровывай при первом упоминании.\n- Не упрощай до неправды: важный нюанс называй.',
+    'bots.empty.what':'Бот — это именованный участник чата со своим промптом, моделью и памятью. Аналитик, редактор, рецензент — каждый знает своё.','bots.empty.how':'Создайте бота и позовите его в сообщении:','bots.empty.cta':'Создать первого бота',
     'bot.state.queued':'в очереди','bot.state.running':'работает','bot.state.done':'готово','bot.state.failed':'ошибка','bot.state.stopped':'остановлен','bot.state.skipped':'пропущен','bot.stop.all':'Остановить',
     'at.no_bots':'Боты не найдены',
     'bot.modal.mcp.label':'MCP-серверы','bot.modal.mcp.hint':'Инструменты, которые бот получает сверх включённых для чата. Веб-поиск давайте только тем, кто читает, а не тем, кто ещё запускает команды или правит файлы.','bot.modal.mcp.none':'MCP-серверы не настроены.',
-    'sec.bots':'Боты','bots.hint':'Участники этого проекта. Упомяните бота через @@ в сообщении.','bot.add.new':'Создать бота','bot.add.btn':'Создать','bot.use.title':'Вставить упоминание','bot.modal.add.title':'Новый бот','bot.modal.edit.title':'Редактировать бота','bot.modal.label.label':'Имя','bot.modal.handle.hint':'Обращение в чате:','bot.modal.avatar.label':'Эмодзи','bot.modal.desc.label':'Назначение','bot.modal.desc.hint':'Одной строкой. Это видят другие боты, чтобы знать, кому передать работу.','bot.modal.model.label':'Модель','bot.model.inherit':'Как в чате','bot.model.group.gateway':'Шлюз (API)','bot.model.no_tools':'без инструментов','bot.modal.model.hint':'Haiku, Sonnet, Opus, Fable — как на панели нового чата, на провайдере по умолчанию. В списке ниже — модели всех остальных провайдеров.','bot.model.gateway.ph':'Другая модель шлюза…','bot.modal.tools.label':'Файлы в обсуждении','bot.tools.default':'По умолчанию','bot.tools.read':'Чтение','bot.tools.run':'Чтение + команды','bot.tools.work':'Чтение + запись','bot.modal.tools.hint':'Что бот может делать с файлами, пока участвует в комнате. По умолчанию — чтение и запись. В карточке канбана и при прямом обращении @@ у него полный доступ. На движке «Подписка» это просьба в промпте, а не запрет.','bot.modal.engine.label':'Движок','bot.engine.inherit':'Как в чате','bot.engine.api':'API','bot.engine.subscription':'Подписка Claude','bot.modal.engine.hint':'Действует только для этого бота, даже если чат идёт на другом движке. Подписке нужен вход в Claude на сервере и tmux.','bot.modal.prompt.label':'Системный промпт','bot.modal.prompt.hint':'Кто этот бот и как он работает. До 8000 символов.','bot.err.label':'Укажите имя бота','bot.del.confirm':'Удалить бота','bot.del.note':'Его прошлые сообщения останутся, а обращение больше никогда не достанется другому боту.','bot.deleted':'удалённый бот','toast.bot_added':'✓ Бот создан','toast.bot_updated':'✓ Бот обновлён','toast.bot_deleted':'✓ Бот удалён','bot.modal.global.label':'Доступен во всех проектах','bot.modal.global.hint':'Роль вроде программиста нужна везде. Включите — и бот появится в каждом проекте без отдельного добавления.','bot.modal.also_in':'Также в проектах:','bot.modal.delete':'Удалить бота','bot.global.badge':'Доступен во всех проектах','bot.unlink.title':'Убрать из этого проекта','bot.unlink.confirm':'Убрать из этого проекта','bot.unlink.note':'Бот останется в других проектах, его сообщения никуда не денутся.','bot.del.everywhere':'Он доступен во всех проектах — исчезнет отовсюду.','bot.del.in_n':'Он доступен в {n} проектах — исчезнет из всех.','toast.bot_unlinked':'✓ Убран из проекта','bots.import.title':'Импортировать ботов из JSON файла','bots.export.title':'Экспортировать ботов в JSON файл','bots.import.conflict':'Ботов с такими обращениями уже есть: {n}. Перезаписать их данными из файла? Локальные изменения в них будут потеряны.','toast.bots_imported':'✓ Импортировано ботов: {n}, пропущено: {s}','toast.bots_import_err':'Не удалось импортировать: ','toast.bots_import_parse':'Файл не является корректным JSON','toast.bots_import_empty':'В файле нет ни одного бота','toast.bots_import_reserved':'Пропущено из-за удалённых ботов: {n} ({list}) — эти обращения зарезервированы навсегда','toast.bots_export_err':'Не удалось экспортировать ботов','toast.bots_export_empty':'Некого экспортировать','at.group.bots':'Боты','at.group.files':'Файлы',
+    'sec.bots':'Боты','bots.hint':'Участники этого проекта. Упомяните бота через @@ в сообщении.','bot.add.new':'Создать бота','bot.add.btn':'Создать','bot.use.title':'Вставить упоминание','bot.modal.add.title':'Новый бот','bot.modal.edit.title':'Редактировать бота','bot.modal.label.label':'Имя','bot.modal.handle.hint':'Обращение в чате:','bot.modal.avatar.label':'Эмодзи','bot.modal.desc.label':'Назначение','bot.modal.desc.hint':'Одной строкой. Это видят другие боты, чтобы знать, кому передать работу.','bot.modal.model.label':'Модель','bot.model.inherit':'Как в чате','bot.modal.model.hint':'«Как в чате» — модель чата, в котором бот отвечает. Модель провайдера с пометкой «подписка» работает по подписке Claude, остальные — через API своего провайдера.','bot.modal.tools.label':'Файлы в обсуждении','bot.tools.default':'По умолчанию','bot.tools.read':'Чтение','bot.tools.run':'Чтение + команды','bot.tools.work':'Чтение + запись','bot.modal.tools.hint':'Что бот может делать с файлами, пока участвует в комнате. По умолчанию — чтение и запись. В карточке канбана и при прямом обращении @@ у него полный доступ. Для модели по подписке это просьба в промпте, а не запрет.','bot.modal.prompt.label':'Системный промпт','bot.modal.prompt.hint':'Кто этот бот и как он работает. До 8000 символов.','bot.err.label':'Укажите имя бота','bot.del.confirm':'Удалить бота','bot.del.note':'Его прошлые сообщения останутся, а обращение больше никогда не достанется другому боту.','bot.deleted':'удалённый бот','toast.bot_added':'✓ Бот создан','toast.bot_updated':'✓ Бот обновлён','toast.bot_deleted':'✓ Бот удалён','bot.modal.global.label':'Доступен во всех проектах','bot.modal.global.hint':'Роль вроде программиста нужна везде. Включите — и бот появится в каждом проекте без отдельного добавления.','bot.modal.also_in':'Также в проектах:','bot.modal.delete':'Удалить бота','bot.global.badge':'Доступен во всех проектах','bot.unlink.title':'Убрать из этого проекта','bot.unlink.confirm':'Убрать из этого проекта','bot.unlink.note':'Бот останется в других проектах, его сообщения никуда не денутся.','bot.del.everywhere':'Он доступен во всех проектах — исчезнет отовсюду.','bot.del.in_n':'Он доступен в {n} проектах — исчезнет из всех.','toast.bot_unlinked':'✓ Убран из проекта','bots.import.title':'Импортировать ботов из JSON файла','bots.export.title':'Экспортировать ботов в JSON файл','bots.import.conflict':'Ботов с такими обращениями уже есть: {n}. Перезаписать их данными из файла? Локальные изменения в них будут потеряны.','toast.bots_imported':'✓ Импортировано ботов: {n}, пропущено: {s}','toast.bots_import_err':'Не удалось импортировать: ','toast.bots_import_parse':'Файл не является корректным JSON','toast.bots_import_empty':'В файле нет ни одного бота','toast.bots_import_reserved':'Пропущено из-за удалённых ботов: {n} ({list}) — эти обращения зарезервированы навсегда','toast.bots_export_err':'Не удалось экспортировать ботов','toast.bots_export_empty':'Некого экспортировать','at.group.bots':'Боты','at.group.files':'Файлы',
     'term.open.title':'Открыть живой терминал этого агента во вкладке','term.kill':'Завершить','term.killConfirm':'Завершить эту терминальную сессию? Разговор можно будет восстановить позже.','term.unavailable':'Терминальные сессии недоступны','term.state.attached':'подключено','term.state.started':'запущено','term.state.restored':'восстановлено','term.state.restoredLast':'восстановлен последний разговор агента','term.state.restoreFailed':'восстанавливать было нечего — начато заново','term.state.exited':'агент завершился','term.state.error':'ошибка','term.state.disconnected':'соединение потеряно — переподключение...','term.state.reconnecting':'переподключение...','term.paste.title':'Вставить в терминал','term.paste.notarget':'Нет открытого терминала для вставки','term.paste.notconnected':'Терминал не подключен','term.paste.done':'Вставлено в терминал','term.refresh.title':'Переподключить этот терминал','term.send.ph':'Отправить строку в терминал…','term.send.title':'Отправить (Enter)',
     'agent.modal.newIdCommand.label':'Команда создания разговора','agent.modal.newIdCommand.hint':'Альтернатива флагу: команда, создающая разговор и печатающая его id. Выполняется один раз при создании сессии.',
     'agent.modal.interactive.label':'Интерактивная команда','agent.modal.interactive.hint':'Запускает TUI агента для терминальной сессии. Пусто — агент только для делегирования.','agent.modal.resume.label':'Команда восстановления','agent.modal.resume.hint':'{sid} — идентификатор разговора. Используется для восстановления сессии после перезагрузки.','agent.modal.resumeLast.label':'Восстановить последний (запасной вариант)','agent.modal.resumeLast.hint':'Используется, когда идентификатор неизвестен. Может восстановить другой разговор.','agent.modal.newIdFlag.label':'Флаг id нового разговора','agent.modal.newIdFlag.hint':'Если CLI позволяет задать id НОВОГО разговора, восстановление становится точным. Пусто — не поддерживается.',
@@ -6381,12 +6334,9 @@ const TRANSLATIONS = {
     'model.opus.tip':'Opus — самая мощная модель; выбирайте для сложных задач, где важна глубина анализа, а не скорость или стоимость.',
     'model.fable.tip':'Fable — самая творческая и глубокая в рассуждениях модель (контекст 1М токенов, как у Sonnet/Opus); выбирайте для сложного планирования и глубокого анализа.',
     'turns.tip':'Максимальное количество шагов Claude за один запуск. По достижении лимита Claude автоматически продолжает сессию до 3 раз («Continue where you left off») — реальный расход может достигать ~4× заданного числа, прежде чем появится уведомление о незавершении. Диапазон 1–200.',
-    'tb.engine':'Движок','engine.sub':'Подписка',
-    'engine.api.title':'Движок API — headless claude -p, оплата за токены (Claude Pro / ключ API)',
-    'engine.sub.title':'Движок подписки — постоянная сессия tmux, оплата по подписке Claude Max (без кредитов API). Требуются tmux и Claude Max.',
-    'engine.default.btn':'★ Сделать основным','engine.default.title':'Сделать текущий движок основным для новых чатов',
-    'engine.default.set':'Сделать текущий движок ({engine}) основным для новых чатов','engine.default.is':'{engine} — основной движок для новых чатов',
-    'engine.default.toast':'★ {engine} — основной движок для новых чатов','engine.default.err':'⚠ Не удалось сохранить основной движок',
+    
+    
+    
     'tb.effort':'Усилие','effort.title':'Уровень обдумывания (claude --effort): Авто — значение CLI по умолчанию, более высокие уровни — более глубокие рассуждения',
     'effort.auto':'Авто','effort.low':'Низкое','effort.med':'Среднее','effort.high':'Высокое','effort.xhigh':'Очень высокое','effort.max':'Максимальное',
     'tb.defaults':'По умолчанию','defaults.pin.title':'Сохранить текущие Режим / Агент / Модель / Effort / Шаги как значения по умолчанию для этого проекта','defaults.reset.title':'Убрать переопределения проекта и унаследовать глобальные значения по умолчанию','defaults.noproject':'Сначала откройте проект','defaults.pinned':'Значения по умолчанию для проекта сохранены','defaults.reset.done':'Проект наследует глобальные значения по умолчанию',
@@ -6424,6 +6374,9 @@ const TRANSLATIONS = {
     'prov.utility.hint':'Заголовки чатов, выбор навыков, сжатие истории, перевод.',
     'prov.utility.default':'haiku на провайдере по умолчанию',
     'prov.builtin.claude':'Claude (вход CLI)',
+    'prov.mode.subscription':'подписка','prov.mode.api':'API',
+    'prov.mode.subscription.tip':'Вход Claude CLI: отвечает постоянная сессия tmux, расход — по подписке Claude. Без tmux — headless, с тем же входом.',
+    'prov.mode.api.tip':'Запросы идут по API-ключу провайдера (headless claude -p), оплата за токены.',
     'prov.default':'по умолч.',
     'prov.make_default':'Сделать провайдером по умолчанию',
     'prov.test':'Проверить',
@@ -6512,16 +6465,13 @@ const TRANSLATIONS = {
     'prov.usage.none':'Пока нет запросов через мост.',
     'prov.notice.provider_missing':'Провайдера модели «{ref}» больше нет — ответ идёт через провайдера по умолчанию.',
     'prov.notice.provider_disabled':'Провайдер модели «{ref}» выключен — ответ идёт через провайдера по умолчанию.',
-    'prov.notice.engine_api':'Модель «{ref}» — не Claude: движок «Подписка» её не запустит, ответ идёт через API.',
-    'model.more':'Другие модели…',
-    'model.more.tip':'Модели всех провайдеров',
+    
     'model.pick.change':'нажмите, чтобы сменить модель',
     'model.pick.search':'Найти модель…',
     'model.pick.empty':'Ничего не найдено',
     'model.pick.manage':'⚙ Управлять провайдерами',
     'model.pick.notools':'Без инструментов — не сможет читать и менять файлы',
-    'engine.sub.only_claude':'Движок «Подписка» работает только с моделями Claude (вход CLI)',
-    'engine.switched_api':'Модель другого провайдера — движок переключён на API',
+    
     'effort.unsupported':'Эта модель не поддерживает рассуждения',
   },
   fr: {
@@ -6566,7 +6516,6 @@ const TRANSLATIONS = {
     'cfg.reset.title':'Retirer la valeur du fichier pour que la valeur par défaut s’applique de nouveau',
     'cfg.reset.done':'Réinitialisé à la valeur par défaut',
     'cfg.saved_restart':'Enregistré — redémarrez le serveur pour appliquer',
-    'cfg.h.defaultEngine':'Moteur présélectionné pour les nouveaux chats et tâches : API (sans interface) ou Subscription (Claude Max).',
     'cfg.h.chatDefaults.mode':'Mode avec lequel un nouveau chat s\u2019ouvre. Un projet peut le surcharger avec le bouton \u2605 de la barre d\u2019outils.','cfg.h.chatDefaults.agent':'Mode agent d\u2019un nouveau chat : single, multi, dispatch ou conversation.','cfg.h.chatDefaults.model':'Modèle présélectionné pour un nouveau chat.','cfg.h.chatDefaults.effort':'Niveau de réflexion d\u2019un nouveau chat ; auto n\u2019envoie aucun indicateur --effort.','cfg.h.chatDefaults.turns':'Limite de tours d\u2019un nouveau chat (1\u2013200).',
     'cfg.h.ANTHROPIC_BASE_URL':'La passerelle à partir de laquelle le fournisseur par défaut est créé au premier démarrage (voir Fournisseurs). Tant qu’il n’est pas modifié dans l’interface, il suit cette valeur après un redémarrage.',
     'cfg.h.ANTHROPIC_API_KEY':'Clé API du moteur API lorsque le CLI claude n’est pas connecté.',
@@ -6616,11 +6565,11 @@ const TRANSLATIONS = {
     "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","newtab.or":"ou","term.tab":"terminal",
     "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
     "agent.cap.delegate":"délégation","agent.cap.terminal":"terminal",
-    "bots.empty.what":"Un bot est un participant nommé du chat, avec son propre prompt, son modèle et sa mémoire.","bots.empty.how":"Créez un bot puis appelez-le dans un message :","bots.empty.cta":"Créer votre premier bot","bot.tpl.replace":"Remplacer ce qui est déjà écrit dans le prompt ?","bot.tpl.analyst.name":"Analyste","bot.tpl.analyst.desc":"analyse de données et conclusions","bot.tpl.analyst.prompt":"Tu es analyste. Tu examines les données et donnes des conclusions sur lesquelles on peut s'appuyer.\n\nRègles :\n- Les chiffres d'abord, l'interprétation ensuite.\n- Chaque conclusion nomme la source sur laquelle elle repose.\n- Si les données sont insuffisantes, dis précisément ce qui manque.\n- Pas de remplissage : paragraphes courts, points clés en liste.","bot.tpl.writer.name":"Rédacteur","bot.tpl.writer.desc":"textes et rapports","bot.tpl.writer.prompt":"Tu es rédacteur. Tu transformes brouillons et données en un texte qu'on a envie de lire.\n\nRègles :\n- Écris pour un lecteur, pas pour la forme.\n- Structure : titre, l'essentiel dans le premier paragraphe, les détails ensuite.\n- N'invente rien. Si un fait ne figure pas dans la source, demande-le.\n- Supprime le jargon et les répétitions.","bot.tpl.reviewer.name":"Relecteur","bot.tpl.reviewer.desc":"revue du code et des décisions","bot.tpl.reviewer.prompt":"Tu es relecteur. Tu cherches où la solution casse, pas où elle est élégante.\n\nRègles :\n- Chaque constat : ce qui casse, avec quelles entrées, fichier et ligne à l'appui.\n- Distingue « c'est un bug » de « je l'aurais fait autrement ».\n- Si tu n'es pas sûr, dis que c'est une hypothèse.\n- Le plus grave en premier.","bot.tpl.explainer.name":"Vulgarisateur","bot.tpl.explainer.desc":"rend le complexe clair","bot.tpl.explainer.prompt":"Tu expliques les choses difficiles en langage simple.\n\nRègles :\n- Une phrase pour l'essentiel, puis le détail.\n- Un exemple vaut mieux qu'une définition.\n- Explique un terme dès sa première apparition.\n- Ne simplifie pas jusqu'à l'erreur : si une nuance compte, nomme-la.",
+    "bots.empty.what":"Un bot est un participant nommé du chat, avec son propre prompt, son modèle et sa mémoire.","bots.empty.how":"Créez un bot puis appelez-le dans un message :","bots.empty.cta":"Créer votre premier bot",
     "bot.state.queued":"en attente","bot.state.running":"en cours","bot.state.done":"terminé","bot.state.failed":"échec","bot.state.stopped":"arrêté","bot.state.skipped":"ignoré","bot.stop.all":"Arrêter",
     "at.no_bots":"Aucun bot trouvé",
     "bot.modal.mcp.label":"Serveurs MCP","bot.modal.mcp.hint":"Outils que ce bot reçoit en plus de ceux activés pour le chat. Réservez la recherche web aux bots qui lisent, pas à ceux qui exécutent aussi des commandes ou modifient des fichiers.","bot.modal.mcp.none":"Aucun serveur MCP configuré.",
-    "sec.bots":"Bots","bots.hint":"Participants de ce projet. Mentionnez un bot avec @@ dans un message.","bot.add.new":"Créer un bot","bot.add.btn":"Créer","bot.use.title":"Insérer la mention","bot.modal.add.title":"Nouveau bot","bot.modal.edit.title":"Modifier le bot","bot.modal.label.label":"Nom","bot.modal.handle.hint":"Adressé dans le chat comme :","bot.modal.avatar.label":"Émoji","bot.modal.desc.label":"Rôle","bot.modal.desc.hint":"Une ligne. Les autres bots la voient pour savoir à qui passer le travail.","bot.modal.model.label":"Modèle","bot.model.inherit":"Comme le chat","bot.model.group.gateway":"Passerelle (API)","bot.model.no_tools":"sans outils",'bot.modal.model.hint':'Haiku, Sonnet, Opus, Fable — comme sur la barre du nouveau chat, sur le fournisseur par défaut. La liste ci-dessous contient les modèles de tous les autres fournisseurs.',"bot.model.gateway.ph":"Autre modèle de la passerelle…","bot.modal.tools.label":"Fichiers pendant une discussion","bot.tools.default":"Par défaut","bot.tools.read":"Lecture","bot.tools.run":"Lecture + commandes","bot.tools.work":"Lecture + écriture","bot.modal.tools.hint":"Ce que ce bot peut faire des fichiers pendant qu'il participe à une salle. Par défaut : lecture et écriture. Sur une carte Kanban et quand vous l'appelez avec @@, il a un accès complet. Sur le moteur Abonnement, c'est une demande dans l'invite, pas un verrou.","bot.modal.engine.label":"Moteur","bot.engine.inherit":"Comme le chat","bot.engine.api":"API","bot.engine.subscription":"Abonnement Claude","bot.modal.engine.hint":"Ne s'applique qu'à ce bot, même si le chat tourne sur l'autre moteur. L'abonnement exige une connexion Claude sur le serveur et tmux.","bot.modal.prompt.label":"Invite système","bot.modal.prompt.hint":"Qui est ce bot et comment il travaille. Jusqu'à 8000 caractères.","bot.err.label":"Donnez un nom au bot","bot.del.confirm":"Supprimer le bot","bot.del.note":"Ses anciens messages restent, et son identifiant ne sera jamais repris par un autre bot.","bot.deleted":"bot supprimé","toast.bot_added":"✓ Bot créé","toast.bot_updated":"✓ Bot mis à jour","toast.bot_deleted":"✓ Bot supprimé","bot.modal.global.label":"Disponible dans tous les projets","bot.modal.global.hint":"Un rôle comme celui de programmeur est utile partout. Activez cette option et le bot apparaît dans chaque projet sans y être ajouté un par un.","bot.modal.also_in":"Aussi dans les projets :","bot.modal.delete":"Supprimer le bot","bot.global.badge":"Disponible dans tous les projets","bot.unlink.title":"Retirer de ce projet","bot.unlink.confirm":"Retirer de ce projet","bot.unlink.note":"Le bot reste dans les autres projets et conserve tous ses messages.","bot.del.everywhere":"Il est disponible dans tous les projets et disparaîtra de partout.","bot.del.in_n":"Il est disponible dans {n} projets et disparaîtra de tous.","toast.bot_unlinked":"✓ Retiré du projet","bots.import.title":"Importer des bots depuis un fichier JSON","bots.export.title":"Exporter les bots vers un fichier JSON","bots.import.conflict":"{n} de ces identifiants existent déjà ici. Les écraser avec le fichier ? Les modifications locales de ces bots seront perdues.","toast.bots_imported":"✓ {n} bots importés, {s} ignorés","toast.bots_import_err":"Import impossible : ","toast.bots_import_parse":"Ce fichier n'est pas du JSON valide","toast.bots_import_empty":"Aucun bot dans ce fichier","toast.bots_import_reserved":"{n} identifiant(s) ignoré(s), appartenant à des bots supprimés ({list}) — ils sont réservés définitivement","toast.bots_export_err":"Export des bots impossible","toast.bots_export_empty":"Rien à exporter","at.group.bots":"Bots","at.group.files":"Fichiers",
+    "sec.bots":"Bots","bots.hint":"Participants de ce projet. Mentionnez un bot avec @@ dans un message.","bot.add.new":"Créer un bot","bot.add.btn":"Créer","bot.use.title":"Insérer la mention","bot.modal.add.title":"Nouveau bot","bot.modal.edit.title":"Modifier le bot","bot.modal.label.label":"Nom","bot.modal.handle.hint":"Adressé dans le chat comme :","bot.modal.avatar.label":"Émoji","bot.modal.desc.label":"Rôle","bot.modal.desc.hint":"Une ligne. Les autres bots la voient pour savoir à qui passer le travail.","bot.modal.model.label":"Modèle","bot.model.inherit":"Comme le chat",'bot.modal.model.hint':'« Comme le chat » suit le chat où le bot répond. Un modèle d’un fournisseur marqué « abonnement » tourne sur l’abonnement Claude, tout autre via l’API de son fournisseur.',"bot.modal.tools.label":"Fichiers pendant une discussion","bot.tools.default":"Par défaut","bot.tools.read":"Lecture","bot.tools.run":"Lecture + commandes","bot.tools.work":"Lecture + écriture","bot.modal.tools.hint":"Ce que ce bot peut faire des fichiers pendant qu'il participe à une salle. Par défaut : lecture et écriture. Sur une carte Kanban et quand vous l'appelez avec @@, il a un accès complet. Pour un modèle sur abonnement, c'est une demande dans l'invite, pas un verrou.","bot.modal.prompt.label":"Invite système","bot.modal.prompt.hint":"Qui est ce bot et comment il travaille. Jusqu'à 8000 caractères.","bot.err.label":"Donnez un nom au bot","bot.del.confirm":"Supprimer le bot","bot.del.note":"Ses anciens messages restent, et son identifiant ne sera jamais repris par un autre bot.","bot.deleted":"bot supprimé","toast.bot_added":"✓ Bot créé","toast.bot_updated":"✓ Bot mis à jour","toast.bot_deleted":"✓ Bot supprimé","bot.modal.global.label":"Disponible dans tous les projets","bot.modal.global.hint":"Un rôle comme celui de programmeur est utile partout. Activez cette option et le bot apparaît dans chaque projet sans y être ajouté un par un.","bot.modal.also_in":"Aussi dans les projets :","bot.modal.delete":"Supprimer le bot","bot.global.badge":"Disponible dans tous les projets","bot.unlink.title":"Retirer de ce projet","bot.unlink.confirm":"Retirer de ce projet","bot.unlink.note":"Le bot reste dans les autres projets et conserve tous ses messages.","bot.del.everywhere":"Il est disponible dans tous les projets et disparaîtra de partout.","bot.del.in_n":"Il est disponible dans {n} projets et disparaîtra de tous.","toast.bot_unlinked":"✓ Retiré du projet","bots.import.title":"Importer des bots depuis un fichier JSON","bots.export.title":"Exporter les bots vers un fichier JSON","bots.import.conflict":"{n} de ces identifiants existent déjà ici. Les écraser avec le fichier ? Les modifications locales de ces bots seront perdues.","toast.bots_imported":"✓ {n} bots importés, {s} ignorés","toast.bots_import_err":"Import impossible : ","toast.bots_import_parse":"Ce fichier n'est pas du JSON valide","toast.bots_import_empty":"Aucun bot dans ce fichier","toast.bots_import_reserved":"{n} identifiant(s) ignoré(s), appartenant à des bots supprimés ({list}) — ils sont réservés définitivement","toast.bots_export_err":"Export des bots impossible","toast.bots_export_empty":"Rien à exporter","at.group.bots":"Bots","at.group.files":"Fichiers",
     "term.open.title":"Ouvrir le terminal","term.kill":"Terminer","term.killConfirm":"Terminer cette session terminal ? La conversation pourra être reprise plus tard.","term.unavailable":"Sessions terminal indisponibles","term.state.attached":"connecté","term.state.started":"démarré","term.state.restored":"restauré","term.state.restoredLast":"dernière conversation de l'agent restaurée","term.state.restoreFailed":"rien à reprendre — nouveau départ","term.state.exited":"agent terminé","term.state.error":"erreur","term.state.disconnected":"connexion perdue — reconnexion…","term.state.reconnecting":"reconnexion…","term.paste.title":"Coller dans le terminal","term.paste.notarget":"Aucun terminal ouvert où coller","term.paste.notconnected":"Le terminal n'est pas connecté","term.paste.done":"Collé dans le terminal","term.refresh.title":"Reconnecter ce terminal","term.send.ph":"Envoyer une ligne au terminal…","term.send.title":"Envoyer (Entrée)",
     "agent.modal.newIdCommand.label":"Commande de nouvelle conversation","agent.modal.newIdCommand.hint":"Alternative à l'indicateur : une commande qui crée une conversation et affiche son id. Exécutée une fois à la création de la session.",
     "agent.modal.interactive.label":"Commande interactive","agent.modal.interactive.hint":"Lance le TUI de l'agent pour une session terminal. Vide — agent de délégation uniquement.","agent.modal.resume.label":"Commande de reprise","agent.modal.resume.hint":"{sid} — identifiant de la conversation. Sert à restaurer la session après un redémarrage.","agent.modal.resumeLast.label":"Reprendre la dernière (repli)","agent.modal.resumeLast.hint":"Utilisée quand aucun identifiant n'est connu. Peut restaurer une autre conversation.","agent.modal.newIdFlag.label":"Indicateur d'id de nouvelle conversation","agent.modal.newIdFlag.hint":"Si la CLI accepte l'id d'une NOUVELLE conversation, la restauration devient exacte. Vide si non pris en charge.",
@@ -6793,12 +6742,9 @@ const TRANSLATIONS = {
     "model.opus.tip":"Opus — le modèle le plus performant ; à choisir pour les tâches complexes où la profondeur de raisonnement prime sur la vitesse ou le coût.",
     "model.fable.tip":"Fable — le modèle le plus créatif et le plus profond en raisonnement (contexte de 1M jetons, comme Sonnet/Opus) ; à choisir pour la planification complexe et l'analyse approfondie.",
     "turns.tip":"Nombre maximal d'étapes que Claude peut effectuer en une exécution. À la limite, Claude poursuit automatiquement la session jusqu'à 3 fois (« Continue where you left off ») — l'usage réel peut atteindre ~4x ce nombre avant qu'une notice d'exécution incomplète n'apparaisse. Plage 1-200.",
-    "tb.engine":"Moteur","engine.sub":"Abonnement",
-    "engine.api.title":"Moteur API — claude -p sans interface, facturé au jeton (Claude Pro / clé API)",
-    "engine.sub.title":"Moteur d'abonnement — session tmux persistante, facturée sur l'abonnement Claude Max (sans crédits API). Nécessite tmux et Claude Max.",
-    "engine.default.btn":"★ Définir par défaut","engine.default.title":"Définir le moteur actuel comme moteur par défaut des nouvelles discussions",
-    "engine.default.set":"Définir le moteur actuel ({engine}) comme moteur par défaut des nouvelles discussions","engine.default.is":"{engine} — moteur par défaut des nouvelles discussions",
-    "engine.default.toast":"★ {engine} — moteur par défaut des nouvelles discussions","engine.default.err":"⚠ Impossible d'enregistrer le moteur par défaut",
+    
+    
+    
     "tb.effort":"Effort","effort.title":"Niveau de réflexion (claude --effort) : Auto = valeur par défaut du CLI, les niveaux supérieurs raisonnent plus en profondeur",
     "effort.auto":"Auto","effort.low":"Faible","effort.med":"Moyen","effort.high":"Élevé","effort.xhigh":"Très élevé","effort.max":"Maximal",
     "tb.defaults":"Par défaut","defaults.pin.title":"Enregistrer les valeurs Mode / Agent / Modèle / Effort / Tours actuelles comme valeurs par défaut de ce projet","defaults.reset.title":"Supprimer les surcharges de ce projet et hériter des valeurs par défaut globales","defaults.noproject":"Ouvrez d\u2019abord un projet","defaults.pinned":"Valeurs par défaut du projet enregistrées","defaults.reset.done":"Le projet hérite des valeurs par défaut globales",
@@ -6836,6 +6782,9 @@ const TRANSLATIONS = {
     'prov.utility.hint':'Titres des discussions, choix des compétences, compactage de l’historique, traduction.',
     'prov.utility.default':'haiku sur le fournisseur par défaut',
     'prov.builtin.claude':'Claude (connexion CLI)',
+    'prov.mode.subscription':'abonnement','prov.mode.api':'API',
+    'prov.mode.subscription.tip':'Connexion Claude CLI : une session tmux persistante répond, facturée sur l’abonnement Claude. Sans tmux, elle tourne en headless avec la même connexion.',
+    'prov.mode.api.tip':'Les requêtes utilisent la clé API du fournisseur (claude -p headless), facturées au token.',
     'prov.default':'par défaut',
     'prov.make_default':'Définir comme fournisseur par défaut',
     'prov.test':'Tester',
@@ -6924,16 +6873,13 @@ const TRANSLATIONS = {
     'prov.usage.none':'Aucune requête via le pont pour l’instant.',
     'prov.notice.provider_missing':'Le fournisseur de « {ref} » n’existe plus — exécution sur le fournisseur par défaut.',
     'prov.notice.provider_disabled':'Le fournisseur de « {ref} » est désactivé — exécution sur le fournisseur par défaut.',
-    'prov.notice.engine_api':'Le modèle « {ref} » n’est pas Claude : le moteur Abonnement ne peut pas l’exécuter, il passe par l’API.',
-    'model.more':'Autres modèles…',
-    'model.more.tip':'Modèles de tous les fournisseurs',
+    
     'model.pick.change':'cliquez pour changer de modèle',
     'model.pick.search':'Trouver un modèle…',
     'model.pick.empty':'Rien trouvé',
     'model.pick.manage':'⚙ Gérer les fournisseurs',
     'model.pick.notools':'Sans outils — ne peut ni lire ni modifier les fichiers',
-    'engine.sub.only_claude':'Le moteur Abonnement n’exécute que les modèles Claude (connexion CLI)',
-    'engine.switched_api':'Modèle d’un autre fournisseur — moteur basculé sur l’API',
+    
     'effort.unsupported':'Ce modèle ne raisonne pas',
   },
   he: {
@@ -6978,7 +6924,6 @@ const TRANSLATIONS = {
     'cfg.reset.title':'הסרת הערך מהקובץ כדי שברירת המחדל תחול שוב',
     'cfg.reset.done':'אופס לברירת המחדל',
     'cfg.saved_restart':'נשמר — הפעילו מחדש את השרת כדי להחיל',
-    'cfg.h.defaultEngine':'המנוע שנבחר מראש עבור צ׳אטים ומשימות חדשים: API (ללא ממשק) או Subscription‏ (Claude Max).',
     'cfg.h.chatDefaults.mode':'המצב שבו נפתח צ׳אט חדש. פרויקט יכול לקבוע ערך משלו בעזרת הכפתור ★ בסרגל הכלים.','cfg.h.chatDefaults.agent':'מצב הסוכן לצ׳אט חדש: single, multi, dispatch או conversation.','cfg.h.chatDefaults.model':'המודל שנבחר מראש לצ׳אט חדש.','cfg.h.chatDefaults.effort':'רמת החשיבה לצ׳אט חדש; auto פירושו שלא נשלח דגל ‎--effort‎.','cfg.h.chatDefaults.turns':'מגבלת הצעדים לצ׳אט חדש (1–200).',
     'cfg.h.ANTHROPIC_BASE_URL':'השער שממנו נוצר ספק ברירת המחדל בהפעלה הראשונה (ראה ספקים). כל עוד הספק לא נערך בממשק, הוא עוקב אחרי הערך הזה אחרי הפעלה מחדש.',
     'cfg.h.ANTHROPIC_API_KEY':'מפתח API עבור מנוע ה-API כאשר ה-CLI של claude אינו מחובר.',
@@ -7028,11 +6973,11 @@ const TRANSLATIONS = {
     "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","newtab.or":"או","term.tab":"טרמינל",
     "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
     "agent.cap.delegate":"האצלה","agent.cap.terminal":"טרמינל",
-    "bots.empty.what":"בוט הוא משתתף בעל שם בצ׳אט, עם הנחיה, מודל וזיכרון משלו.","bots.empty.how":"צרו בוט ואז קראו לו בהודעה:","bots.empty.cta":"צרו את הבוט הראשון","bot.tpl.replace":"להחליף את מה שכבר כתוב בהנחיה?","bot.tpl.analyst.name":"אנליסט","bot.tpl.analyst.desc":"ניתוח נתונים ומסקנות","bot.tpl.analyst.prompt":"אתה אנליסט. אתה מנתח נתונים ונותן מסקנות שאפשר להישען עליהן.\n\nכללים:\n- קודם המספרים, אחר כך הפרשנות.\n- כל מסקנה מציינת את המקור שעליו היא נשענת.\n- אם הנתונים אינם מספיקים, אמור בדיוק מה חסר.\n- בלי מילוי מיותר: פסקאות קצרות, עיקרי הדברים ברשימה.","bot.tpl.writer.name":"עורך","bot.tpl.writer.desc":"טקסטים ודוחות","bot.tpl.writer.prompt":"אתה עורך. אתה הופך טיוטות ונתונים לטקסט שנעים לקרוא.\n\nכללים:\n- כתוב עבור קורא, לא לפרוטוקול.\n- מבנה: כותרת, העיקר בפסקה הראשונה, הפרטים מתחת.\n- אל תמציא עובדות. מה שאינו במקור — בקש.\n- הסר ז׳רגון וחזרות.","bot.tpl.reviewer.name":"סוקר","bot.tpl.reviewer.desc":"סקירת קוד והחלטות","bot.tpl.reviewer.prompt":"אתה סוקר. אתה מחפש היכן הפתרון נשבר, לא היכן הוא יפה.\n\nכללים:\n- כל ממצא: מה נשבר, באילו קלטים, עם קובץ ושורה.\n- הפרד בין ״זה באג״ ל״הייתי עושה אחרת״.\n- אם אינך בטוח, אמור שזו השערה.\n- החמור ביותר ראשון.","bot.tpl.explainer.name":"מסביר","bot.tpl.explainer.desc":"הופך מסובך לברור","bot.tpl.explainer.prompt":"אתה מסביר דברים מורכבים בשפה פשוטה.\n\nכללים:\n- משפט אחד של העיקר, ואז הפירוט.\n- דוגמה עדיפה על הגדרה.\n- פרש מונח בהופעתו הראשונה.\n- אל תפשט עד כדי טעות: אם יש סייג חשוב, ציין אותו.",
+    "bots.empty.what":"בוט הוא משתתף בעל שם בצ׳אט, עם הנחיה, מודל וזיכרון משלו.","bots.empty.how":"צרו בוט ואז קראו לו בהודעה:","bots.empty.cta":"צרו את הבוט הראשון",
     "bot.state.queued":"בתור","bot.state.running":"עובד","bot.state.done":"הושלם","bot.state.failed":"נכשל","bot.state.stopped":"נעצר","bot.state.skipped":"דולג","bot.stop.all":"עצור",
     "at.no_bots":"לא נמצאו בוטים",
     "bot.modal.mcp.label":"שרתי MCP","bot.modal.mcp.hint":"כלים שהבוט מקבל בנוסף לאלה שהופעלו לצ׳אט. כדאי לתת חיפוש ברשת רק לבוטים שקוראים, לא לאלה שגם מריצים פקודות או עורכים קבצים.","bot.modal.mcp.none":"לא הוגדרו שרתי MCP.",
-    "sec.bots":"בוטים","bots.hint":"משתתפים בפרויקט הזה. אזכרו בוט עם @@ בהודעה.","bot.add.new":"צור בוט","bot.add.btn":"צור","bot.use.title":"הוסף אזכור","bot.modal.add.title":"בוט חדש","bot.modal.edit.title":"עריכת בוט","bot.modal.label.label":"שם","bot.modal.handle.hint":"פנייה בצ׳אט:","bot.modal.avatar.label":"אמוג׳י","bot.modal.desc.label":"ייעוד","bot.modal.desc.hint":"שורה אחת. בוטים אחרים רואים אותה כדי לדעת למי להעביר עבודה.","bot.modal.model.label":"מודל","bot.model.inherit":"כמו בצ׳אט","bot.model.group.gateway":"שער (API)","bot.model.no_tools":"ללא כלים",'bot.modal.model.hint':'Haiku, Sonnet, Opus, Fable — כמו בסרגל הצ׳אט החדש, בספק ברירת המחדל. ברשימה שלמטה נמצאים המודלים של כל שאר הספקים.',"bot.model.gateway.ph":"מודל אחר של השער…","bot.modal.tools.label":"קבצים בדיון","bot.tools.default":"ברירת מחדל","bot.tools.read":"קריאה","bot.tools.run":"קריאה + פקודות","bot.tools.work":"קריאה + כתיבה","bot.modal.tools.hint":"מה הבוט יכול לעשות בקבצים בזמן שהוא משתתף בחדר. ברירת מחדל: קריאה וכתיבה. בכרטיס Kanban וכשפונים אליו ב-@@ יש לו גישה מלאה. במנוע המנוי זו בקשה בפרומפט, לא נעילה.","bot.modal.engine.label":"מנוע","bot.engine.inherit":"כמו בצ׳אט","bot.engine.api":"API","bot.engine.subscription":"מנוי Claude","bot.modal.engine.hint":"חל על הבוט הזה בלבד, גם אם הצ׳אט רץ על המנוע השני. מנוי דורש התחברות ל-Claude בשרת ו-tmux.","bot.modal.prompt.label":"הנחיית מערכת","bot.modal.prompt.hint":"מי הבוט הזה ואיך הוא עובד. עד 8000 תווים.","bot.err.label":"תנו שם לבוט","bot.del.confirm":"למחוק בוט","bot.del.note":"ההודעות הקודמות שלו נשארות, והמזהה שלו לעולם לא יעבור לבוט אחר.","bot.deleted":"בוט שנמחק","toast.bot_added":"✓ הבוט נוצר","toast.bot_updated":"✓ הבוט עודכן","toast.bot_deleted":"✓ הבוט נמחק","bot.modal.global.label":"זמין בכל הפרויקטים","bot.modal.global.hint":"תפקיד כמו מתכנת נחוץ בכל מקום. הפעילו את האפשרות והבוט יופיע בכל פרויקט בלי להוסיף אותו לכל אחד בנפרד.","bot.modal.also_in":"גם בפרויקטים:","bot.modal.delete":"מחיקת הבוט","bot.global.badge":"זמין בכל הפרויקטים","bot.unlink.title":"הסרה מהפרויקט הזה","bot.unlink.confirm":"להסיר מהפרויקט הזה","bot.unlink.note":"הבוט יישאר בפרויקטים האחרים וכל ההודעות שלו נשמרות.","bot.del.everywhere":"הוא זמין בכל הפרויקטים וייעלם מכולם.","bot.del.in_n":"הוא זמין ב-{n} פרויקטים וייעלם מכולם.","toast.bot_unlinked":"✓ הוסר מהפרויקט","bots.import.title":"ייבוא בוטים מקובץ JSON","bots.export.title":"ייצוא בוטים לקובץ JSON","bots.import.conflict":"{n} מהשמות האלה כבר קיימים כאן. לדרוס אותם מהקובץ? שינויים מקומיים בבוטים האלה יאבדו.","toast.bots_imported":"✓ יובאו {n} בוטים, {s} דולגו","toast.bots_import_err":"הייבוא נכשל: ","toast.bots_import_parse":"הקובץ אינו JSON תקין","toast.bots_import_empty":"אין בוטים בקובץ הזה","toast.bots_import_reserved":"{n} שמות דולגו כי הם שייכים לבוטים שנמחקו ({list}) — הם שמורים לתמיד","toast.bots_export_err":"ייצוא הבוטים נכשל","toast.bots_export_empty":"אין מה לייצא","at.group.bots":"בוטים","at.group.files":"קבצים",
+    "sec.bots":"בוטים","bots.hint":"משתתפים בפרויקט הזה. אזכרו בוט עם @@ בהודעה.","bot.add.new":"צור בוט","bot.add.btn":"צור","bot.use.title":"הוסף אזכור","bot.modal.add.title":"בוט חדש","bot.modal.edit.title":"עריכת בוט","bot.modal.label.label":"שם","bot.modal.handle.hint":"פנייה בצ׳אט:","bot.modal.avatar.label":"אמוג׳י","bot.modal.desc.label":"ייעוד","bot.modal.desc.hint":"שורה אחת. בוטים אחרים רואים אותה כדי לדעת למי להעביר עבודה.","bot.modal.model.label":"מודל","bot.model.inherit":"כמו בצ׳אט",'bot.modal.model.hint':'"כמו בצ׳אט" — המודל של הצ׳אט שבו הבוט עונה. מודל של ספק המסומן "מנוי" רץ על מנוי Claude, כל השאר דרך ה-API של הספק שלו.',"bot.modal.tools.label":"קבצים בדיון","bot.tools.default":"ברירת מחדל","bot.tools.read":"קריאה","bot.tools.run":"קריאה + פקודות","bot.tools.work":"קריאה + כתיבה","bot.modal.tools.hint":"מה הבוט יכול לעשות בקבצים בזמן שהוא משתתף בחדר. ברירת מחדל: קריאה וכתיבה. בכרטיס Kanban וכשפונים אליו ב-@@ יש לו גישה מלאה. במודל של המנוי זו בקשה בפרומפט, לא נעילה.","bot.modal.prompt.label":"הנחיית מערכת","bot.modal.prompt.hint":"מי הבוט הזה ואיך הוא עובד. עד 8000 תווים.","bot.err.label":"תנו שם לבוט","bot.del.confirm":"למחוק בוט","bot.del.note":"ההודעות הקודמות שלו נשארות, והמזהה שלו לעולם לא יעבור לבוט אחר.","bot.deleted":"בוט שנמחק","toast.bot_added":"✓ הבוט נוצר","toast.bot_updated":"✓ הבוט עודכן","toast.bot_deleted":"✓ הבוט נמחק","bot.modal.global.label":"זמין בכל הפרויקטים","bot.modal.global.hint":"תפקיד כמו מתכנת נחוץ בכל מקום. הפעילו את האפשרות והבוט יופיע בכל פרויקט בלי להוסיף אותו לכל אחד בנפרד.","bot.modal.also_in":"גם בפרויקטים:","bot.modal.delete":"מחיקת הבוט","bot.global.badge":"זמין בכל הפרויקטים","bot.unlink.title":"הסרה מהפרויקט הזה","bot.unlink.confirm":"להסיר מהפרויקט הזה","bot.unlink.note":"הבוט יישאר בפרויקטים האחרים וכל ההודעות שלו נשמרות.","bot.del.everywhere":"הוא זמין בכל הפרויקטים וייעלם מכולם.","bot.del.in_n":"הוא זמין ב-{n} פרויקטים וייעלם מכולם.","toast.bot_unlinked":"✓ הוסר מהפרויקט","bots.import.title":"ייבוא בוטים מקובץ JSON","bots.export.title":"ייצוא בוטים לקובץ JSON","bots.import.conflict":"{n} מהשמות האלה כבר קיימים כאן. לדרוס אותם מהקובץ? שינויים מקומיים בבוטים האלה יאבדו.","toast.bots_imported":"✓ יובאו {n} בוטים, {s} דולגו","toast.bots_import_err":"הייבוא נכשל: ","toast.bots_import_parse":"הקובץ אינו JSON תקין","toast.bots_import_empty":"אין בוטים בקובץ הזה","toast.bots_import_reserved":"{n} שמות דולגו כי הם שייכים לבוטים שנמחקו ({list}) — הם שמורים לתמיד","toast.bots_export_err":"ייצוא הבוטים נכשל","toast.bots_export_empty":"אין מה לייצא","at.group.bots":"בוטים","at.group.files":"קבצים",
     "term.open.title":"פתח טרמינל","term.kill":"סיים","term.killConfirm":"לסיים את שיחת הטרמינל הזו? אפשר יהיה לשחזר אותה בהמשך.","term.unavailable":"שיחות טרמינל אינן זמינות","term.state.attached":"מחובר","term.state.started":"הופעל","term.state.restored":"שוחזר","term.state.restoredLast":"שוחזרה השיחה האחרונה של הסוכן","term.state.restoreFailed":"לא היה מה לשחזר — התחלה מחדש","term.state.exited":"הסוכן הסתיים","term.state.error":"שגיאה","term.state.disconnected":"החיבור אבד — מתחבר מחדש...","term.state.reconnecting":"מתחבר מחדש...","term.paste.title":"הדבק בטרמינל","term.paste.notarget":"אין טרמינל פתוח להדבקה","term.paste.notconnected":"הטרמינל אינו מחובר","term.paste.done":"הודבק בטרמינל","term.refresh.title":"חבר מחדש את הטרמינל","term.send.ph":"שלחו שורה לטרמינל…","term.send.title":"שליחה (Enter)",
     "agent.modal.newIdCommand.label":"פקודת יצירת שיחה","agent.modal.newIdCommand.hint":"חלופה לדגל: פקודה שיוצרת שיחה ומדפיסה את המזהה שלה. מורצת פעם אחת ביצירת השיחה.",
     "agent.modal.interactive.label":"פקודה אינטראקטיבית","agent.modal.interactive.hint":"מפעילה את ה-TUI של הסוכן עבור שיחת טרמינל. ריק — סוכן להאצלה בלבד.","agent.modal.resume.label":"פקודת שחזור","agent.modal.resume.hint":"{sid} — מזהה השיחה. משמש לשחזור השיחה לאחר הפעלה מחדש.","agent.modal.resumeLast.label":"שחזר אחרונה (גיבוי)","agent.modal.resumeLast.hint":"משמש כאשר המזהה אינו ידוע. עשוי לשחזר שיחה אחרת.","agent.modal.newIdFlag.label":"דגל מזהה לשיחה חדשה","agent.modal.newIdFlag.hint":"אם ה-CLI מאפשר לקבוע מזהה לשיחה חדשה, השחזור נעשה מדויק. ריק אם אינו נתמך.",
@@ -7178,12 +7123,9 @@ const TRANSLATIONS = {
     "model.opus.tip":"Opus — המודל החזק ביותר; בחרו בו למשימות מורכבות שבהן עומק הניתוח חשוב יותר ממהירות או עלות.",
     "model.fable.tip":"Fable — המודל היצירתי ביותר ובעל היכולת ההסקתית העמוקה ביותר (חלון הקשר של 1M טוקנים, כמו Sonnet/Opus); בחרו בו לתכנון מורכב וניתוח מעמיק.",
     "turns.tip":"מספר הצעדים המרבי ש-Claude יכול לבצע בהרצה אחת. עם הגעה למגבלה, Claude ממשיך את הסשן אוטומטית עד 3 פעמים נוספות (\"Continue where you left off\") — השימוש בפועל עשוי להגיע לכ-4x מהמספר שהוגדר לפני שתופיע הודעה על הרצה לא-גמורה. טווח 1–200.",
-    "tb.engine":"מנוע","engine.sub":"מנוי",
-    "engine.api.title":"מנוע API — claude -p ללא ממשק, חיוב לפי טוקנים (Claude Pro / מפתח API)",
-    "engine.sub.title":"מנוע מנוי — סשן tmux קבוע, חיוב במסגרת מנוי Claude Max (ללא קרדיטים של API). דורש tmux ו-Claude Max.",
-    "engine.default.btn":"★ הגדרה כברירת מחדל","engine.default.title":"להגדיר את המנוע הנוכחי כברירת מחדל לצ׳אטים חדשים",
-    "engine.default.set":"להגדיר את המנוע הנוכחי ({engine}) כברירת מחדל לצ׳אטים חדשים","engine.default.is":"{engine} — מנוע ברירת המחדל לצ׳אטים חדשים",
-    "engine.default.toast":"★ {engine} — מנוע ברירת המחדל לצ׳אטים חדשים","engine.default.err":"⚠ שמירת מנוע ברירת המחדל נכשלה",
+    
+    
+    
     "tb.effort":"מאמץ","effort.title":"רמת החשיבה (claude --effort): אוטומטי = ברירת המחדל של ה-CLI, רמות גבוהות יותר = חשיבה מעמיקה יותר",
     "effort.auto":"אוטומטי","effort.low":"נמוך","effort.med":"בינוני","effort.high":"גבוה","effort.xhigh":"גבוה מאוד","effort.max":"מרבי",
     "tb.defaults":"ברירת מחדל","defaults.pin.title":"שמירת המצב / הסוכן / המודל / המאמץ / הצעדים הנוכחיים כברירת המחדל של הפרויקט הזה","defaults.reset.title":"הסרת ההגדרות הייעודיות של הפרויקט וירושת ברירות המחדל הגלובליות","defaults.noproject":"יש לפתוח פרויקט תחילה","defaults.pinned":"ברירות המחדל של הפרויקט נשמרו","defaults.reset.done":"הפרויקט יורש את ברירות המחדל הגלובליות",
@@ -7221,6 +7163,9 @@ const TRANSLATIONS = {
     'prov.utility.hint':'כותרות צ׳אט, בחירת מיומנויות, דחיסת היסטוריה, תרגום.',
     'prov.utility.default':'haiku בספק ברירת המחדל',
     'prov.builtin.claude':'Claude (התחברות CLI)',
+    'prov.mode.subscription':'מנוי','prov.mode.api':'API',
+    'prov.mode.subscription.tip':'התחברות Claude CLI: סשן tmux קבוע עונה, החיוב על מנוי Claude. בלי tmux — headless עם אותה התחברות.',
+    'prov.mode.api.tip':'הבקשות נשלחות עם מפתח ה-API של הספק (claude -p headless), חיוב לפי טוקנים.',
     'prov.default':'ברירת מחדל',
     'prov.make_default':'הגדר כספק ברירת המחדל',
     'prov.test':'בדוק',
@@ -7309,16 +7254,13 @@ const TRANSLATIONS = {
     'prov.usage.none':'עדיין אין בקשות דרך הגשר.',
     'prov.notice.provider_missing':'הספק של "{ref}" כבר לא קיים — מריץ בספק ברירת המחדל.',
     'prov.notice.provider_disabled':'הספק של "{ref}" מושבת — מריץ בספק ברירת המחדל.',
-    'prov.notice.engine_api':'המודל "{ref}" אינו Claude: מנוע המנוי לא יכול להריץ אותו, ולכן הוא רץ דרך ה-API.',
-    'model.more':'מודלים נוספים…',
-    'model.more.tip':'מודלים של כל הספקים',
+    
     'model.pick.change':'לחץ כדי להחליף מודל',
     'model.pick.search':'מצא מודל…',
     'model.pick.empty':'לא נמצא דבר',
     'model.pick.manage':'⚙ ניהול ספקים',
     'model.pick.notools':'ללא כלים — לא יכול לקרוא או לשנות קבצים',
-    'engine.sub.only_claude':'מנוע המנוי מריץ רק מודלים של Claude (התחברות CLI)',
-    'engine.switched_api':'מודל של ספק אחר — המנוע הועבר ל-API',
+    
     'effort.unsupported':'המודל הזה אינו תומך בחשיבה',
   }
 };
@@ -7336,7 +7278,7 @@ function t(key) {
 // language until the next page reload.
 let _i18nDynReady = false;
 const I18N_RERENDER = [
-  'renderBots', 'renderBotsStrip', 'renderBotTemplates', 'renderMcp', 'renderSkills',
+  'renderBots', 'renderBotsStrip', 'renderMcp', 'renderSkills',
   'renderCommands', 'renderAgents', 'renderProjects', 'renderRemoteHostsList',
   'renderGlobalHome', 'renderCfgForm',
   'renderRemoteHostSelect', 'renderTabs', 'updateSessBarSkills', 'loadHist', 'updateMobSubtitle',
@@ -8536,18 +8478,18 @@ function handleWsMsg(d) {
 
     case 'provider_notice': {
       // The server ran a turn somewhere other than where the chat says (providers.js fallback).
-      const key = { provider_missing: 'prov.notice.provider_missing', provider_disabled: 'prov.notice.provider_disabled', engine_api: 'prov.notice.engine_api' }[d.kind];
+      const key = { provider_missing: 'prov.notice.provider_missing', provider_disabled: 'prov.notice.provider_disabled' }[d.kind];
       if (key) toast(t(key).replace('{ref}', String(d.ref || '')));
       break;
     }
 
     case 'ui_state_change': {
       // Agent requested UI state update — validate before assigning to prevent invalid state
-      const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus','fable'], _validAgents = ['single','multi','dispatch','conversation'], _validEngines = ['api','subscription'];
+      // No `engine` any more: it follows the model (engineOfModel), so a model change carries it.
+      const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus','fable'], _validAgents = ['single','multi','dispatch','conversation'];
       if (d.mode && _validModes.includes(d.mode)) { curMode = d.mode; syncBtn('mode', d.mode); }
       if (d.model && (_validModels.includes(d.model) || modelInfo(d.model).known)) { curModel = d.model; syncBtn('model', d.model); }
       if (d.agent && _validAgents.includes(d.agent)) { curAgent = d.agent; syncBtn('agent', d.agent); }
-      if (d.engine && _validEngines.includes(d.engine)) { curEngine = d.engine; syncBtn('engine', d.engine); syncDefaultStar(); }
       break;
     }
 
@@ -9739,23 +9681,6 @@ function insertBotMention(handle) {
 }
 
 
-// Starter prompts. A blank textarea is the real barrier to making a good bot: the
-// user knows what they want the bot to DO but not how a system prompt is shaped.
-// These are one click away and fully editable — a starting point, not a preset.
-const BOT_TEMPLATES = [
-  { key: 'analyst', avatar: '📈' },
-  { key: 'writer',  avatar: '📄' },
-  { key: 'reviewer', avatar: '🔍' },
-  { key: 'explainer', avatar: '💡' },
-];
-
-function renderBotTemplates() {
-  const box = $i('botTemplates'); if (!box) return;
-  box.innerHTML = BOT_TEMPLATES.map((tpl, i) =>
-    `<button type="button" class="tpl-chip" onclick="applyBotTemplate(${i})">${tpl.avatar} ${escH(t('bot.tpl.' + tpl.key + '.name'))}</button>`
-  ).join('');
-}
-
 // ─── Emoji picker (bot avatar) ───────────────────────────────────────────────
 // A curated set rather than a full Unicode table: a bot avatar wants a role or a
 // tool, and 1500 emoji to scroll makes the choice slower, not richer. Typing or
@@ -9803,16 +9728,6 @@ function pickEmoji(e) {
   closeEmojiPicker();
 }
 
-function applyBotTemplate(i) {
-  const tpl = BOT_TEMPLATES[i]; if (!tpl) return;
-  const cur = $i('botPrompt').value.trim();
-  if (cur && !confirm(t('bot.tpl.replace'))) return;
-  $i('botPrompt').value = t('bot.tpl.' + tpl.key + '.prompt');
-  if (!$i('botLabel').value.trim()) { $i('botLabel').value = t('bot.tpl.' + tpl.key + '.name'); _botHandlePreview(); }
-  if (!$i('botAvatar').value.trim()) $i('botAvatar').value = tpl.avatar;
-  if (!$i('botDesc').value.trim()) $i('botDesc').value = t('bot.tpl.' + tpl.key + '.desc');
-}
-
 function _botHandlePreview() {
   const el = $i('botHandlePreview'); if (!el) return;
   const label = $i('botLabel').value.trim();
@@ -9832,72 +9747,34 @@ function _slugifyHandle(label) {
 // The MCP servers a bot can be given: every server the config lists (the built-in `web` one
 // included), ticked when the bot's stored list (a JSON array of ids, as bots.active_mcp) has it.
 // Pure so it can be tested; renderBotMcp only puts it on the page.
-// What the model picker offers for a bot. Claude aliases work on both engines; gateway models
-// ("vendor/model:free") only on the API engine, so they are left out while "Subscription" is chosen. A stored
-// value that is not on offer any more stays selectable, so opening and saving the editor never drops it.
-function botModelChoices(models, engine, current) {
-  const claude = ['haiku', 'sonnet', 'opus', 'fable'];
-  const gateway = engine === 'subscription' ? [] : (Array.isArray(models) ? models : [])
-    .filter(m => m && typeof m.id === 'string' && !claude.includes(m.id))
-    .map(m => ({ id: m.id, name: m.name || m.id, tools: m.tools !== false }));
-  const known = new Set([...claude, ...gateway.map(g => g.id)]);
-  const extra = current && !known.has(current) ? current : null;
-  return { claude, gateway, extra };
-}
-let _gatewayModels = null; // null = not asked yet
-// Every provider's models (/api/models/choices), flattened into the shape this editor has
-// always used — {id, name, tools}. The default provider's four aliases ARE the chips above,
-// so they are not listed twice; another provider's aliases are real choices ("Claude · opus").
-function flattenChoicesForBots(c) {
-  const out = [];
-  for (const p of (c && c.providers) || []) {
-    const pl = p.builtin ? t('prov.builtin.claude') : p.label;
-    for (const m of p.models || []) {
-      if (m.alias && p.isDefault) continue;
-      out.push({ id: m.ref, name: `${pl} · ${m.alias ? m.id : (m.label || m.id)}`, tools: !(m.caps && m.caps.tools === false) });
-    }
-  }
-  return out;
-}
-async function loadGatewayModels() {
-  if (_gatewayModels) return _gatewayModels;
-  try {
-    if (!_modelChoices) { const r = await fetch('/api/models/choices'); _modelChoices = await r.json(); }
-    _gatewayModels = flattenChoicesForBots(_modelChoices);
-  } catch { _gatewayModels = []; }
-  return _gatewayModels;
-}
-function renderBotEngine() {
-  const v = ($i('botEngine') || {}).value || '';
-  document.querySelectorAll('#botEngineSeg .bot-seg-btn').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-}
-// The model chips are the four the new-chat bar has; a gateway model (API only) is a second, optional list
-// under them. The chosen value lives in the hidden #botModel, which is what saveBot reads.
+// The bot's model: '' = as the chat, else a value exactly as the toolbar stores it (a bare
+// alias of the default provider, or "provider::model"). Its PROVIDER decides the engine the
+// bot runs on (server.js runEngineFor), which is why there is no engine field any more.
+// The choice is made in the toolbar's own picker (openModelPicker with a target).
 function renderBotModel(current) {
   const hid = $i('botModel'); if (!hid) return;
-  hid.value = (current !== undefined ? current : hid.value) || '';
-  const ch = botModelChoices(_gatewayModels, ($i('botEngine') || {}).value || '', hid.value);
-  document.querySelectorAll('#botModelSeg .bot-seg-btn').forEach(b => b.classList.toggle('on', b.dataset.v === hid.value));
-  const gw = $i('botModelGw'); if (!gw) return;
-  const opt = (v, label) => { const o = document.createElement('option'); o.value = v; o.textContent = label; return o; };
-  gw.textContent = '';
-  gw.appendChild(opt('', t('bot.model.gateway.ph')));
-  ch.gateway.forEach(m => gw.appendChild(opt(m.id, m.name + (m.tools ? '' : ' — ' + t('bot.model.no_tools')))));
-  if (ch.extra) gw.appendChild(opt(ch.extra, ch.extra));
-  gw.value = hid.value && !ch.claude.includes(hid.value) ? hid.value : '';
-  gw.hidden = !(ch.gateway.length || ch.extra);
-  if (_gatewayModels === null) loadGatewayModels().then(() => { if (($i('botModel') || {}).isConnected) renderBotModel(); });
+  if (current !== undefined) hid.value = current || '';
+  const btn = $i('botModelBtn'); if (!btn) return;
+  const v = hid.value;
+  btn.classList.toggle('inherit', !v);
+  if (!v) {
+    btn.innerHTML = `<span class="mdl-cur-name">${escH(t('bot.model.inherit'))}</span><span class="mdl-cur-caret">▾</span>`;
+    btn.title = t('bot.model.inherit');
+    return;
+  }
+  const mi = modelInfo(v);
+  btn.innerHTML = `<span class="mdl-cur-name">${escH(mi.label)}</span>`
+    + (mi.providerLabel ? `<span class="mdl-cur-prov">${escH(mi.providerLabel)}</span>` : '')
+    + provModeBadge(mi.providerType)
+    + '<span class="mdl-cur-caret">▾</span>';
+  btn.title = `${mi.providerLabel ? mi.providerLabel + ' · ' : ''}${mi.label}`;
 }
 function setBotModel(v) {
   $i('botModel').value = v || '';
   renderBotModel();
 }
-function setBotEngine(v) {
-  $i('botEngine').value = v || '';
-  // A gateway id ("vendor/model:free") means nothing on the subscription; drop it visibly rather than keep a choice
-  // the chips cannot show. Claude aliases and full Claude ids stay.
-  if (v === 'subscription' && !/^(claude::)?[A-Za-z0-9._-]*$/.test($i('botModel').value)) $i('botModel').value = '';
-  renderBotEngine(); renderBotModel();
+function openBotModelPicker(anchor) {
+  openModelPicker(anchor, { current: ($i('botModel') || {}).value || '', inherit: true, onPick: setBotModel });
 }
 function renderBotRoomTools() {
   const v = ($i('botRoomTools') || {}).value || '';
@@ -9948,9 +9825,9 @@ function openBotForm(id) {
   $i('botLabel').value = bot?.label || '';
   $i('botAvatar').value = bot?.avatar || '';
   $i('botDesc').value = bot?.description || '';
-  $i('botEngine').value = bot?.run_engine || '';
-  renderBotEngine();
   renderBotModel(bot?.model || '');
+  // The button names the model through the provider list; fetched once, then re-rendered.
+  if (!_modelChoices) loadModelChoices().then(() => { if (($i('botModel') || {}).isConnected) renderBotModel(); });
   $i('botRoomTools').value = bot?.room_tools || '';
   renderBotRoomTools();
   $i('botPrompt').value = bot?.system_prompt || '';
@@ -9976,7 +9853,6 @@ function openBotForm(id) {
   btn.textContent = t(btnKey); btn.setAttribute('data-i18n', btnKey);
   title.textContent = t(titleKey); title.setAttribute('data-i18n', titleKey);
   _botHandlePreview();
-  renderBotTemplates();
   openModalOverlay('botModal', { initialFocus: '#botLabel', labelId: 'botModalTitle', onEscape: cancelBotForm });
 }
 
@@ -9990,7 +9866,6 @@ async function saveBot() {
     avatar: $i('botAvatar').value.trim(),
     description: $i('botDesc').value.trim(),
     model: $i('botModel').value || null,
-    runEngine: $i('botEngine').value || null,
     roomTools: $i('botRoomTools').value || null,
     systemPrompt: $i('botPrompt').value,
     isGlobal: $i('botGlobal').checked,
@@ -10089,8 +9964,7 @@ function addAgentBadge(el, agent) {
   hd.innerHTML = `<span class="bh-ic">${escH(bot.avatar || '🤖')}</span>`
     + `<b class="bh-name">${escH(bot.label)}</b>`
     + `<span class="bh-handle">@@${escH(agent)}</span>`
-    + (bot.model ? `<span class="bh-model">${escH(bot.model)}</span>` : '')
-    + (bot.run_engine === 'subscription' ? `<span class="bh-model">${escH(t('bot.engine.subscription'))}</span>` : '');
+    + (bot.model ? `<span class="bh-model">${escH(botModelText(bot.model))}</span>` : '');
   el.classList.add('from-bot');
   el.style.setProperty('--bc', accent);
   el.insertBefore(hd, el.firstChild);
@@ -10430,9 +10304,6 @@ function showW() {
   // tab, project switch) rather than each of them remembering.
   hideTerminalView();
   streaming.el = null;
-  // Welcome/blank screen = no active chat → engine selector reflects the global default
-  _curSessionRunEngine = null;
-  if (typeof resolveEngineForView === 'function') resolveEngineForView();
   msgsEl.innerHTML = `<div class="welcome"><div class="wi">CCS</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div><button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('welcome.import')}</button></div>`;
 }
 
@@ -12362,48 +12233,9 @@ function setOpt(btn, group) {
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') { curModel = v; syncModelMore(); applyModelDependentDials(); }
-  else if (group === 'engine') { curEngine = v; _engineForcedFrom = null; syncDefaultStar(); }
   updInd();
   // Sync mobile UI
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
-}
-
-// Highlight the ★ button when the current engine selection IS the global default.
-// (setOpt / syncBtn clear .on across the whole tb-group, including the star, so
-// this must run AFTER them.)
-function syncDefaultStar() {
-  const isDefault = curEngine === _globalDefaultEngine;
-  const cur = curEngine === 'subscription' ? 'Subscription' : 'API';
-  document.querySelectorAll('[data-default-star]').forEach(b => {
-    b.classList.toggle('on', isDefault);
-    b.title = t(isDefault ? 'engine.default.is' : 'engine.default.set').replace('{engine}', cur);
-  });
-}
-
-// Resolve which engine the current view shows: an explicit per-chat run_engine
-// wins; otherwise the chat inherits the global default. Race-proof — called from
-// both checkVersion (default loaded) and loadSess (session loaded); whichever
-// runs last produces the correct result.
-function resolveEngineForView() {
-  const want = _curSessionRunEngine || _globalDefaultEngine;
-  _engineForcedFrom = null;
-  // …and never the tmux engine for a model of another provider (subscriptionAllowedFor).
-  curEngine = (want === 'subscription' && _tmuxAvailable && subscriptionAllowedFor(curModel)) ? 'subscription' : 'api';
-  syncBtn('engine', curEngine);
-  syncDefaultStar();
-}
-
-// Persist the current engine choice as the global default for NEW chats/tasks.
-function setDefaultEngine() {
-  fetch('/api/default-engine', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ engine: curEngine }),
-  }).then(r => r.json()).then(d => {
-    _globalDefaultEngine = d.defaultEngine === 'subscription' ? 'subscription' : 'api';
-    syncDefaultStar();
-    toast(t('engine.default.toast').replace('{engine}', _globalDefaultEngine === 'subscription' ? 'Subscription' : 'API'));
-  }).catch(() => toast(t('engine.default.err'), true));
 }
 
 function updInd() { /* removed — mode indicator no longer in toolbar */ }
@@ -12446,7 +12278,7 @@ function updateSessBarSkills() {
 }
 
 function syncBtn(group, val) {
-  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch','conversation'], model: ['haiku','sonnet','opus','fable'], engine: ['api','subscription'] };
+  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch','conversation'], model: ['haiku','sonnet','opus','fable'] };
   if (group === 'model' && val && !groups.model.includes(val)) {
     // A model of any provider ("deepseek::deepseek-chat"): no alias chip is lit, "⋯" names it.
     document.querySelectorAll('.tb-group[data-tbg="model"] .tb-btn').forEach(x => x.classList.remove('on'));
@@ -12946,16 +12778,9 @@ inEl.addEventListener('paste', e => {
 function sendChat(text) { inEl.value = text; send(); }
 
 async function send() {
-  // _globalDefaultEngine starts hardcoded 'api' and only becomes the real
-  // configured default once checkVersion()'s /api/version fetch resolves
-  // (see resolveEngineForView()). A message sent before that fetch lands —
-  // e.g. the very first message of a fresh page load — used to go out with
-  // curEngine still on that placeholder 'api', and the server bakes whatever
-  // `engine` arrives into the session's run_engine permanently (server.js
-  // ~11914). That silently routed billing through the API key instead of the
-  // user's actually-configured Subscription default, and stuck that way for
-  // the life of the chat. Awaiting an already-settled promise is a no-op, so
-  // this costs nothing once the page has been open for more than an instant.
+  // The first message of a fresh page load waits for checkVersion() (capabilities,
+  // chat defaults) so it never goes out on placeholder dials. Awaiting an
+  // already-settled promise is a no-op once the page has been open an instant.
   if (typeof _versionCheckDone !== 'undefined') { try { await _versionCheckDone; } catch {} }
   if (!ws || ws.readyState !== 1) { toast(t('toast.no_connection'), true); return; }
 
@@ -13109,7 +12934,6 @@ async function send() {
       mcpServers: [...activeMcp],
       mode: curMode, agentMode: curAgent,
       model: curModel,
-      engine: curEngine,
       // 'auto' explicitly, never undefined. An omitted key lets the server's
       // destructuring default fill in the CURRENT global default — so a chat
       // deliberately on Auto would be re-dialled, and persisted, the day someone
@@ -13280,32 +13104,13 @@ inEl.addEventListener('keydown', e => {
 function loadStats() { /* removed */ }
 
 // ─── tmux capability (Subscription engine) ─────────────────────────────────
-// Subscription engine needs tmux on the server. When absent (e.g. native
-// Windows without WSL/Git-Bash), disable the button up front with a reason
-// instead of letting the user discover it via a failed send.
+// The Subscription engine needs tmux on the server. There is no engine button any
+// more — a model of the CLI-login provider runs there when tmux exists and headless
+// otherwise (engineOfModel), so this only feeds that rule.
 let _tmuxAvailable = true;
 function applyTmuxCapability(available) {
   _tmuxAvailable = !!available;
-  const reason = t('tmux.required');
-  const sel = [
-    ...document.querySelectorAll('.tb-btn[data-v="subscription"]'),
-    ...document.querySelectorAll('.mob-chip[data-mob="engine"][data-v="subscription"]'),
-  ];
-  for (const btn of sel) {
-    btn.disabled = !_tmuxAvailable;
-    btn.style.opacity = _tmuxAvailable ? '' : '0.4';
-    btn.style.cursor = _tmuxAvailable ? '' : 'not-allowed';
-    if (!_tmuxAvailable) btn.title = reason;
-  }
-  // If a stored session already had Subscription selected but tmux is now gone,
-  // fall back to API in the UI so the user is not stranded on a dead engine.
-  if (!_tmuxAvailable && curEngine === 'subscription') {
-    curEngine = 'api';
-    syncBtn('engine', 'api');
-  }
-  // The same buttons are also off for a model of another provider — one place decides both.
   if (typeof applyModelDependentDials === 'function') applyModelDependentDials();
-  if (typeof syncDefaultStar === 'function') syncDefaultStar();
 }
 
 // ─── Version check ────────────────────────────────────────────────────────
@@ -13321,13 +13126,9 @@ async function checkVersion() {
     }
     loadTerminalCapability();
     loadBots();
-    // Store the global default and resolve the current view's engine. An open
-    // chat's explicit run_engine wins; a chat without one inherits this default.
-    _globalDefaultEngine = local.defaultEngine === 'subscription' ? 'subscription' : 'api';
     // Issue #63 — label the "Open in …" buttons with the editor actually configured.
     if (local.editor && local.editor.label) _editorLabel = local.editor.label;
     _syncEditorLabels();
-    resolveEngineForView();
     // Issue #58: resolve the dials for whatever project the session restored to.
     // Only a brand-new tab is seeded — a restored chat keeps what it was saved with.
     loadChatDefaults(curProjectId).then(() => { if (!currentSessionId) applyChatDefaults(); });
@@ -14131,10 +13932,8 @@ async function loadSess(id) {
       if (_eff != null) { setEffort(_eff); const es = $i('effortSel'); if (es) es.value = curEffort; }
       markDefaultOverrides();
     }
-    // Explicit per-chat run_engine wins; a chat without one (null — old chats or
-    // never-sent) inherits the global default instead of being forced to API.
-    _curSessionRunEngine = (d.run_engine === 'subscription' || d.run_engine === 'api') ? d.run_engine : null;
-    resolveEngineForView();
+    // The engine is not stored per chat any more: it follows the model just restored.
+    applyModelDependentDials();
     updInd();
 
     // git_root FIRST: a worktree-isolated session stores the WORKTREE in `workdir`,
@@ -15530,8 +15329,6 @@ async function loadModelChoices() {
   } catch {
     if (!_modelChoices) _modelChoices = { providers: [], defaultProviderId: 'claude', utilityModel: '' };
   }
-  // The bot editor builds its second list from these; drop its copy so it rebuilds.
-  _gatewayModels = null;
   syncModelMore();
   applyModelDependentDials();
   renderUtilitySelect();
@@ -15559,10 +15356,27 @@ function modelInfo(value) {
   };
 }
 
-/** The tmux Subscription engine runs the CLI's own login only (providers.effectiveEngine). */
-function subscriptionAllowedFor(value) {
+/** How a provider is billed, as every list marks it: the CLI login is the subscription, the rest API. */
+function provModeOf(type) {
+  return type === 'claude-subscription' ? 'subscription' : 'api';
+}
+function provModeBadge(type) {
+  if (!type) return '';
+  const m = provModeOf(type);
+  return `<span class="prov-mode ${m}" title="${escH(t('prov.mode.' + m + '.tip'))}">${escH(t('prov.mode.' + m))}</span>`;
+}
+
+/** The engine a model runs on — there is no dial: its provider decides (server.js runEngineFor). */
+function engineOfModel(value) {
+  const tmuxOk = typeof _tmuxAvailable === 'undefined' ? true : !!_tmuxAvailable;
+  return (tmuxOk && provModeOf(modelInfo(value).providerType) === 'subscription') ? 'subscription' : 'api';
+}
+
+/** "Opus" on the default provider, "Claude (subscription) · Opus" on another one. */
+function botModelText(value) {
   const mi = modelInfo(value);
-  return !mi.qualified || mi.providerId === 'claude';
+  const defId = _modelChoices && _modelChoices.defaultProviderId;
+  return (mi.qualified && mi.providerId !== defId && mi.providerLabel) ? `${mi.providerLabel} · ${mi.label}` : mi.label;
 }
 
 function _fmtTokens(n) {
@@ -15587,7 +15401,8 @@ function syncModelMore() {
   const mi = modelInfo(curModel);
   const defId = _modelChoices && _modelChoices.defaultProviderId;
   const otherProv = mi.qualified && mi.providerId && mi.providerId !== defId;
-  const full = `${mi.providerLabel ? mi.providerLabel + ' · ' : ''}${mi.label}`;
+  const mode = mi.providerType ? ` (${t('prov.mode.' + provModeOf(mi.providerType))})` : '';
+  const full = `${mi.providerLabel ? mi.providerLabel + ' · ' : ''}${mi.label}${mode}`;
   const name = mi.label.length > 26 ? mi.label.slice(0, 25) + '…' : mi.label;
   for (const id of ['mdlMoreBtn', 'mobMdlMoreBtn']) {
     const b = $i(id); if (!b) continue;
@@ -15600,33 +15415,9 @@ function syncModelMore() {
   }
 }
 
-/** Engine and effort follow the model: no Subscription off Claude, no effort dial for a model that cannot reason. */
+/** Engine and effort follow the model: its provider decides the engine, and a model that cannot reason has no effort dial. */
 function applyModelDependentDials() {
-  const subOk = subscriptionAllowedFor(curModel);
-  const tmuxOk = typeof _tmuxAvailable === 'undefined' ? true : !!_tmuxAvailable;
-  const sel = [
-    ...document.querySelectorAll('.tb-btn[data-v="subscription"]'),
-    ...document.querySelectorAll('.mob-chip[data-mob="engine"][data-v="subscription"]'),
-  ];
-  for (const btn of sel) {
-    const ok = tmuxOk && subOk;
-    btn.disabled = !ok;
-    btn.style.opacity = ok ? '' : '0.4';
-    btn.style.cursor = ok ? '' : 'not-allowed';
-    btn.title = !tmuxOk ? t('tmux.required') : (!subOk ? t('engine.sub.only_claude') : t('engine.sub.title'));
-  }
-  if (!subOk && curEngine === 'subscription') {
-    curEngine = 'api';
-    _engineForcedFrom = 'subscription';   // remembered: a Claude model picked next gets it back
-    syncBtn('engine', 'api');
-    if (typeof syncDefaultStar === 'function') syncDefaultStar();
-    toast(t('engine.switched_api'));
-  } else if (subOk && tmuxOk && _engineForcedFrom === 'subscription' && curEngine === 'api') {
-    _engineForcedFrom = null;
-    curEngine = 'subscription';
-    syncBtn('engine', 'subscription');
-    if (typeof syncDefaultStar === 'function') syncDefaultStar();
-  }
+  curEngine = engineOfModel(curModel);
   const es = $i('effortSel');
   if (es) {
     const mi = modelInfo(curModel);
@@ -15638,9 +15429,9 @@ function applyModelDependentDials() {
 
 // ── The "⋯" picker ──────────────────────────────────────────────────────────
 var _mdlPickAnchor = null, _mdlPickKb = -1, _mdlPickRefs = [];
-// Set when a non-Claude model pushed the engine off Subscription; a manual engine choice or
-// a chat switch forgets it, a Claude model picked next restores it.
-var _engineForcedFrom = null;
+// null = the picker serves the chat toolbar (curModel); otherwise another field borrowed
+// it — the bot editor: { current, onPick(value), inherit } ('' = "same as chat").
+var _mdlPickOpts = null;
 
 function _ensureModelPicker() {
   let el = $i('mdlPick');
@@ -15667,10 +15458,11 @@ function _ensureModelPicker() {
   return el;
 }
 
-function openModelPicker(anchor) {
+function openModelPicker(anchor, opts) {
   const el = _ensureModelPicker();
   if (el.classList.contains('open') && _mdlPickAnchor === anchor) { closeModelPicker(); return; }
   _mdlPickAnchor = anchor || null;
+  _mdlPickOpts = opts || null;
   const inp = $i('mdlPickInp');
   inp.value = '';
   inp.placeholder = t('model.pick.search');
@@ -15688,17 +15480,33 @@ function closeModelPicker() {
   const el = $i('mdlPick');
   if (el) el.classList.remove('open');
   _mdlPickAnchor = null;
+  _mdlPickOpts = null;
 }
 
 function positionModelPicker() {
   const el = $i('mdlPick'); if (!el) return;
+  const list = el.querySelector('.mdl-pick-list');
+  if (list) list.style.maxHeight = '';
+  el.style.width = '';
   if (window.innerWidth <= 768 || !_mdlPickAnchor) { el.style.left = ''; el.style.top = ''; return; }
   const r = _mdlPickAnchor.getBoundingClientRect();
-  const w = el.offsetWidth || 380, h = el.offsetHeight || 300;
-  let left = Math.min(r.left, window.innerWidth - w - 8);
-  let top = r.bottom + 6;
-  if (top + h > window.innerHeight - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
-  el.style.left = Math.max(8, left) + 'px';
+  // A wide anchor (the bot editor's field) gets a picker as wide as itself.
+  if (r.width > 380) el.style.width = Math.min(r.width, window.innerWidth - 16) + 'px';
+  const w = el.offsetWidth || 380;
+  let h = el.offsetHeight || 300;
+  // Below the anchor when it fits, else above; when neither side fits (an anchor in the
+  // middle of a modal), the roomier side and a shorter list — never off the screen.
+  const below = window.innerHeight - r.bottom - 14, above = r.top - 14;
+  let top;
+  if (h <= below) top = r.bottom + 6;
+  else if (h <= above) top = r.top - h - 6;
+  else {
+    const room = Math.max(below, above);
+    if (list) list.style.maxHeight = Math.max(120, list.offsetHeight - (h - room)) + 'px';
+    h = el.offsetHeight || room;
+    top = below >= above ? r.bottom + 6 : r.top - h - 6;
+  }
+  el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
   el.style.top = Math.max(8, top) + 'px';
 }
 
@@ -15707,16 +15515,29 @@ function renderModelPicker() {
   const q = ($i('mdlPickInp')?.value || '').trim().toLowerCase();
   // The default provider first: its models are what a bare alias means.
   const provs = ((_modelChoices && _modelChoices.providers) || []).slice().sort((x, y) => (y.isDefault ? 1 : 0) - (x.isDefault ? 1 : 0));
-  const cur = modelInfo(curModel);
+  const curVal = _mdlPickOpts ? _mdlPickOpts.current : curModel;
+  const cur = curVal ? modelInfo(curVal) : { providerId: null, modelId: null };
   list.innerHTML = '';
   _mdlPickRefs = [];
+  // A borrowed picker may offer "same as chat" ('') on top — the bot editor does.
+  if (_mdlPickOpts && _mdlPickOpts.inherit && (!q || t('bot.model.inherit').toLowerCase().includes(q))) {
+    const idx = _mdlPickRefs.push('') - 1;
+    const row = document.createElement('div');
+    row.className = 'mdl-pick-item' + (!curVal ? ' on' : '') + (idx === _mdlPickKb ? ' kb' : '');
+    row.setAttribute('role', 'option');
+    row.dataset.idx = String(idx);
+    row.innerHTML = `<span class="nm">${escH(t('bot.model.inherit'))}</span>`;
+    row.addEventListener('click', () => pickModel(''));
+    list.appendChild(row);
+  }
   for (const p of provs) {
     const pl = p.builtin ? t('prov.builtin.claude') : p.label;
     const items = (p.models || []).filter(m => !q || pl.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || String(m.label || '').toLowerCase().includes(q));
     if (!items.length) continue;
     const g = document.createElement('div');
     g.className = 'mdl-pick-grp';
-    g.innerHTML = `<span>${escH(pl)}</span>${p.isDefault ? `<span class="prov-badge">${escH(t('prov.default'))}</span>` : ''}`;
+    // Every group says how it is billed: the engine follows the provider (engineOfModel).
+    g.innerHTML = `<span>${escH(pl)}</span>${provModeBadge(p.type)}${p.isDefault ? `<span class="prov-badge">${escH(t('prov.default'))}</span>` : ''}`;
     list.appendChild(g);
     for (const m of items) {
       const value = (m.alias && p.isDefault) ? m.id : m.ref;
@@ -15758,6 +15579,8 @@ function modelPickerKey(e) {
 }
 
 function pickModel(value) {
+  if (value == null) return;
+  if (_mdlPickOpts) { const cb = _mdlPickOpts.onPick; closeModelPicker(); if (cb) cb(value); return; }
   if (!value) return;
   curModel = value;
   closeModelPicker();
@@ -15805,7 +15628,7 @@ function renderProviders() {
     div.innerHTML = `
       <div class="inf" style="flex:1;min-width:0">
         <div class="nm" style="display:flex;gap:6px;align-items:center"><span class="prov-dot ${dot}" title="${escH(dotTitle)}"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(name)}</span>${isDef ? `<span class="prov-badge">${escH(t('prov.default'))}</span>` : ''}</div>
-        <div class="ds" style="font-size:11px">${escH(provTypeLabel(p.type))} · ${escH(t('prov.models.count').replace('{n}', nOn))}${p.enabled ? '' : ' · ' + escH(t('prov.disabled'))}</div>
+        <div class="ds" style="font-size:11px">${provModeBadge(p.type)} ${escH(provTypeLabel(p.type))} · ${escH(t('prov.models.count').replace('{n}', nOn))}${p.enabled ? '' : ' · ' + escH(t('prov.disabled'))}</div>
       </div>
       ${!isDef && p.enabled ? `<button class="cfg prov-def-btn" title="${escH(t('prov.make_default'))}">★</button>` : ''}
       <button class="cfg prov-test-btn" title="${escH(t('prov.test'))}" style="font-size:12px">▶</button>
@@ -15830,7 +15653,7 @@ function renderUtilitySelect() {
   let found = !cur;
   for (const p of (_modelChoices && _modelChoices.providers) || []) {
     const og = document.createElement('optgroup');
-    og.label = p.builtin ? t('prov.builtin.claude') : p.label;
+    og.label = `${p.builtin ? t('prov.builtin.claude') : p.label} — ${t('prov.mode.' + provModeOf(p.type))}`;
     for (const m of p.models || []) {
       const o = document.createElement('option');
       o.value = m.ref;
@@ -18811,9 +18634,7 @@ function setMobOpt(btn, group) {
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') curModel = v;
-  else if (group === 'engine') curEngine = v;
   syncBtn(group, v);
-  if (group === 'engine') syncDefaultStar();
   updateMobSubtitle();
   saveUIState();
 }
@@ -18826,7 +18647,6 @@ function syncMobSheetFromDesktop() {
     if (group === 'mode') cur = curMode;
     else if (group === 'agent') cur = curAgent;
     else if (group === 'model') cur = curModel;
-    else if (group === 'engine') cur = curEngine;
     chip.classList.toggle('on', v === cur);
   });
   // Sync turns

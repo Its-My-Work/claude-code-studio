@@ -1137,7 +1137,13 @@ class TelegramBot extends EventEmitter {
     const id = i === -1 ? v : v.slice(i + 2);
     const m = p && (p.models || []).find(x => x.id === id);
     const pl = p ? (p.builtin ? 'Claude' : p.label) : (i === -1 ? '' : v.slice(0, i));
-    return `${pl ? pl + ' · ' : ''}${m && !m.alias ? (m.label || m.id) : id}`;
+    return `${pl ? pl + ' · ' : ''}${m && !m.alias ? (m.label || m.id) : id}${p ? ' · ' + this._modeWord(p) : ''}`;
+  }
+
+  // How a provider is billed — and so which engine its models run on (server.js
+  // runEngineFor): the CLI login is the subscription, every other provider the API.
+  _modeWord(p) {
+    return this._t((p.mode || (p.type === 'claude-subscription' ? 'subscription' : 'api')) === 'subscription' ? 'model_mode_subscription' : 'model_mode_api');
   }
 
   async _cmdModel(chatId, userId) {
@@ -1147,7 +1153,7 @@ class TelegramBot extends EventEmitter {
     const c = this._getModelChoices ? this._getModelChoices() : null;
     if (!c || !Array.isArray(c.providers) || !c.providers.length) return this._showScreen(chatId, userId, this._t('model_unavailable'), [back]);
     ctx.modelMenu = c.providers.map(p => ({
-      label: p.builtin ? 'Claude' : p.label, isDefault: !!p.isDefault,
+      label: p.builtin ? 'Claude' : p.label, mode: this._modeWord(p), isDefault: !!p.isDefault,
       models: (p.models || []).map(m => ({
         // The default provider's aliases are stored bare, exactly as the toolbar chips send them.
         value: (m.alias && p.isDefault) ? m.id : m.ref,
@@ -1157,7 +1163,7 @@ class TelegramBot extends EventEmitter {
     }));
     const sess = this.db.prepare('SELECT model FROM sessions WHERE id = ?').get(ctx.sessionId);
     const text = this._t('model_current', { model: this._escHtml(this._modelLabel(sess && sess.model)) }) + '\n\n' + this._t('model_pick_provider');
-    const rows = ctx.modelMenu.map((p, i) => [{ text: `${p.isDefault ? '★ ' : ''}${p.label}`.slice(0, 60), callback_data: `md:p:${i}:0` }]);
+    const rows = ctx.modelMenu.map((p, i) => [{ text: `${p.isDefault ? '★ ' : ''}${p.label} · ${p.mode}`.slice(0, 60), callback_data: `md:p:${i}:0` }]);
     rows.push(back);
     return this._showScreen(chatId, userId, text, rows);
   }
@@ -1179,7 +1185,7 @@ class TelegramBot extends EventEmitter {
       if ((page + 1) * PAGE < p.models.length) nav.push({ text: '›', callback_data: `md:p:${pi}:${page + 1}` });
       if (nav.length) rows.push(nav);
       rows.push([{ text: this._t('btn_back'), callback_data: 'md:root' }]);
-      return this._showScreen(chatId, userId, this._t('model_pick_model', { provider: this._escHtml(p.label) }), rows);
+      return this._showScreen(chatId, userId, this._t('model_pick_model', { provider: this._escHtml(`${p.label} · ${p.mode}`) }), rows);
     }
     if (parts[1] === 's') {
       const m = menu[parseInt(parts[2], 10)]?.models[parseInt(parts[3], 10)];

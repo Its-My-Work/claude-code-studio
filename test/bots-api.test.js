@@ -140,19 +140,21 @@ async function api(method, url, body) {
     check('the description is truncated to its cap', r.json.description.length, 500);
   }
 
-  console.log('per-bot engine:');
+  console.log('no per-bot engine — an old "subscription" becomes a CLI-login model:');
   {
+    // The engine follows the model's provider (server.js runEngineFor). An older client that
+    // still sends runEngine:'subscription' gets its model pinned to the CLI login instead.
     const made = (await api('POST', '/api/bots', { label: 'Planner', runEngine: 'subscription' })).json;
-    check('a new bot can be pinned to the subscription engine', made.run_engine, 'subscription');
-    check('an ordinary bot follows the chat (no engine)', (await api('POST', '/api/bots', { label: 'Plain' })).json.run_engine, null);
-    check('a partial update keeps the engine', (await api('PUT', `/api/bots/${made.id}`, { label: 'Planner 2' })).json.run_engine, 'subscription');
-    check('an unknown engine is refused', (await api('PUT', `/api/bots/${made.id}`, { label: 'P', runEngine: 'codex' })).status, 400);
-    check('a refused update leaves the engine alone', (await api('GET', '/api/bots')).json.find(b => b.id === made.id).run_engine, 'subscription');
-    const exp = (await api('GET', '/api/bots/export')).json;
-    check('the export carries the engine', exp.bots.find(b => b.id === made.id).run_engine, 'subscription');
-    check('an empty value clears it back to "as the chat"', (await api('PUT', `/api/bots/${made.id}`, { label: 'P', runEngine: '' })).json.run_engine, null);
-    const imp = await api('POST', '/api/bots/import', { overwrite: true, bots: [{ id: made.id, label: 'Planner', run_engine: 'subscription' }] });
-    check('an import restores it', [imp.json.updated, (await api('GET', '/api/bots')).json.find(b => b.id === made.id).run_engine], [1, 'subscription']);
+    check('an old "subscription" bot is created on the CLI login\'s model, with no engine stored', [made.model, made.run_engine], ['claude::sonnet', null]);
+    const opus = (await api('POST', '/api/bots', { label: 'Opus planner', model: 'opus', runEngine: 'subscription' })).json;
+    check('…keeping its own alias', opus.model, 'claude::opus');
+    check('an ordinary bot stores neither', (await api('POST', '/api/bots', { label: 'Plain' })).json.run_engine, null);
+    check('a partial update keeps the model', (await api('PUT', `/api/bots/${made.id}`, { label: 'Planner 2' })).json.model, 'claude::sonnet');
+    check('an unknown engine is still refused', (await api('PUT', `/api/bots/${made.id}`, { label: 'P', runEngine: 'codex' })).status, 400);
+    check('an empty engine changes nothing', (await api('PUT', `/api/bots/${made.id}`, { label: 'P', runEngine: '' })).json.model, 'claude::sonnet');
+    const imp = await api('POST', '/api/bots/import', { overwrite: true, bots: [{ id: made.id, label: 'Planner', model: 'haiku', run_engine: 'subscription' }] });
+    const back = (await api('GET', '/api/bots')).json.find(b => b.id === made.id);
+    check('an old export file is imported the same way', [imp.json.updated, back.model, back.run_engine], [1, 'claude::haiku', null]);
   }
 
   console.log('per-bot model:');

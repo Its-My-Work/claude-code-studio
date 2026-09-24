@@ -73,7 +73,7 @@ function bareModelId(value) {
 // A preset only pre-fills the form; every field stays editable. Base URLs are the
 // providers' documented OpenAI- / Anthropic-compatible roots.
 const PRESETS = [
-  { id: 'anthropic',   label: 'Anthropic API',          type: 'anthropic',            baseUrl: 'https://api.anthropic.com',                  authScheme: 'x-api-key', aliases: true },
+  { id: 'anthropic',   label: 'Claude API (Anthropic key)', type: 'anthropic',            baseUrl: 'https://api.anthropic.com',                  authScheme: 'x-api-key', aliases: true },
   { id: 'gateway',     label: 'Anthropic-compatible gateway', type: 'anthropic-compatible', baseUrl: '',                                   authScheme: 'bearer',    aliases: true },
   { id: 'openai',      label: 'OpenAI',                 type: 'openai-compatible',    baseUrl: 'https://api.openai.com/v1',                  dialect: 'openai' },
   { id: 'openrouter',  label: 'OpenRouter',             type: 'openai-compatible',    baseUrl: 'https://openrouter.ai/api/v1',               dialect: 'openrouter' },
@@ -284,6 +284,38 @@ function effectiveEngine(engine, value, registry) {
   return r.ok ? r.engine : engine;
 }
 
+/** How a provider is billed, as the UI marks it: the CLI login is the subscription, the rest is API. */
+function providerMode(p) {
+  return p && p.type === 'claude-subscription' ? 'subscription' : 'api';
+}
+
+/**
+ * The engine a stored model value runs on. There is no engine dial: the model's provider
+ * decides. The CLI-login provider runs on the tmux Subscription engine when tmux exists
+ * (`opts.tmux`), every other provider — and the CLI login without tmux — headless.
+ * A bare value means the DEFAULT provider's model, exactly as resolveModel() reads it.
+ */
+function engineForModel(value, registry, opts = {}) {
+  const r = resolveModel(value, registry, { engine: 'api' });
+  return (r.ok && providerMode(r.provider) === 'subscription' && opts.tmux !== false) ? 'subscription' : 'api';
+}
+
+/**
+ * A value stored next to an explicit "Subscription" choice (the dial this replaced), as the
+ * model ref that now means the same thing: the CLI login's model. A bare alias or Claude id
+ * becomes `claude::<id>`; a ref to the CLI login stays; a ref to another provider stays too —
+ * that run already went headless under the old rule, so pinning it to Claude would change it.
+ */
+function toClaudeRef(value) {
+  const v = value == null ? '' : String(value).trim();
+  if (!v) return formatModelRef(BUILTIN_CLAUDE_ID, 'sonnet');
+  const parsed = parseModelRef(v);
+  if (!parsed) return v;
+  if (parsed.providerId) return v;
+  if (CLAUDE_ALIASES.includes(parsed.modelId) || /^claude-/i.test(parsed.modelId)) return formatModelRef(BUILTIN_CLAUDE_ID, parsed.modelId);
+  return v;
+}
+
 // ── Environment for one run ─────────────────────────────────────────────────
 // Every variable a provider decision may set. They are stripped from the inherited
 // environment FIRST, so a stale ANTHROPIC_BASE_URL in the server's own env (docker
@@ -427,7 +459,7 @@ function listChoices(registry) {
       if (CLAUDE_ALIASES.includes(m.id)) continue;
       models.push(publicModel(p, m));
     }
-    providers.push({ id: p.id, label: p.label, type: p.type, builtin: p.id === BUILTIN_CLAUDE_ID, isDefault: p.id === (registry.defaultProviderId || BUILTIN_CLAUDE_ID), models });
+    providers.push({ id: p.id, label: p.label, type: p.type, mode: providerMode(p), builtin: p.id === BUILTIN_CLAUDE_ID, isDefault: p.id === (registry.defaultProviderId || BUILTIN_CLAUDE_ID), models });
   }
   // utilityModel stays '' when unset: the pickers show that as "haiku on the default provider".
   return { defaultProviderId: registry && registry.defaultProviderId || BUILTIN_CLAUDE_ID, utilityModel: (registry && registry.utilityModel) || '', providers };
@@ -556,6 +588,6 @@ module.exports = {
   parseModelRef, formatModelRef, isQualifiedRef, bareModelId,
   normalizeCaps, normalizePricing, normalizeCatalog,
   findProvider, defaultProviderFor, supportsAliases, roleModel, capsFor,
-  resolveModel, effectiveEngine, buildRunEnv, applyRunEnv, buildRunCtx, providerCfg, BACKEND_ENV_VARS,
+  resolveModel, effectiveEngine, engineForModel, providerMode, toClaudeRef, buildRunEnv, applyRunEnv, buildRunCtx, providerCfg, BACKEND_ENV_VARS,
   listChoices, isKnownModel, describeModel, computeCost, validateProviderInput,
 };

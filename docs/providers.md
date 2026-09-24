@@ -23,7 +23,7 @@ Claude subscription (CLI login) never goes through the bridge.
 
 | Type | Reached by | Notes |
 |---|---|---|
-| `claude-subscription` | the CLI's own login (OAuth) | Built-in row `claude`. The only type the tmux **Subscription** engine runs on. |
+| `claude-subscription` | the CLI's own login (OAuth) | Built-in row `claude`, marked **subscription**: its models run on the tmux Subscription engine (headless without tmux). |
 | `anthropic` | bridge, passthrough | Anthropic API key. |
 | `anthropic-compatible` | bridge, passthrough | Any `/v1/messages` endpoint: a gateway such as kilo-gateway, or the Anthropic endpoints of DeepSeek, Kimi, GLM, MiniMax. For Claude Code these are more faithful than translation. |
 | `openai-compatible` | bridge, **translation** | `/chat/completions`: OpenAI, OpenRouter, Gemini, Qwen, Groq, Mistral, xAI, Ollama, LM Studio, vLLM… A **dialect** describes how effort, reasoning and the token limit are sent. |
@@ -32,6 +32,12 @@ On first start the registry is seeded from the environment: `ANTHROPIC_BASE_URL`
 token) becomes provider `gateway`, the **default** — that is what every run used before,
 so a bare `sonnet` stored in an old row keeps landing on the same endpoint. An env-seeded
 row follows the env on later boots until it is edited in the UI.
+
+**Engine = the model's provider.** There is no engine dial anywhere: a model of the CLI login
+runs on the tmux Subscription engine, a model of any other provider (marked **API**) runs
+headless (`providers.engineForModel`, `server.js runEngineFor`). Two Claude providers can
+coexist — the CLI login (subscription) and an Anthropic key (preset "Claude API") — and the
+picker shows which is which. See `docs/bot-engine.md` for bots and the one-time migration.
 
 ## Model references
 
@@ -95,9 +101,10 @@ repaired · `stop_reason`, usage with cached tokens · errors canonicalised: con
 - **Sidebar → Providers**: add (presets), test before saving, default ★, per-model
   capabilities and prices, a probe (a forced tool call + a short reply through the bridge),
   the utility model, 30-day usage.
-- **Toolbar**: the four alias chips are the default provider's; `⋯` lists every provider's
-  models. Subscription is off for a non-Claude model; effort is off for a model that
-  cannot reason.
+- **Toolbar**: one model button; its picker lists every provider's models (the default
+  provider first), each provider marked *subscription* or *API* — that mark is the engine.
+  Effort is off for a model that cannot reason. The bot editor, Kanban and Schedule use the
+  same marks.
 - **Telegram**: `/model`, `/effort`.
 - `GET /api/llm-bridge/log` — the last 200 bridge requests (no content).
 - `CCS_BRIDGE=off` disables the bridge (Anthropic-type providers then run with their key in
@@ -115,5 +122,6 @@ Bump both together, and look at the captured request fixture in
 
 - SSH projects: the remote `claude` runs on that host's own login/config; a provider ref is
   passed as its bare model id.
-- The tmux Subscription engine runs Claude's own login only.
+- The tmux Subscription engine runs Claude's own login only — which is exactly the provider
+  marked *subscription*.
 - External agents (`externalAgents`, delegation) keep their own CLIs and credentials.

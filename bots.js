@@ -4,6 +4,9 @@
 // unit tested the way rate-limit-utils.js, multi-agent-result.js and
 // terminal-session.js are. The side effects live in server.js.
 
+// providers.js is pure too: its model-ref grammar is what a bot's model is written in.
+const { toClaudeRef } = require('./providers');
+
 // A handle must be safe to type after '@' and safe to use as a primary key.
 // A trailing '-' or '_' is rejected on purpose: '@bot-' followed by a space would
 // not match the mention regex's word boundary, so such a handle could be created
@@ -351,9 +354,12 @@ function planBotImport({ incoming, live, reserved, overwrite } = {}) {
       active_mcp: normList(raw?.active_mcp ?? raw?.activeMcp),
       avatar: typeof raw?.avatar === 'string' ? raw.avatar : '',
       is_global: (raw?.is_global ?? raw?.isGlobal) ? 1 : 0,
-      run_engine: normalizeBotEngine(raw?.run_engine ?? raw?.runEngine) || null,
+      // A file from before the engine dial went away may say "subscription": the model's
+      // provider decides the engine now, so that bot's model is pinned to the CLI login.
+      run_engine: null,
       room_tools: normalizeRoomTools(raw?.room_tools ?? raw?.roomTools) || null,
     };
+    if (normalizeBotEngine(raw?.run_engine ?? raw?.runEngine) === 'subscription') row.model = toClaudeRef(row.model);
     (liveSet.has(handle) ? replace : create).push(row);
   }
   return { create, overwrite: replace, skipped };
@@ -432,15 +438,10 @@ function botsAvailability({ remote, runEngine } = {}) {
 }
 
 // ─── Per-bot engine ──────────────────────────────────────────────────
-// A bot may pin its own billing engine, so one bot (a planner) can run on the Claude
-// subscription while the chat, and every other bot, stays on `api`. `null` is "as the
-// chat", which is what every existing bot has.
-//
-// The override is honoured only where the caller says so (`enabled`): the web chat owns a
-// WebSocket the interactive pane streams into; Telegram hands the bot runner a stand-in
-// socket, and a tmux pane must not be started behind it. And only while tmux exists —
-// the subscription engine is a tmux pane, so without one the bot quietly follows the chat
-// rather than failing every turn.
+// A bot's engine follows its MODEL now (server.js runEngineFor): a model of the CLI login
+// runs on the subscription, any other provider headless. `run_engine` is the column the
+// old per-bot dial wrote; it is only still parsed so an older client or export file that
+// says "subscription" can be turned into a `claude::` model (toClaudeRef).
 const BOT_ENGINES = ['api', 'subscription'];
 
 /** A stored/submitted value as it is kept: 'api', 'subscription' or null. undefined stays undefined. */
@@ -468,15 +469,6 @@ function botModel(bot, engine, chatModel) {
     const bare = own.startsWith('claude::') ? own.slice('claude::'.length) : own;
     return CLAUDE_MODEL_RE.test(bare) ? bare : chatModel;
   }
-  return own;
-}
-
-/** The engine one bot's turn runs on: the bot's own choice, else the chat's. */
-function botEngine(bot, chatEngine, { enabled = false, tmux = true } = {}) {
-  const chat = chatEngine === 'subscription' ? 'subscription' : 'api';
-  const own = bot && BOT_ENGINES.includes(bot.run_engine) ? bot.run_engine : null;
-  if (!own || !enabled) return chat;
-  if (own === 'subscription' && !tmux) return chat;
   return own;
 }
 
@@ -846,7 +838,7 @@ module.exports = {
   HANDLE_RE, EVIDENCE_CLAUSE, ROSTER_MAX, IMPORT_MAX,
   isValidHandle, handleFromLabel, uniqueHandle,
   parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, planBotImport,
-  MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability, BOT_ENGINES, normalizeBotEngine, botEngine, botModel,
+  MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability, BOT_ENGINES, normalizeBotEngine, botModel,
   stripReportFormat, ROOM_TOOL_SCOPES, normalizeRoomTools, roomToolScope,
   planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS,
   planRoom, seatPlanner, PLANNER_HANDLE, PLAN_INTENT_RE, parseRoomReply, roomShouldContinue,

@@ -30,6 +30,15 @@ unchanged); `llm-bridge/` translates for OpenAI-compatible endpoints. See `docs/
   task; its spawn script unsets provider variables tmux could hand the pane; `/api/translate`
   no longer inherits server secrets; `set_ui_state` knows `fable`; Dispatch and Telegram send
   the chat's effort; a routing refusal stops the turn instead of burning the auto-continues.
+- **No engine dial.** The toolbar's API/Subscription switch (and ★ default), the mobile one,
+  Kanban's, Schedule's and the bot editor's are gone: the chosen model's provider decides —
+  the CLI login ("Claude (CLI login)", marked *subscription*) runs on tmux, every other
+  provider (marked *API*, e.g. the "Claude API" preset with an Anthropic key) headless. A
+  one-time boot migration turns every explicit "Subscription" into a `claude::<model>` pin,
+  and the `defaultEngine` setting / `PUT /api/default-engine` are removed.
+- **Bot editor:** one Model button with the toolbar's picker ("Same as chat" on top); the
+  starter-prompt templates (Analyst, Writer, Reviewer, Explainer) are gone — they overwrote
+  the bot's own prompt.
 - The Claude Code CLI is pinned (`CLAUDE_CODE_VERSION=2.1.281`) and CI runs a contract test
   that drives the real binary through the bridge.
 

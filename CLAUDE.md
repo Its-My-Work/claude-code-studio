@@ -81,7 +81,7 @@ Environment (`.env`, see `.env.example`):
 - `MULTI_AGENT_CONCURRENCY` — max `claude` subprocesses alive at once inside one wave,
   default 3. A wave still runs every member; this only bounds how many at a time.
 
-**Models** — a model is ONE string: a bare alias (`haiku`, `sonnet` (default), `opus`, `fable`, or an old gateway id) resolved on the **default provider**, or a provider ref `provider::model` (`deepseek::deepseek-chat`). The four toolbar chips send bare aliases; the `⋯` picker sends refs. `providers.js` resolves a value per run (`resolveModel`), `server.js resolveRunTarget()` turns that into the child's `--model` + environment, and `claude-cli.js` asks it through `setRunTargetHook` on EVERY `send()` — do not add a second routing path. See **Providers & LLM bridge** below and `docs/providers.md`.
+**Models** — a model is ONE string: a bare alias (`haiku`, `sonnet` (default), `opus`, `fable`, or an old gateway id) resolved on the **default provider**, or a provider ref `provider::model` (`deepseek::deepseek-chat`). The toolbar's one model button opens a picker that sends a bare alias for the default provider's aliases and a ref for everything else. `providers.js` resolves a value per run (`resolveModel`), `server.js resolveRunTarget()` turns that into the child's `--model` + environment, and `claude-cli.js` asks it through `setRunTargetHook` on EVERY `send()` — do not add a second routing path. See **Providers & LLM bridge** below and `docs/providers.md`.
 
 ## MCP & Skills
 
@@ -135,8 +135,9 @@ splice the room's rounds into the thread the bot uses when mentioned normally.
 Not built: the room's artifact is not yet consumed by a DAG node (roadmap item 6b).
 
 ### Engines
-- `api` (default) — headless `claude -p` via `runCliSingle` in server.js
-- `subscription` — persistent interactive tmux session (one per chat) via `claude-interactive.js`, billed on the Claude Max subscription (UI button "Subscription"). MCP servers passed via `--mcp-config` at spawn; systemPrompt via `--append-system-prompt` at spawn; config changes (skills/mode/MCP/model) auto-respawn the tmux session with `--resume` — verified to keep writing to the same transcript jsonl. Image attachments saved to temp files, paths appended to the prompt. maxTurns is not applicable. Choice persisted per session in `sessions.run_engine` (the `engine` column belongs to telegram-bot.js — do not reuse it).
+Which engine a run uses is decided by its MODEL's provider (`runEngineFor`, see Providers below) — there is no engine button.
+- `api` — headless `claude -p` via `runCliSingle` in server.js; every provider except the CLI login
+- `subscription` — persistent interactive tmux session (one per chat) via `claude-interactive.js`, billed on the Claude Max subscription; the models of the CLI-login provider when tmux exists. MCP servers passed via `--mcp-config` at spawn; systemPrompt via `--append-system-prompt` at spawn; config changes (skills/mode/MCP/model) auto-respawn the tmux session with `--resume` — verified to keep writing to the same transcript jsonl. Image attachments saved to temp files, paths appended to the prompt. maxTurns is not applicable. The engine of the last turn is recorded in `sessions.run_engine` (the `engine` column belongs to telegram-bot.js — do not reuse it).
 
 **Interactive prompts (#20).** A subscription turn can stop on a blocking select
 widget (permission question, plan approval, AskUserQuestion). `paneAwaitingInput()`
@@ -204,7 +205,7 @@ shrink its xterm to that pane. The user saw a 46-column strip and nothing else.
   can pin deterministically.
 
 
-**Platform support — capability-checked, not OS-sniffed.** `/api/version` returns `tmuxAvailable` (server runs `tmux -V` once at boot); the UI disables the "Subscription" button when false. Works on macOS / Linux / Docker (tmux in Dockerfile) / Windows-via-WSL or Git-Bash. Native Windows without tmux → button disabled, user stays on `api`. There is intentionally no Windows special-casing — the capability flag covers every case.
+**Platform support — capability-checked, not OS-sniffed.** `/api/version` returns `tmuxAvailable` (server runs `tmux -V` once at boot); without tmux the CLI-login models run headless (`runEngineFor`, `engineOfModel` in the SPA). Works on macOS / Linux / Docker (tmux in Dockerfile) / Windows-via-WSL or Git-Bash. Native Windows without tmux → every run is `api`. There is intentionally no Windows special-casing — the capability flag covers every case.
 
 ### WebSocket Protocol — Do Not Break
 The entire UI depends on this exact message contract:
@@ -253,7 +254,7 @@ On a provider that serves Claude (the CLI login, Anthropic, a Claude gateway) th
 
 - **One choke point.** `ClaudeCLI.send()` calls the routing hook for every headless run; `/api/translate` (the only raw spawn) asks the same hook. A new call site that spawns `claude` some other way skips routing, the bridge token and the usage ledger.
 - **The child never sees a provider key.** A bridge run gets `ANTHROPIC_BASE_URL=<bridge>` and a short-lived `ccsr_` run token; `buildRunEnv()` strips every inherited `ANTHROPIC_*` first. Keep new provider variables in `PROVIDER_ENV_VARS` or they leak from the server env.
-- **The tmux Subscription engine is the CLI login only.** `engineForModel()` / `providers.effectiveEngine()` turn a non-Claude model on that engine into an API run; the spawn script unsets every provider variable because tmux hands a pane its SERVER's environment.
+- **The engine is the model's provider, never a dial.** `server.js runEngineFor(model)` (`providers.engineForModel`) is the one rule for chats, tasks, bots and Telegram: the CLI-login provider (`claude-subscription`, marked *subscription* in every list) runs on the tmux engine when tmux exists, everything else headless. Do not reintroduce an engine field — `sessions.run_engine` only records the last turn's engine, `tasks`/`bots.run_engine` are no longer read (boot migration `migrateEngineDial`). The spawn script unsets every provider variable because tmux hands a pane its SERVER's environment.
 - **Effort comes from the run, not the request.** The CLI sends `effort: "high"` even with no flag, so the bridge takes `RunCtx.effort`; `Auto` reaches it as `'auto'` (send none).
 - **A routing refusal is a stop, not a retry.** `auth-errors.js` classifies it (`provider_unavailable`, `provider_key`) so the auto-continue ladders stop at once.
 - **Cost and window off Anthropic come from the ledger**, not from the CLI (it prices unknown ids with its Claude table and assumes 200K): `withProviderUsage()`.
@@ -622,9 +623,10 @@ user had just picked in the modal — and silent about a bot's model, which OVER
 the session's inside the runner. `kbRunBadges()` in `public/kanban.html` replaces it.
 
 - **The card mirrors `startTask`, it does not re-derive.** Model is
-  `taskBot?.model || session?.model || task.model || 'sonnet'`; effort and engine come
-  off the TASK row (`task.effort`, `task.run_engine`), which is the #79 rule that those
-  dials drive every run regardless of which session the task uses. The two live in
+  `taskBot?.model || session?.model || task.model || 'sonnet'`; effort comes off the
+  TASK row (`task.effort`), which is the #79 rule that it drives every run regardless of
+  which session the task uses; the engine is derived from that same model
+  (`runEngineFor` ↔ `kbEngineOf`) — `task.run_engine` is no longer read. The two live in
   different files, so `test/kanban-run-badges.test.js` pins the runner's expression as
   source text as well as the helper's behaviour — a reorder there makes the card lie
   and nothing else notices.
@@ -641,11 +643,11 @@ the session's inside the runner. `kbRunBadges()` in `public/kanban.html` replace
   run is exactly the thing a silent badge would hide.
 - **The chain card (`renderChainCard`) still shows `chain.model` alone.** Deliberately
   out of scope; a chain has no bot and no per-task engine.
-- **Choosing a non-Claude PROVIDER per task is NOT this.** The Kanban worker parses
-  `claude`'s `stream-json`, and external agents (`config.externalAgents`) reach the
-  studio only through `/api/delegate` and the terminal, which is fire-and-forget with
-  no turn budget, no retry and no session resume. Wiring one into `taskWorker` is a new
-  execution backend, not a dropdown.
+- **External agents are still NOT a task backend.** A task can run any provider's model
+  (the model picker), but external agents (`config.externalAgents`) reach the studio only
+  through `/api/delegate` and the terminal, which is fire-and-forget with no turn budget,
+  no retry and no session resume. Wiring one into `taskWorker` is a new execution
+  backend, not a dropdown.
 
 ### Add project from a Git URL (issue #94)
 
