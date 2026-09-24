@@ -2972,8 +2972,11 @@ html[dir="rtl"] .notif-card.notif-error     { border-right-color: var(--red); }
 html[dir="rtl"] .notif-card.notif-milestone { border-right-color: var(--green); }
 html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 /* ─── Providers (sidebar + modal) and the model picker ─── */
-.tb-btn.mdl-more { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mob-chip.mdl-more { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-btn.mdl-cur, .mob-chip.mdl-cur { display: inline-flex; align-items: center; gap: 6px; max-width: 260px; }
+.mob-chip.mdl-cur { max-width: 100%; }
+.mdl-cur-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mdl-cur-prov { font-size: 10.5px; font-weight: 600; opacity: .8; padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,.14); white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+.mdl-cur-caret { font-size: 9px; opacity: .75; }
 .mdl-pick {
   position: fixed; z-index: 1300; width: 380px; max-width: calc(100vw - 16px);
   background: var(--s2); border: 1px solid var(--border); border-radius: 12px;
@@ -3396,11 +3399,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.model">Model</div>
         <div class="mob-sheet-chips">
-          <button class="mob-chip" data-mob="model" data-v="haiku" onclick="setMobOpt(this,'model')" data-i18n-tip="model.haiku.tip">Haiku</button>
-          <button class="mob-chip on" data-mob="model" data-v="sonnet" onclick="setMobOpt(this,'model')" data-i18n-tip="model.sonnet.tip">Sonnet</button>
-          <button class="mob-chip" data-mob="model" data-v="opus" onclick="setMobOpt(this,'model')" data-i18n-tip="model.opus.tip">Opus</button>
-          <button class="mob-chip" data-mob="model" data-v="fable" onclick="setMobOpt(this,'model')" data-i18n-tip="model.fable.tip">Fable</button>
-          <button class="mob-chip mdl-more" id="mobMdlMoreBtn" onclick="openModelPicker(this)" aria-haspopup="dialog" data-i18n="model.more">Other models…</button>
+          <button class="mob-chip mdl-cur on" id="mobMdlMoreBtn" onclick="openModelPicker(this)" aria-haspopup="dialog">Sonnet</button>
         </div>
       </div>
       <div class="mob-sheet-section">
@@ -3544,11 +3543,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="model">
       <span class="label" data-i18n="tb.model">Model</span>
-      <button class="tb-btn" data-v="haiku" onclick="setOpt(this,'model')" data-i18n-tip="model.haiku.tip">Haiku</button>
-      <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')" data-i18n-tip="model.sonnet.tip">Sonnet</button>
-      <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')" data-i18n-tip="model.opus.tip">Opus</button>
-      <button class="tb-btn" data-v="fable" onclick="setOpt(this,'model')" data-i18n-tip="model.fable.tip">Fable</button>
-      <button class="tb-btn mdl-more" id="mdlMoreBtn" data-v="__more" onclick="openModelPicker(this)" aria-haspopup="dialog">⋯</button>
+      <!-- One button: the chat's current model; the popup lists every provider's models (syncModelMore / openModelPicker). -->
+      <button class="tb-btn mdl-cur on" id="mdlMoreBtn" data-v="__model" onclick="openModelPicker(this)" aria-haspopup="dialog">Sonnet</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -5495,6 +5491,7 @@ const TRANSLATIONS = {
     'prov.notice.engine_api':'Модель «{ref}» — не Claude: рушій «Підписка» її не запустить, відповідь іде через API.',
     'model.more':'Інші моделі…',
     'model.more.tip':'Моделі всіх провайдерів',
+    'model.pick.change':'натисніть, щоб змінити модель',
     'model.pick.search':'Знайти модель…',
     'model.pick.empty':'Нічого не знайдено',
     'model.pick.manage':'⚙ Керувати провайдерами',
@@ -6006,6 +6003,7 @@ const TRANSLATIONS = {
     'prov.notice.engine_api':'Model "{ref}" is not Claude: the Subscription engine cannot run it, so it runs on the API engine.',
     'model.more':'Other models…',
     'model.more.tip':'Models of every provider',
+    'model.pick.change':'click to change the model',
     'model.pick.search':'Find a model…',
     'model.pick.empty':'Nothing found',
     'model.pick.manage':'⚙ Manage providers',
@@ -6517,6 +6515,7 @@ const TRANSLATIONS = {
     'prov.notice.engine_api':'Модель «{ref}» — не Claude: движок «Подписка» её не запустит, ответ идёт через API.',
     'model.more':'Другие модели…',
     'model.more.tip':'Модели всех провайдеров',
+    'model.pick.change':'нажмите, чтобы сменить модель',
     'model.pick.search':'Найти модель…',
     'model.pick.empty':'Ничего не найдено',
     'model.pick.manage':'⚙ Управлять провайдерами',
@@ -6928,6 +6927,7 @@ const TRANSLATIONS = {
     'prov.notice.engine_api':'Le modèle « {ref} » n’est pas Claude : le moteur Abonnement ne peut pas l’exécuter, il passe par l’API.',
     'model.more':'Autres modèles…',
     'model.more.tip':'Modèles de tous les fournisseurs',
+    'model.pick.change':'cliquez pour changer de modèle',
     'model.pick.search':'Trouver un modèle…',
     'model.pick.empty':'Rien trouvé',
     'model.pick.manage':'⚙ Gérer les fournisseurs',
@@ -7312,6 +7312,7 @@ const TRANSLATIONS = {
     'prov.notice.engine_api':'המודל "{ref}" אינו Claude: מנוע המנוי לא יכול להריץ אותו, ולכן הוא רץ דרך ה-API.',
     'model.more':'מודלים נוספים…',
     'model.more.tip':'מודלים של כל הספקים',
+    'model.pick.change':'לחץ כדי להחליף מודל',
     'model.pick.search':'מצא מודל…',
     'model.pick.empty':'לא נמצא דבר',
     'model.pick.manage':'⚙ ניהול ספקים',
@@ -15579,18 +15580,23 @@ function modelCapsText(caps) {
   return out.join(' ');
 }
 
-/** "⋯" names the chosen model whenever it is not one of the four default-provider chips. */
+/** The toolbar's model button names the chat's current model; a model of a provider other
+ *  than the default also carries that provider as a tag ("Sonnet" on the CLI login and
+ *  "Sonnet" on a gateway are different models and must not look alike). */
 function syncModelMore() {
   const mi = modelInfo(curModel);
-  const onChip = !mi.qualified && mi.alias;
+  const defId = _modelChoices && _modelChoices.defaultProviderId;
+  const otherProv = mi.qualified && mi.providerId && mi.providerId !== defId;
+  const full = `${mi.providerLabel ? mi.providerLabel + ' · ' : ''}${mi.label}`;
+  const name = mi.label.length > 26 ? mi.label.slice(0, 25) + '…' : mi.label;
   for (const id of ['mdlMoreBtn', 'mobMdlMoreBtn']) {
     const b = $i(id); if (!b) continue;
-    const on = !!curModel && !onChip;
-    b.classList.toggle('on', on);
-    const full = on ? `${mi.providerLabel ? mi.providerLabel + ' · ' : ''}${mi.label}` : t('model.more.tip');
-    b.textContent = on ? (mi.label.length > 22 ? mi.label.slice(0, 21) + '…' : mi.label) : (id === 'mobMdlMoreBtn' ? t('model.more') : '⋯');
-    b.title = full;
-    b.dataset.tip = full;
+    b.classList.add('on');
+    b.innerHTML = `<span class="mdl-cur-name">${escH(name)}</span>`
+      + (otherProv ? `<span class="mdl-cur-prov">${escH(mi.providerLabel)}</span>` : '')
+      + '<span class="mdl-cur-caret">▾</span>';
+    b.title = `${full} — ${t('model.pick.change')}`;
+    b.dataset.tip = b.title;
   }
 }
 
@@ -15699,7 +15705,8 @@ function positionModelPicker() {
 function renderModelPicker() {
   const list = $i('mdlPickList'); if (!list) return;
   const q = ($i('mdlPickInp')?.value || '').trim().toLowerCase();
-  const provs = (_modelChoices && _modelChoices.providers) || [];
+  // The default provider first: its models are what a bare alias means.
+  const provs = ((_modelChoices && _modelChoices.providers) || []).slice().sort((x, y) => (y.isDefault ? 1 : 0) - (x.isDefault ? 1 : 0));
   const cur = modelInfo(curModel);
   list.innerHTML = '';
   _mdlPickRefs = [];
