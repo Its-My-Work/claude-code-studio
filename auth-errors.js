@@ -73,6 +73,15 @@ function isAuthError(text = '') {
 // a next step is the complaint the issue was filed about.
 const AUTH_KINDS = [
   {
+    // A provider from the registry, reached through llm-bridge: the bridge prefixes every
+    // upstream error with `provider "<label>": `, so this is the key of THAT provider —
+    // `claude login` would change nothing.
+    kind: 'provider_key',
+    re: /provider\s+"[^"\n]{1,60}"\s*:\s*(?:invalid\s+api\s+key|invalid\s+bearer\s+token|authentication)/i,
+    label: 'The provider rejected its API key',
+    hint: 'Open Providers in the sidebar and check that provider\'s API key — or switch the chat to a model of another provider.',
+  },
+  {
     kind: 'oauth_refresh_failed',
     re: /oauth\s+session\s+expired|could\s+not\s+be\s+refreshed|failed\s+to\s+refresh\s+(?:the\s+)?(?:oauth\s+)?(?:access\s+)?token|refresh\s+token\s+(?:is\s+)?(?:missing|expired|invalid|revoked)|oauth\s+token\s+(?:has\s+)?expired/i,
     label: 'OAuth session expired and the CLI could not refresh it',

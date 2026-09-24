@@ -2118,6 +2118,9 @@ async function startTask(task) {
         TASK_MANAGER_TASK_ID: task.id,
         TASK_MANAGER_SESSION_ID: sessionId,
         TASK_MANAGER_SECRET: TASK_MANAGER_SECRET,
+        // The tool's `model` field is free text now (any provider ref); the agent learns
+        // what it may pick from this list, the endpoint re-checks it (validModelOr).
+        TASK_MANAGER_MODELS: modelChoicesForAgents(),
       },
     };
 
@@ -4309,6 +4312,20 @@ function withProviderUsage(resultMeta, infos) {
   return out;
 }
 const CLAUDE_ALIAS_SET = new Set(providersLib.CLAUDE_ALIASES);
+
+/** A model value an agent or API client sent, if it can run; else the fallback. */
+function validModelOr(value, fallback) {
+  if (typeof value !== 'string' || !value.trim()) return fallback;
+  return providersLib.isKnownModel(value.trim(), providerStore.registry()) ? value.trim() : fallback;
+}
+
+/** Comma list of the models an agent may name in create_task (capped — it rides an env var). */
+function modelChoicesForAgents() {
+  const c = providersLib.listChoices(providerStore.registry());
+  const refs = [];
+  for (const p of c.providers) for (const m of p.models) refs.push(m.alias && p.isDefault ? m.id : m.ref);
+  return refs.slice(0, 80).join(', ');
+}
 
 // A chat pinned to a provider that was deleted or switched off runs on the default
 // instead of failing — and says so, once per (chat, pinned model), not on every run.
@@ -6631,7 +6648,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           0,  // sort_order
           (chain_id ? callerTask?.session_id : null) || null, // session_id — only inherit for chain tasks
           workdir,
-          model || callerTask?.model || 'sonnet',
+          validModelOr(model, null) || callerTask?.model || 'sonnet',
           mode || callerTask?.mode || 'auto',
           agent_mode || callerTask?.agent_mode || 'single',
           max_turns || callerTask?.max_turns || UNATTENDED_MAX_TURNS,
@@ -6715,7 +6732,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         // Create chain + shared session
         const chainId = genId();
         const chainSessionId = genId();
-        const effectiveModel = chainModel || callerTask?.model || 'sonnet';
+        const effectiveModel = validModelOr(chainModel, null) || callerTask?.model || 'sonnet';
 
         // One tree for the chain, same as the REST door. GIT_UNAVAILABLE is a 400, not
         // a throw and not a 200 body: mcp-task-manager.js only rejects on
@@ -6767,7 +6784,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             i * 1000, // sort_order
             chainSessionId,
             _mchainWd,
-            td.model || effectiveModel,
+            validModelOr(td.model, null) || effectiveModel,
             'auto', 'single',
             td.max_turns || UNATTENDED_MAX_TURNS,
             null, // attachments
@@ -11975,6 +11992,11 @@ function saveBot(req, res, mode) {
 
   if (body.model !== undefined && body.model !== null && body.model !== '' && !gatewayModels.MODEL_ID_RE.test(String(body.model))) {
     return res.status(400).json({ error: 'model must be 1-100 characters of a-z, 0-9, . _ : / -' });
+  }
+  // A provider ref must name a provider that exists and is switched on — a bot saved
+  // against a typo would otherwise run every turn on the default and nobody would know.
+  if (body.model && String(body.model).includes('::') && !providersLib.isKnownModel(String(body.model), providerStore.registry())) {
+    return res.status(400).json({ error: 'model belongs to a provider that does not exist or is switched off' });
   }
 
   const runEngine = botsLogic.normalizeBotEngine(body.runEngine);
