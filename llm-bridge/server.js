@@ -108,6 +108,7 @@ function createBridgeServer(o = {}) {
   }
 
   const env = {
+    log,
     calibrator,
     pingIntervalMs,
     acquire: (p, signal) => limiterFor(p).acquire(signal),
@@ -304,7 +305,11 @@ function createBridgeServer(o = {}) {
 
   return {
     server,
+    /** Loopback only: this port proxies to providers with real keys behind a bearer token. */
     listen(port = 0, host = '127.0.0.1') {
+      if (!/^(127\.\d+\.\d+\.\d+|::1|localhost)$/.test(String(host))) {
+        return Promise.reject(new Error(`llm-bridge: refusing to listen on non-loopback host ${host}`));
+      }
       return new Promise((resolve, reject) => {
         const onErr = (e) => { server.off('listening', onOk); reject(e); };
         const onOk = () => { server.off('error', onErr); resolve({ port: server.address().port }); };

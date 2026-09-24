@@ -11,9 +11,12 @@ const NO_CAPS = Object.freeze({ tools: null, vision: null, reasoning: null, pdf:
  *  1. modelMap exact match;
  *  2. modelMap family alias ('haiku' / 'sonnet' / …) contained in the name — the CLI sends dated
  *     ids like `claude-haiku-4-5-20251001` for its side calls, and nobody can list every date;
- *  3. anthropic types: unchanged (the provider knows Claude ids);
- *  4. openai-compatible: a model of this run → itself; a Claude-looking unknown id → fallbackModel
- *     (an OpenAI-style provider would only 404 on it); anything else → unchanged.
+ *  3. type 'anthropic': unchanged (the provider knows every Claude id);
+ *  4. otherwise a model of this run → itself; a Claude-looking unknown id → fallbackModel (an
+ *     OpenAI-style provider would only 404 on it, and so would most anthropic-COMPATIBLE ones —
+ *     DeepSeek/Kimi/GLM speak the protocol, not the model names); anything else → unchanged.
+ *     An anthropic-compatible provider without a fallbackModel keeps the id (a proxy that does
+ *     serve Claude models).
  */
 function resolveModel(ctx, requested) {
   const req = typeof requested === 'string' ? requested : '';
@@ -24,10 +27,10 @@ function resolveModel(ctx, requested) {
     if (v && FAMILY_RE.test(k) && lower.includes(k.toLowerCase())) return v;
   }
   const type = ctx && ctx.provider && ctx.provider.type;
-  if (type === 'anthropic' || type === 'anthropic-compatible') return req || ctx.model;
   if (!req) return ctx.model;
+  if (type === 'anthropic') return req;
   if (ctx.models && ctx.models[req]) return req;
-  if (CLAUDE_LIKE_RE.test(req)) return ctx.fallbackModel || ctx.model;
+  if (CLAUDE_LIKE_RE.test(req)) return type === 'anthropic-compatible' ? (ctx.fallbackModel || req) : (ctx.fallbackModel || ctx.model);
   return req;
 }
 

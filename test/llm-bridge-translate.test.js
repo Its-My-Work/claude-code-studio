@@ -316,7 +316,11 @@ console.log('model resolution:');
   check('a run model passes', resolveModel(ctx, 'm1'), 'm1');
   check('an unknown Claude-looking id -> fallbackModel', resolveModel(ctx, 'claude-sonnet-5'), 'fb');
   check('an unknown non-Claude id passes unchanged', resolveModel(ctx, 'vendor/x'), 'vendor/x');
-  check('anthropic types keep Claude ids', resolveModel({ ...ctx, provider: { type: 'anthropic' } }, 'claude-sonnet-5'), 'claude-sonnet-5');
+  check('anthropic keeps Claude ids', resolveModel({ ...ctx, provider: { type: 'anthropic' } }, 'claude-sonnet-5'), 'claude-sonnet-5');
+  check('anthropic-compatible: unknown Claude id -> fallbackModel (DeepSeek & co. do not serve Claude names)', resolveModel({ ...ctx, provider: { type: 'anthropic-compatible' } }, 'claude-sonnet-5'), 'fb');
+  check('anthropic-compatible without a fallbackModel keeps the id (a Claude proxy)', resolveModel({ ...ctx, fallbackModel: null, provider: { type: 'anthropic-compatible' } }, 'claude-sonnet-5'), 'claude-sonnet-5');
+  check('anthropic-compatible: its own model ids pass', resolveModel({ ...ctx, provider: { type: 'anthropic-compatible' } }, 'm1'), 'm1');
+  check('no model in the request -> the run model', resolveModel(ctx, undefined), 'm1');
 }
 
 console.log('schema sanitize:');

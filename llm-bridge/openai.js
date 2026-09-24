@@ -9,7 +9,7 @@
 // first-byte clock is satisfied — followed by a ping every 15 s of silence (a reasoning model
 // can think for minutes without emitting a token; Claude Code aborts a stream that stays silent).
 
-const { sseFrame } = require('./util');
+const { sseFrame, anthropicError } = require('./util');
 const { resolveDialect } = require('./dialects');
 const { resolveModel, capsFor } = require('./models');
 const { toOpenAI, BadRequest } = require('./translate-request');
@@ -177,6 +177,12 @@ async function handleTranslate(rc, env) {
       failWith(transportError(up.reason() || e, label));
     };
     const chunkErrorOpts = { contextWindow: caps.contextWindow, estimate };
+    // A translator bug on one odd chunk must fail THIS request, not escape as an uncaught
+    // exception that takes every other run's stream down with the child.
+    const internal = (e) => {
+      if (env.log) env.log.error(`[llm-bridge] #${rc.id} translation failed: ${(e && e.stack) || e}`);
+      failWith({ status: 500, body: anthropicError('api_error', `llm-bridge: internal error while translating the ${label} response`), headers: {}, errorType: 'api_error' });
+    };
 
     rc.onAbort(() => { up.destroy(); settle({ status: 'aborted' }); });
 
@@ -190,8 +196,15 @@ async function handleTranslate(rc, env) {
           if (r && r.error !== undefined) { failWith(streamChunkError(r.error, label, chunkErrorOpts)); return; }
         }
       });
-      up.stream.on('data', (c) => { if (!done) { rc.markFirstByte(); parser.feed(c); } });
-      up.stream.once('end', () => { if (done) return; parser.end(); complete(); });
+      up.stream.on('data', (c) => {
+        if (done) return;
+        rc.markFirstByte();
+        try { parser.feed(c); } catch (e) { internal(e); }
+      });
+      up.stream.once('end', () => {
+        if (done) return;
+        try { parser.end(); complete(); } catch (e) { internal(e); }
+      });
     } else {
       readAll(up, 64 * 1024 * 1024).then(({ text, error }) => {
         if (done) return;
@@ -201,8 +214,7 @@ async function handleTranslate(rc, env) {
         try { json = JSON.parse(text); } catch { /* handled below */ }
         if (!json || typeof json !== 'object') { failWith(transportError(new UpstreamError('EBADJSON', 'upstream returned a body that is not JSON'), label)); return; }
         if (json.error && !Array.isArray(json.choices)) { failWith(streamChunkError(json.error, label, chunkErrorOpts)); return; }
-        tl.chunk(completionToChunk(json));
-        complete();
+        try { tl.chunk(completionToChunk(json)); complete(); } catch (e) { internal(e); }
       });
       return;
     }

@@ -191,12 +191,12 @@ async function handlePassthrough(rc, env, kind) {
     up.stream.on('data', (c) => {
       if (done) return;
       rc.markFirstByte();
-      tap.feed(c);
+      try { tap.feed(c); } catch { /* usage tap is best effort; the bytes still go through */ }
       if (!rc.res.write(c)) { up.stream.pause(); rc.res.once('drain', () => up.stream.resume()); }
     });
     up.stream.once('end', () => {
       if (done) return;
-      tap.end();
+      try { tap.end(); } catch { /* best effort */ }
       rc.res.end();
       const err = tap.usage.error;
       settle(err ? { status: 'error', httpStatus: up.status, errorType: err.type || 'api_error' } : { status: 'ok', httpStatus: up.status });
