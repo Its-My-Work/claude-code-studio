@@ -292,6 +292,7 @@ console.log('effort, every source and dialect:');
   const E = (ctxEffort, body) => effectiveEffort({ effort: ctxEffort }, body);
   check('RunCtx wins over output_config and thinking', E('low', { output_config: { effort: 'max' }, thinking: { type: 'enabled', budget_tokens: 30000 } }), 'low');
   check('output_config next', E(null, { output_config: { effort: 'max' }, thinking: { type: 'disabled' } }), 'max');
+  check('RunCtx "auto" = provider default, even over the CLI\'s own output_config', E('auto', { output_config: { effort: 'high' }, thinking: { type: 'enabled', budget_tokens: 9000 } }), null);
   check('thinking budgets bucket: <2500 low, <8000 medium, else high', [1024, 2499, 2500, 7999, 8000, 31999].map((b) => E(null, { thinking: { type: 'enabled', budget_tokens: b } })), ['low', 'low', 'medium', 'medium', 'high', 'high']);
   check('enabled without a budget -> medium; adaptive -> provider default; disabled -> none; absent -> none sent',
     [E(null, { thinking: { type: 'enabled' } }), E(null, { thinking: { type: 'adaptive' } }), E(null, { thinking: { type: 'disabled' } }), E(null, {})], ['medium', null, 'none', null]);

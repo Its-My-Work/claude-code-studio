@@ -46,8 +46,13 @@ const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max', 'none']);
  * The reasoning effort for this request: RunCtx.effort (the studio's choice — the CLI may drop
  * --effort for a model id it does not know) ?? output_config.effort ?? the thinking config
  * (enabled budget → bucket; adaptive → provider default; disabled → 'none'). null = send nothing.
+ *
+ * RunCtx.effort 'auto' (beyond the documented values) = "provider default", whatever the request
+ * says: Claude Code 2.1.281 sends output_config.effort "high" even when no --effort was given, so
+ * a null RunCtx.effort can never mean "let the provider decide".
  */
 function effectiveEffort(ctx, body) {
+  if (ctx && ctx.effort === 'auto') return null;
   if (ctx && ctx.effort && EFFORTS.has(ctx.effort)) return ctx.effort;
   const oc = body && body.output_config;
   if (oc && typeof oc.effort === 'string' && EFFORTS.has(oc.effort)) return oc.effort;
