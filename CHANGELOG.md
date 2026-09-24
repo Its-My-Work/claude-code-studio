@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Providers: any model, any mode (not only Claude)
+
+The studio could reach exactly one endpoint — whatever `ANTHROPIC_BASE_URL` said at boot —
+and offered four hardcoded aliases. It now keeps a list of **providers** and every run picks
+its own: chat, multi-agent, rooms, `@@bots`, Kanban tasks, schedules, Telegram and the
+utility calls. Every run is still the `claude` CLI (tools, MCP, hooks, resume, compaction
+unchanged); `llm-bridge/` translates for OpenAI-compatible endpoints. See `docs/providers.md`.
+
+- **Types:** the CLI login (Claude subscription), Anthropic API, Anthropic-compatible
+  endpoints (gateways, DeepSeek/Kimi/GLM/MiniMax), OpenAI-compatible endpoints (OpenAI,
+  OpenRouter, Gemini, Qwen, Groq, Mistral, xAI, Ollama, LM Studio…), with presets.
+- **Nothing to migrate by hand.** `ANTHROPIC_BASE_URL` becomes the default provider on first
+  start; a bare `sonnet` in an existing row keeps meaning what it meant.
+- **A model is one string** (`provider::model`), so it travels through every existing column,
+  WS frame, MCP tool and plan file.
+- **UI:** a Providers section (test before save, catalogue import, capabilities and prices,
+  probe, utility model, 30-day usage); a `⋯` model picker next to the toolbar chips; the bot
+  editor, Kanban and Schedule list every provider's models; Telegram `/model` and `/effort`.
+- **Every parameter reaches the model:** role models for the CLI's own background calls and
+  sub-agents, the real context window (compaction), the output cap, effort taken from the
+  run (the CLI sends "high" by itself), images inside tool results, reasoning echo, tool
+  schema sanitising, stop reasons, cached-token usage, error mapping the CLI understands.
+- **Keys never enter the agent's environment** — the CLI gets a short-lived run token for a
+  loopback bridge. Cost and context % off Anthropic come from the bridge's usage ledger.
+- **Found on the way:** the Subscription engine now honours `--effort` and a bot's model on a
+  task; its spawn script unsets provider variables tmux could hand the pane; `/api/translate`
+  no longer inherits server secrets; `set_ui_state` knows `fable`; Dispatch and Telegram send
+  the chat's effort; a routing refusal stops the turn instead of burning the auto-continues.
+- The Claude Code CLI is pinned (`CLAUDE_CODE_VERSION=2.1.281`) and CI runs a contract test
+  that drives the real binary through the bridge.
+
 ## 7.17.0
 
 ### Add project from a Git URL (#94)

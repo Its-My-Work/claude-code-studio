@@ -81,7 +81,7 @@ Environment (`.env`, see `.env.example`):
 - `MULTI_AGENT_CONCURRENCY` — max `claude` subprocesses alive at once inside one wave,
   default 3. A wave still runs every member; this only bounds how many at a time.
 
-**Models** — the UI exposes four choices: `haiku`, `sonnet` (default), `opus`, `fable`. The short aliases are mapped in `claude-cli.js` (`MODEL_MAP`, lines 81-89) and passed to the `claude` CLI **as-is** (`opus`→`opus`, `sonnet`→`sonnet`, `haiku`→`haiku`, `fable`→`fable`); the CLI resolves each alias internally. `server.js` defines no model map — it defers to `claude-cli.js`. Dated model IDs are kept commented out in `MODEL_MAP` and are not used.
+**Models** — a model is ONE string: a bare alias (`haiku`, `sonnet` (default), `opus`, `fable`, or an old gateway id) resolved on the **default provider**, or a provider ref `provider::model` (`deepseek::deepseek-chat`). The four toolbar chips send bare aliases; the `⋯` picker sends refs. `providers.js` resolves a value per run (`resolveModel`), `server.js resolveRunTarget()` turns that into the child's `--model` + environment, and `claude-cli.js` asks it through `setRunTargetHook` on EVERY `send()` — do not add a second routing path. See **Providers & LLM bridge** below and `docs/providers.md`.
 
 ## MCP & Skills
 
@@ -245,7 +245,19 @@ sonnet
 haiku
 fable
 ```
-These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the CLI — pass them through **as-is**; the `claude` binary resolves each one internally. Do not use dated model-ID suffixes in CLI flags (the dated IDs are kept commented out in `MODEL_MAP`).
+On a provider that serves Claude (the CLI login, Anthropic, a Claude gateway) these aliases are passed to the CLI **as-is** and the `claude` binary resolves them. On any other provider they map through that provider's roles (`haiku→fast`, `sonnet/fable→main`, `opus→strong`) — `providers.resolveModel()` does it, nothing else should. Do not use dated model-ID suffixes in CLI flags.
+
+### Providers & LLM bridge
+
+`providers.js` (pure rules) · `providers-store.js` (SQLite: `providers`, `provider_models`, `provider_settings`, `llm_usage`) · `providers-catalog.js` (GET /models) · `llm-bridge/` (a separate `node` process on 127.0.0.1, spawned like the MCP helpers). Full picture: `docs/providers.md`.
+
+- **One choke point.** `ClaudeCLI.send()` calls the routing hook for every headless run; `/api/translate` (the only raw spawn) asks the same hook. A new call site that spawns `claude` some other way skips routing, the bridge token and the usage ledger.
+- **The child never sees a provider key.** A bridge run gets `ANTHROPIC_BASE_URL=<bridge>` and a short-lived `ccsr_` run token; `buildRunEnv()` strips every inherited `ANTHROPIC_*` first. Keep new provider variables in `PROVIDER_ENV_VARS` or they leak from the server env.
+- **The tmux Subscription engine is the CLI login only.** `engineForModel()` / `providers.effectiveEngine()` turn a non-Claude model on that engine into an API run; the spawn script unsets every provider variable because tmux hands a pane its SERVER's environment.
+- **Effort comes from the run, not the request.** The CLI sends `effort: "high"` even with no flag, so the bridge takes `RunCtx.effort`; `Auto` reaches it as `'auto'` (send none).
+- **A routing refusal is a stop, not a retry.** `auth-errors.js` classifies it (`provider_unavailable`, `provider_key`) so the auto-continue ladders stop at once.
+- **Cost and window off Anthropic come from the ledger**, not from the CLI (it prices unknown ids with its Claude table and assumes 200K): `withProviderUsage()`.
+- **The CLI version is pinned** (Dockerfile `CLAUDE_CODE_VERSION`, CI). `test/llm-bridge-contract.test.js` drives the real binary through the bridge; bump the pin and that test together.
 
 ### Remote shell environment (issue #59)
 
