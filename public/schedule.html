@@ -476,6 +476,7 @@ const TR = {
     'engine.api': 'API', 'engine.sub': 'Підписка',
     'tmux.required': 'На сервері потрібен tmux',
     'locale': 'uk',
+    'model.more':'Інші моделі…','model.more.tip':'Моделі всіх провайдерів',
   },
   en: {
 
@@ -540,6 +541,7 @@ const TR = {
     'engine.api': 'API', 'engine.sub': 'Subscription',
     'tmux.required': 'tmux is required on the server',
     'locale': 'en-GB',
+    'model.more':'Other models…','model.more.tip':'Models of every provider',
   },
   ru: {
 
@@ -604,6 +606,7 @@ const TR = {
     'engine.api': 'API', 'engine.sub': 'Подписка',
     'tmux.required': 'На сервере нужен tmux',
     'locale': 'ru-RU',
+    'model.more':'Другие модели…','model.more.tip':'Модели всех провайдеров',
   },
   fr: {
     'form.exec.bot':'Bot','form.exec.bot.none':'sans bot','form.exec.bot.tip':'La tâche s\'exécute avec le prompt et le modèle de ce bot',
@@ -668,6 +671,7 @@ const TR = {
     'engine.api': 'API', 'engine.sub': 'Abonnement',
     'tmux.required': 'tmux est requis sur le serveur',
     'locale': 'fr-FR',
+    'model.more':'Autres modèles…','model.more.tip':'Modèles de tous les fournisseurs',
   },
   he: {
     'form.exec.bot':'בוט','form.exec.bot.none':'ללא בוט','form.exec.bot.tip':'המשימה תרוץ עם הפרומפט והמודל של הבוט הזה',
@@ -732,6 +736,7 @@ const TR = {
     'engine.api': 'API', 'engine.sub': 'מנוי',
     'tmux.required': 'נדרש tmux בשרת',
     'locale': 'he-IL',
+    'model.more':'מודלים נוספים…','model.more.tip':'מודלים של כל הספקים',
   },
 };
 function t(k) { return (TR[lang]||TR.en)[k] || k; }
@@ -800,6 +805,58 @@ function buildRecurToken() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function $i(id) { return document.getElementById(id); }
+
+// ─── Other providers' models (/api/models/choices, providers.js) ──────────────
+// The four alias buttons stay; this select adds every other configured model. Its choice
+// rides a hidden `.sc-btn.on` inside the same segment, so every reader of
+// `.sc-seg[data-group] .sc-btn.on` — and scOpt's reset — keeps working unchanged.
+let _mdlChoices = null;
+const _MDL_ALIASES = ['haiku', 'sonnet', 'opus', 'fable'];
+async function loadModelChoicesPage() {
+  try { const r = await fetch('/api/models/choices'); _mdlChoices = r.ok ? await r.json() : { providers: [] }; }
+  catch { _mdlChoices = { providers: [] }; }
+  return _mdlChoices;
+}
+/** "deepseek::deepseek-chat" -> "DeepSeek · deepseek-chat"; an alias stays as it is. */
+function modelLabelPage(v) {
+  const s = String(v || '');
+  const i = s.indexOf('::');
+  if (i === -1) return s;
+  const p = ((_mdlChoices && _mdlChoices.providers) || []).find(x => x.id === s.slice(0, i));
+  const m = p && (p.models || []).find(x => x.id === s.slice(i + 2));
+  return `${p ? (p.builtin ? 'Claude' : p.label) : s.slice(0, i)} · ${m ? (m.alias ? m.id : (m.label || m.id)) : s.slice(i + 2)}`;
+}
+function modelMoreHtml(cur, handler) {
+  const c = _mdlChoices || { providers: [] };
+  const isAlias = !cur || _MDL_ALIASES.includes(cur);
+  let found = isAlias;
+  let opts = `<option value="">${escH(t('model.more'))}</option>`;
+  for (const p of c.providers || []) {
+    const items = (p.models || []).filter(m => !(m.alias && p.isDefault));
+    if (!items.length) continue;
+    opts += `<optgroup label="${escH(p.builtin ? 'Claude' : p.label)}">` + items.map(m => {
+      if (m.ref === cur) found = true;
+      return `<option value="${escH(m.ref)}"${m.ref === cur ? ' selected' : ''}>${escH(m.alias ? m.id : (m.label || m.id))}</option>`;
+    }).join('') + '</optgroup>';
+  }
+  if (!found) opts += `<option value="${escH(cur)}" selected>${escH(cur)}</option>`;
+  const hidden = isAlias ? '' : `<button type="button" class="sc-btn on" data-v="${escH(cur)}" data-more="1" hidden></button>`;
+  return `<select class="sc-turns sc-model-more" style="width:auto;max-width:190px" title="${escH(t('model.more.tip'))}" onchange="${handler || 'pickModelMore'}(this)">${opts}</select>${hidden}`;
+}
+/** Make the select's choice the segment's `.sc-btn.on`; '' falls back to Sonnet. Returns the value. */
+function pickModelMore(sel) {
+  const grp = sel.closest('.sc-seg'); if (!grp) return null;
+  grp.querySelectorAll('.sc-btn').forEach(b => b.classList.remove('on'));
+  let h = grp.querySelector('.sc-btn[data-more]');
+  if (!sel.value) {
+    if (h) h.remove();
+    const s = grp.querySelector('.sc-btn[data-v="sonnet"]'); if (s) s.classList.add('on');
+    return 'sonnet';
+  }
+  if (!h) { h = document.createElement('button'); h.type = 'button'; h.className = 'sc-btn'; h.dataset.more = '1'; h.hidden = true; grp.appendChild(h); }
+  h.dataset.v = sel.value; h.classList.add('on');
+  return sel.value;
+}
 function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 const MODAL_FOCUSABLE_SEL='button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let modalRestoreFocus = null;
@@ -1219,7 +1276,7 @@ function renderCard(tk, cls) {
       </span>` : '';
 
   const modelBadge = tk.model
-    ? `<span class="badge badge-muted">${escH(tk.model)}</span>` : '';
+    ? `<span class="badge badge-muted">${escH(modelLabelPage(tk.model))}</span>` : '';
 
   const runBtn = isRunnable
     ? `<button class="btn-run" onclick="runNow('${tk.id}')" title="${t('card.run_now.title')}">
@@ -1287,7 +1344,7 @@ function renderScheduleChainCard(chain, cls) {
     ? `<span class="badge badge-orange"><span class="spinning"></span> ${t('card.running')}</span>`
     : `<span class="badge badge-muted"><span class="dot dot-${chain.derived_status}"></span> ${statusLabel(chain.derived_status)}</span>`;
 
-  const modelBadge = chain.model ? `<span class="badge badge-muted">${escH(chain.model)}</span>` : '';
+  const modelBadge = chain.model ? `<span class="badge badge-muted">${escH(modelLabelPage(chain.model))}</span>` : '';
 
   const runBtn = isRunnable
     ? `<button class="btn-run" onclick="runChainNow('${chain.id}')" title="${escH(t('group.run_now'))}">
@@ -1469,6 +1526,7 @@ function buildForm(tk={}) {
           <button type="button" class="sc-btn${(tk.model||'sonnet')==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${tk.model==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
           <button type="button" class="sc-btn${tk.model==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
+          ${modelMoreHtml(tk.model || 'sonnet')}
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg">
@@ -1513,6 +1571,7 @@ function scOpt(btn) {
   if (!grp) return;
   grp.querySelectorAll('.sc-btn').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
+  const mm = grp.querySelector('.sc-model-more'); if (mm) mm.value = '';
 }
 
 // Engine (api/subscription) segment. Subscription disabled without server tmux.
@@ -1706,6 +1765,7 @@ function applyStaticI18n() {
     tc.onmessage = e => { if (e.data?.type === 'task_deleted' || e.data?.type === 'task_changed') refresh(); };
   } catch {}
 })();
+loadModelChoicesPage();
 </script>
 </body>
 </html>

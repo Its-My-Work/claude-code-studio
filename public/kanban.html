@@ -506,6 +506,7 @@ const TR = {
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача','agent.single':'Один','agent.multi':'Мульти',
     'effort.auto':'Авто','effort.low':'Низьке','effort.med':'Середнє','effort.high':'Високе','effort.xhigh':'Дуже високе','effort.max':'Максимальне',
     'engine.api':'API','engine.sub':'Підписка','tmux.required':'Потрібен tmux на сервері',
+    'model.more':'Інші моделі…','model.more.tip':'Моделі всіх провайдерів',
   },
   en: {
     'modal.task_cfg':'Run settings','modal.task_cfg_note':'Changes are saved and affect the next run, not the one in progress. Which dials take effect depends on the task engine and on whether it already has a session.',
@@ -554,6 +555,7 @@ const TR = {
     'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Task','agent.single':'Single','agent.multi':'Multi',
     'effort.auto':'Auto','effort.low':'Low','effort.med':'Medium','effort.high':'High','effort.xhigh':'XHigh','effort.max':'Max',
     'engine.api':'API','engine.sub':'Subscription','tmux.required':'tmux is required on the server',
+    'model.more':'Other models…','model.more.tip':'Models of every provider',
   },
   ru: {
     'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Изменения сохраняются и влияют на следующий запуск, а не на текущий. Какие именно настройки подействуют, зависит от движка задачи и от того, есть ли у неё уже сессия.',
@@ -602,6 +604,7 @@ const TR = {
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача','agent.single':'Один','agent.multi':'Мульти',
     'effort.auto':'Авто','effort.low':'Низкое','effort.med':'Среднее','effort.high':'Высокое','effort.xhigh':'Очень высокое','effort.max':'Максимальное',
     'engine.api':'API','engine.sub':'Подписка','tmux.required':'Нужен tmux на сервере',
+    'model.more':'Другие модели…','model.more.tip':'Модели всех провайдеров',
   },
   fr: {
     'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Les modifications sont enregistrées et affectent le prochain lancement, pas celui en cours. Les réglages qui prennent effet dépendent du moteur de la tâche et du fait qu elle ait déjà une session.',
@@ -650,6 +653,7 @@ const TR = {
     'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Tâche','agent.single':'Simple','agent.multi':'Multi',
     'effort.auto':'Auto','effort.low':'Faible','effort.med':'Moyen','effort.high':'Élevé','effort.xhigh':'Très élevé','effort.max':'Maximal',
     'engine.api':'API','engine.sub':'Abonnement','tmux.required':'tmux est requis sur le serveur',
+    'model.more':'Autres modèles…','model.more.tip':'Modèles de tous les fournisseurs',
   },
   he: {
     'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'השינויים נשמרים ומשפיעים על ההרצה הבאה, לא על זו שרצה כעת. אילו הגדרות ייכנסו לתוקף תלוי במנוע המשימה ובשאלה אם כבר יש לה סשן.',
@@ -698,6 +702,7 @@ const TR = {
     'mode.auto':'אוטומטי','mode.plan':'תכנון','mode.task':'משימה','agent.single':'יחיד','agent.multi':'מרובה',
     'effort.auto':'אוטומטי','effort.low':'נמוך','effort.med':'בינוני','effort.high':'גבוה','effort.xhigh':'גבוה מאוד','effort.max':'מרבי',
     'engine.api':'API','engine.sub':'מנוי','tmux.required':'נדרש tmux בשרת',
+    'model.more':'מודלים נוספים…','model.more.tip':'מודלים של כל הספקים',
   },
 };
 // `let`, not `const`: this page is reachable directly (/kanban, /schedule) in a
@@ -760,6 +765,63 @@ let _kbTmuxAvailable=true, _kbDefaultEngine='api';
 
 // ─── Utils ────────────────────────────────────────────────────────────────
 const UI_LOCALES={uk:'uk-UA',en:'en-US',ru:'ru-RU',fr:'fr-FR',he:'he-IL'};
+
+// ─── Other providers' models (/api/models/choices, providers.js) ──────────────
+// The four alias buttons stay; this select adds every other configured model. Its choice
+// rides a hidden `.sc-btn.on` inside the same segment, so every reader of
+// `.sc-seg[data-group] .sc-btn.on` — and scOpt's reset — keeps working unchanged.
+let _mdlChoices = null;
+const _MDL_ALIASES = ['haiku', 'sonnet', 'opus', 'fable'];
+async function loadModelChoicesPage() {
+  try { const r = await fetch('/api/models/choices'); _mdlChoices = r.ok ? await r.json() : { providers: [] }; }
+  catch { _mdlChoices = { providers: [] }; }
+  return _mdlChoices;
+}
+/** "deepseek::deepseek-chat" -> "DeepSeek · deepseek-chat"; an alias stays as it is. */
+function modelLabelPage(v) {
+  const s = String(v || '');
+  const i = s.indexOf('::');
+  if (i === -1) return s;
+  const p = ((_mdlChoices && _mdlChoices.providers) || []).find(x => x.id === s.slice(0, i));
+  const m = p && (p.models || []).find(x => x.id === s.slice(i + 2));
+  return `${p ? (p.builtin ? 'Claude' : p.label) : s.slice(0, i)} · ${m ? (m.alias ? m.id : (m.label || m.id)) : s.slice(i + 2)}`;
+}
+function modelMoreHtml(cur, handler) {
+  const c = _mdlChoices || { providers: [] };
+  const isAlias = !cur || _MDL_ALIASES.includes(cur);
+  let found = isAlias;
+  let opts = `<option value="">${escH(t('model.more'))}</option>`;
+  for (const p of c.providers || []) {
+    const items = (p.models || []).filter(m => !(m.alias && p.isDefault));
+    if (!items.length) continue;
+    opts += `<optgroup label="${escH(p.builtin ? 'Claude' : p.label)}">` + items.map(m => {
+      if (m.ref === cur) found = true;
+      return `<option value="${escH(m.ref)}"${m.ref === cur ? ' selected' : ''}>${escH(m.alias ? m.id : (m.label || m.id))}</option>`;
+    }).join('') + '</optgroup>';
+  }
+  if (!found) opts += `<option value="${escH(cur)}" selected>${escH(cur)}</option>`;
+  const hidden = isAlias ? '' : `<button type="button" class="sc-btn on" data-v="${escH(cur)}" data-more="1" hidden></button>`;
+  return `<select class="sc-turns sc-model-more" style="width:auto;max-width:190px" title="${escH(t('model.more.tip'))}" onchange="${handler || 'pickModelMore'}(this)">${opts}</select>${hidden}`;
+}
+/** Make the select's choice the segment's `.sc-btn.on`; '' falls back to Sonnet. Returns the value. */
+function pickModelMore(sel) {
+  const grp = sel.closest('.sc-seg'); if (!grp) return null;
+  grp.querySelectorAll('.sc-btn').forEach(b => b.classList.remove('on'));
+  let h = grp.querySelector('.sc-btn[data-more]');
+  if (!sel.value) {
+    if (h) h.remove();
+    const s = grp.querySelector('.sc-btn[data-v="sonnet"]'); if (s) s.classList.add('on');
+    return 'sonnet';
+  }
+  if (!h) { h = document.createElement('button'); h.type = 'button'; h.className = 'sc-btn'; h.dataset.more = '1'; h.hidden = true; grp.appendChild(h); }
+  h.dataset.v = sel.value; h.classList.add('on');
+  return sel.value;
+}
+function kbPickModelMore(sel){
+  const v=pickModelMore(sel);
+  if(v)kbSettings.model=v;
+  try{localStorage.setItem('kanban_sess_cfg',JSON.stringify(kbSettings));}catch{}
+}
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // Escape for a single-quoted JS string inside a double-quoted HTML attribute (inline onclick).
 function escArg(s){return escH(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"));}
@@ -1302,7 +1364,9 @@ function kbBlockedInfo(tk){
 // session and retry badges.
 const KB_EFFORT_KEY={low:'low',medium:'med',high:'high',xhigh:'xhigh',max:'max'};
 function kbRunBadges(tk){
-  const out=[{text:tk.bot_model||tk.sess_model||tk.model||'sonnet',title:t('tb.model')}];
+  const _m=tk.bot_model||tk.sess_model||tk.model||'sonnet';
+  // A provider ref reads as "Provider · model" (modelLabelPage); an alias is shown as it is.
+  const out=[{text:typeof modelLabelPage==='function'?modelLabelPage(_m):_m,title:t('tb.model')}];
   const eff=String(tk.effort||'').trim();
   // An unknown value is shown verbatim rather than dropped: it is what the run will be
   // given, and a silently missing badge is how a bad stored dial stays invisible.
@@ -1651,6 +1715,7 @@ function buildChainForm(chain){
           <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
           <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
+          ${modelMoreHtml(mdl, 'kbPickModelMore')}
         </div>
         <div class="sc-sep" style="display:none"></div>
         ${engineSegHtml(chain.run_engine)}
@@ -2023,6 +2088,7 @@ function buildForm(tk={}){
           <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
           <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
+          ${modelMoreHtml(mdl, 'kbPickModelMore')}
         </div>
         <div class="sc-sep" style="display:none"></div>
         ${engineSegHtml(tk.run_engine)}
@@ -2128,6 +2194,7 @@ function scOpt(btn){
   if(!grp)return;
   grp.querySelectorAll('.sc-btn').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
+  const mm=grp.querySelector('.sc-model-more'); if(mm)mm.value='';
   const g=grp.dataset.group;
   if(g==='agent')kbSettings.agent_mode=btn.dataset.v;
   else if(g)kbSettings[g]=btn.dataset.v;
@@ -2328,6 +2395,7 @@ function closeModal(){closeOverlay('taskOv');}
     tc.onmessage=e=>{if(e.data?.type==='task_deleted'||e.data?.type==='task_changed'||e.data?.type==='chain_deleted'||e.data?.type==='chain_changed')refresh(true);};
   }catch{}
 })();
+loadModelChoicesPage();
 </script>
 </body>
 </html>
