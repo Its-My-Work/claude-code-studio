@@ -144,6 +144,9 @@ class TelegramBot extends EventEmitter {
     // Projects live in a JSON file that only server.js reads, so this arrives as a
     // callback rather than a query — same composition as the Forum module's facade.
     this._getRoster = typeof opts.getRoster === 'function' ? opts.getRoster : null;
+    // The model list /model offers (server.js → providers.listChoices). A callback for the
+    // same reason as getRoster: the provider registry lives in the server's store.
+    this._getModelChoices = typeof opts.getModelChoices === 'function' ? opts.getModelChoices : null;
 
     // In-memory state
     this._pairingCodes = new Map();  // code → { createdAt, expiresAt }
@@ -1026,6 +1029,8 @@ class TelegramBot extends EventEmitter {
       case '/full':    return this._cmdFull(chatId, userId);
       case '/status':  return this._cmdStatus(chatId, userId);
       case '/bots':    return this._cmdBots(chatId, userId);
+      case '/model':   return this._cmdModel(chatId, userId);
+      case '/effort':  return this._cmdEffort(chatId, userId);
       case '/tasks':   return this._cmdTasks(chatId, userId);
       case '/files':   return this._cmdFiles(chatId, userId, args);
       case '/cat':     return this._cmdCat(chatId, userId, args);
@@ -1116,6 +1121,95 @@ class TelegramBot extends EventEmitter {
       const last = i === chunks.length - 1;
       await this._sendMessage(chatId, chunks[i], last ? (keyboard || navButtons) : {});
     }
+  }
+
+  // ─── /model and /effort ────────────────────────────────────────────────────
+  // The chat's own dials, the ones the web toolbar sets (sessions.model / sessions.effort) —
+  // Telegram used to have no way to change either. A model ref can outgrow the 64-byte
+  // callback_data ("openrouter::vendor/model-name"), so the buttons carry INDEXES into a
+  // per-user snapshot of the list, taken when the menu opens.
+  _modelLabel(value) {
+    const v = String(value || 'sonnet');
+    const c = this._getModelChoices ? this._getModelChoices() : null;
+    const i = v.indexOf('::');
+    const provs = (c && c.providers) || [];
+    const p = i === -1 ? provs.find(x => x.isDefault) : provs.find(x => x.id === v.slice(0, i));
+    const id = i === -1 ? v : v.slice(i + 2);
+    const m = p && (p.models || []).find(x => x.id === id);
+    const pl = p ? (p.builtin ? 'Claude' : p.label) : (i === -1 ? '' : v.slice(0, i));
+    return `${pl ? pl + ' · ' : ''}${m && !m.alias ? (m.label || m.id) : id}`;
+  }
+
+  async _cmdModel(chatId, userId) {
+    const ctx = this._getContext(userId);
+    const back = [{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }];
+    if (!ctx.sessionId) return this._showScreen(chatId, userId, this._t('model_no_chat'), [back]);
+    const c = this._getModelChoices ? this._getModelChoices() : null;
+    if (!c || !Array.isArray(c.providers) || !c.providers.length) return this._showScreen(chatId, userId, this._t('model_unavailable'), [back]);
+    ctx.modelMenu = c.providers.map(p => ({
+      label: p.builtin ? 'Claude' : p.label, isDefault: !!p.isDefault,
+      models: (p.models || []).map(m => ({
+        // The default provider's aliases are stored bare, exactly as the toolbar chips send them.
+        value: (m.alias && p.isDefault) ? m.id : m.ref,
+        label: m.alias ? m.id : (m.label || m.id),
+        noTools: !!(m.caps && m.caps.tools === false),
+      })),
+    }));
+    const sess = this.db.prepare('SELECT model FROM sessions WHERE id = ?').get(ctx.sessionId);
+    const text = this._t('model_current', { model: this._escHtml(this._modelLabel(sess && sess.model)) }) + '\n\n' + this._t('model_pick_provider');
+    const rows = ctx.modelMenu.map((p, i) => [{ text: `${p.isDefault ? '★ ' : ''}${p.label}`.slice(0, 60), callback_data: `md:p:${i}:0` }]);
+    rows.push(back);
+    return this._showScreen(chatId, userId, text, rows);
+  }
+
+  async _routeModel(chatId, userId, data) {
+    const ctx = this._getContext(userId);
+    const menu = ctx.modelMenu;
+    if (!menu || !ctx.sessionId) return this._cmdModel(chatId, userId);
+    const PAGE = 8;
+    const parts = data.split(':');
+    if (parts[1] === 'p') {
+      const pi = parseInt(parts[2], 10), page = Math.max(0, parseInt(parts[3], 10) || 0);
+      const p = menu[pi];
+      if (!p) return this._cmdModel(chatId, userId);
+      const slice = p.models.slice(page * PAGE, page * PAGE + PAGE);
+      const rows = slice.map((m, k) => [{ text: `${m.label}${m.noTools ? ' ⚠' : ''}`.slice(0, 60), callback_data: `md:s:${pi}:${page * PAGE + k}` }]);
+      const nav = [];
+      if (page > 0) nav.push({ text: '‹', callback_data: `md:p:${pi}:${page - 1}` });
+      if ((page + 1) * PAGE < p.models.length) nav.push({ text: '›', callback_data: `md:p:${pi}:${page + 1}` });
+      if (nav.length) rows.push(nav);
+      rows.push([{ text: this._t('btn_back'), callback_data: 'md:root' }]);
+      return this._showScreen(chatId, userId, this._t('model_pick_model', { provider: this._escHtml(p.label) }), rows);
+    }
+    if (parts[1] === 's') {
+      const m = menu[parseInt(parts[2], 10)]?.models[parseInt(parts[3], 10)];
+      if (!m) return this._cmdModel(chatId, userId);
+      this.db.prepare('UPDATE sessions SET model = ? WHERE id = ?').run(m.value, ctx.sessionId);
+      return this._showScreen(chatId, userId, this._t('model_set', { model: this._escHtml(this._modelLabel(m.value)) }) + (m.noTools ? '\n\n' + this._t('model_no_tools') : ''),
+        [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+    }
+    return this._cmdModel(chatId, userId);
+  }
+
+  async _cmdEffort(chatId, userId) {
+    const ctx = this._getContext(userId);
+    const back = [{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }];
+    if (!ctx.sessionId) return this._showScreen(chatId, userId, this._t('model_no_chat'), [back]);
+    const sess = this.db.prepare('SELECT effort FROM sessions WHERE id = ?').get(ctx.sessionId);
+    const cur = (sess && sess.effort) || 'auto';
+    const levels = ['auto', 'low', 'medium', 'high', 'xhigh', 'max'];
+    const rows = [levels.slice(0, 3), levels.slice(3)].map(row => row.map(v => ({ text: `${v === cur ? '• ' : ''}${this._t('effort_' + v)}`, callback_data: `ef:${v}` })));
+    rows.push(back);
+    return this._showScreen(chatId, userId, this._t('effort_current', { effort: this._t('effort_' + (levels.includes(cur) ? cur : 'auto')) }), rows);
+  }
+
+  async _routeEffort(chatId, userId, data) {
+    const ctx = this._getContext(userId);
+    const v = data.slice(3);
+    if (!ctx.sessionId || !['auto', 'low', 'medium', 'high', 'xhigh', 'max'].includes(v)) return this._cmdEffort(chatId, userId);
+    // 'auto' is stored as the word, not as '' — the web chat's rule (chat-defaults.js).
+    this.db.prepare('UPDATE sessions SET effort = ? WHERE id = ?').run(v, ctx.sessionId);
+    return this._showScreen(chatId, userId, this._t('effort_set', { effort: this._t('effort_' + v) }), [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
   }
 
   async _cmdProjects(chatId, userId) {
@@ -1906,6 +2000,9 @@ class TelegramBot extends EventEmitter {
       if (data === 's:menu')       return this._screenSettings(chatId, userId, opts);
       if (data.startsWith('s:'))   return this._routeSettings(chatId, userId, data, opts);
       if (data.startsWith('tn:'))  return this._routeTunnel(chatId, userId, data, opts);
+      if (data === 'md:root')      return this._cmdModel(chatId, userId);
+      if (data.startsWith('md:'))  return this._routeModel(chatId, userId, data);
+      if (data.startsWith('ef:'))  return this._routeEffort(chatId, userId, data);
     } catch (err) {
       this.log.error(`[telegram] Callback error: ${err.message}`);
       await this._editScreen(chatId, msgId, this._t('error_prefix', { msg: this._escHtml(err.message) }), [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
@@ -3474,6 +3571,8 @@ class TelegramBot extends EventEmitter {
         const ago = this._timeAgo(sess.updated_at);
         const msgCount = this.db.prepare('SELECT COUNT(*) as c FROM messages WHERE session_id = ?').get(ctx.sessionId)?.c || 0;
         text += `\n💬 <b>${this._escHtml(title)}</b>\n📊 ${msgCount} msg · ${ago}`;
+        const _m = this.db.prepare('SELECT model FROM sessions WHERE id = ?').get(ctx.sessionId);
+        text += `\n🧠 ${this._escHtml(this._modelLabel(_m && _m.model))} · /model`;
       }
     } else {
       text += `\n💬 <i>${this._t('error_no_session')}</i>`;

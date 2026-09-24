@@ -11276,7 +11276,7 @@ function initTelegramBot() {
   const tg = c.telegram;
   if (!tg || !tg.enabled || !tg.botToken) return;
 
-  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster, isolateUnit: _isolateTelegramUnit });
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster, isolateUnit: _isolateTelegramUnit, getModelChoices: () => providersLib.listChoices(providerStore.registry()) });
   telegramBot.acceptNewConnections = tg.acceptNewConnections !== false;
   _attachTelegramListeners(telegramBot);
 
@@ -11320,7 +11320,7 @@ app.post('/api/telegram/start', (req, res) => {
   }
 
   // Start new bot
-  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster, isolateUnit: _isolateTelegramUnit });
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster, isolateUnit: _isolateTelegramUnit, getModelChoices: () => providersLib.listChoices(providerStore.registry()) });
   telegramBot.acceptNewConnections = c.telegram.acceptNewConnections !== false;
   _attachTelegramListeners(telegramBot);
 
