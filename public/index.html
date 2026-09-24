@@ -593,6 +593,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Agent team card ─── */
 .agent-team-card {
+  white-space: normal; /* same as .plan-review-card: may sit inside a pre-wrap .msg */
   align-self: flex-start;
   background: var(--s2);
   border: 1px solid var(--border);
@@ -697,6 +698,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Plan review card (planner bot's plan/ package -> Kanban approval) ─── */
 .plan-review-card {
+  /* Restored from history the card lives inside .mw.assistant .msg, which is pre-wrap for
+     plain text; without this the template's newlines/indent render as blank lines. */
+  white-space: normal;
   align-self: flex-start; background: var(--s2); border: 1px solid var(--border); border-radius: 12px;
   padding: 0; max-width: 560px; width: 100%; overflow: hidden; animation: status-appear .25s var(--ease-out); margin: 4px 0;
 }
