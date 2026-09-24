@@ -462,7 +462,12 @@ const CLAUDE_MODEL_RE = /^[A-Za-z0-9._-]+$/;
 function botModel(bot, engine, chatModel) {
   const own = bot && typeof bot.model === 'string' ? bot.model : '';
   if (!own) return chatModel;
-  if (engine === 'subscription' && !CLAUDE_MODEL_RE.test(own)) return chatModel;
+  if (engine === 'subscription') {
+    // A provider ref to the CLI-login row ("claude::opus", providers.js) IS a Claude
+    // model; the tmux engine takes it without the prefix. Any other ref is not.
+    const bare = own.startsWith('claude::') ? own.slice('claude::'.length) : own;
+    return CLAUDE_MODEL_RE.test(bare) ? bare : chatModel;
+  }
   return own;
 }
 

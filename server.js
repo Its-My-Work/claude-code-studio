@@ -128,6 +128,11 @@ const {
 const termBridge = require('./terminal-bridge');
 const botsLogic = require('./bots');
 const gatewayModels = require('./gateway-models');
+// Provider registry (pure rules / SQLite rows / catalogue fetch). Wired below, after the
+// secret-encryption key exists — see "PROVIDERS & LLM BRIDGE".
+const providersLib = require('./providers');
+const { createProviderStore } = require('./providers-store');
+const providersCatalog = require('./providers-catalog');
 // One catalogue for the process: the gateway the CLI talks to, read with the server's own token.
 const modelCatalog = gatewayModels.createCatalog({ baseUrl: process.env.ANTHROPIC_BASE_URL, token: process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY });
 // A message that is nothing but a mention ("@@analyst") strips to an empty string —
@@ -2052,6 +2057,7 @@ async function startTask(task) {
     blockedTasks.delete(task.id); // clear any stale flag an earlier, crashed run left behind
     let fullText = '', newCid = claudeSessionId, hasError = false;
     taskBuffers.set(task.id, '');
+    const taskRunInfos = []; // provider routing of every CLI run of this task (withProviderUsage)
     // Notify watchers — use task_retrying for restarts, task_started for first run
     // Include prompt so client can show user message bubble during live streaming
     if (isRetry) {
@@ -2117,7 +2123,10 @@ async function startTask(task) {
 
     // Engine selection: subscription tasks run via the persistent interactive
     // tmux Claude session (billed on Claude Max), one-shot, no auto-continue.
-    const _taskEngine = (task.run_engine === 'subscription') ? 'subscription' : 'api';
+    const _taskEngineDial = (task.run_engine === 'subscription') ? 'subscription' : 'api';
+    // The tmux engine runs the CLI's own login only (providers.effectiveEngine): a task
+    // whose model belongs to another provider runs headless instead of silently on Claude.
+    const _taskEngine = engineForModel(_taskEngineDial, taskBot?.model || session?.model || task.model || 'sonnet');
 
     while (true) {
       lastTaskResult = null;
@@ -2130,7 +2139,8 @@ async function startTask(task) {
         // returned value below (same shape the chat path uses).
         const _proxy = { send: (str) => { try { broadcastToSession(sessionId, JSON.parse(str)); } catch {} } };
         const r = await runInteractiveSingle({
-          prompt: currentTaskPrompt, systemPrompt: '', model: session?.model || task.model || 'sonnet',
+          // The bot's model wins here too — the Kanban card has always said so (#84).
+          prompt: currentTaskPrompt, systemPrompt: '', model: taskBot?.model || session?.model || task.model || 'sonnet', effort: task.effort || null,
           mode: task.mode || 'auto', ws: _proxy, sessionId, abortController: taskAbort,
           claudeSessionId: currentTaskCid, workdir: task.workdir || WORKDIR, mcpServers: taskMcpServers,
           // Same gap the chat path had, and found while reviewing that fix: the api
@@ -2238,7 +2248,9 @@ async function startTask(task) {
         // personal CLAUDE.md — same boundary as a bot answering in chat, or every
         // reply opens with the user's own activation preamble.
         ...(taskBot ? { settingSources: 'project,local' } : {}),
-        maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: taskBot?.label || task.title, effort: task.effort || null, extraEnv: taskInterruptEnv, extraSettings: taskInterruptSettings });
+        maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: taskBot?.label || task.title, effort: task.effort || null, extraEnv: taskInterruptEnv, extraSettings: taskInterruptSettings,
+        runMeta: { purpose: 'task', sessionId, taskId: task.id, botId: taskBot?.id || null } });
+      if (!_taskRemote) taskRunInfos.push(cli.lastRunTarget);
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -2661,7 +2673,7 @@ async function startTask(task) {
       console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
     }
     const _taskModelInfo = lastTaskResult?.modelUsage ? Object.values(lastTaskResult.modelUsage)[0] : null;
-    const _taskMeta = lastTaskResult ? { cost: lastTaskResult.total_cost_usd, usage: lastTaskResult.usage, lastTurnUsage: lastTaskTurnUsage, numTurns: lastTaskResult.num_turns, durationMs: lastTaskResult.duration_ms, contextWindow: _taskModelInfo?.contextWindow || 0 } : null;
+    const _taskMeta = withProviderUsage(lastTaskResult ? { cost: lastTaskResult.total_cost_usd, usage: lastTaskResult.usage, lastTurnUsage: lastTaskTurnUsage, numTurns: lastTaskResult.num_turns, durationMs: lastTaskResult.duration_ms, contextWindow: _taskModelInfo?.contextWindow || 0 } : null, taskRunInfos);
     broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt, ...(_taskMeta ? { resultMeta: _taskMeta } : {}) });
   } catch (err) {
     log.error(`[taskWorker] task ${task.id} exception`, { message: err.message, name: err.name, stack: err.stack });
@@ -3827,7 +3839,8 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
 
     cli.send({
       prompt,
-      model: 'haiku',
+      model: utilityModel(),
+      runMeta: { purpose: 'utility' },
       maxTurns: 1,
       settingSources: 'user', // skip project CLAUDE.md — service call, everything explicit
       tools: '',           // disable all built-in tools (--tools "")
@@ -4172,6 +4185,144 @@ function decryptPassword(stored) {
 // testSshConnection is now exported from claude-ssh.js (uses ssh2 library, supports password auth)
 
 // ============================================
+// PROVIDERS & LLM BRIDGE
+// ============================================
+// The registry decides, per run, which endpoint and model the `claude` CLI talks to
+// (providers.js has the rules, providers-store.js the rows). Non-login providers are
+// reached through llm-bridge/ — a separate node process on 127.0.0.1 that holds the
+// real keys, translates for OpenAI-compatible endpoints and records usage. The CLI gets
+// only a short-lived run token for it.
+//
+// Created HERE, not next to the schema: the store encrypts with encryptPassword(),
+// whose key constant above is in its temporal dead zone until this point.
+const providerStore = createProviderStore(db, { encrypt: encryptPassword, decrypt: decryptPassword, log });
+try { providerStore.seedFromEnv(process.env); } catch (e) { log.warn('provider seeding failed', { err: e.message }); }
+providerStore.pruneUsage();
+
+let createBridgeHost = null;
+try { ({ createBridgeHost } = require('./llm-bridge/host')); }
+catch (e) { log.warn('llm-bridge unavailable — Anthropic-type providers run with the key in the CLI env, OpenAI-compatible ones cannot run', { err: e.message }); }
+
+function onBridgeUsage(rec) {
+  if (!rec || typeof rec !== 'object') return;
+  let costUsd = null;
+  try {
+    const p = providerStore.get(rec.providerId);
+    const pricing = p ? (p.models.find(m => m.id === rec.model) || {}).pricing : null;
+    costUsd = providersLib.computeCost(rec, pricing);
+  } catch {}
+  providerStore.recordUsage({ ...rec, costUsd });
+}
+
+const llmBridge = (createBridgeHost && process.env.CCS_BRIDGE !== 'off') ? createBridgeHost({
+  nodeCmd: NODE_CMD,
+  childPath: helperPath('llm-bridge', 'child.js'),
+  port: parseInt(process.env.CCS_BRIDGE_PORT || '0', 10) || 0,
+  onUsage: onBridgeUsage,
+  log: {
+    debug: (m, d) => log.debug(`[llm-bridge] ${m}`, d),
+    info: (m, d) => log.info(`[llm-bridge] ${m}`, d),
+    warn: (m, d) => log.warn(`[llm-bridge] ${m}`, d),
+    error: (m, d) => log.error(`[llm-bridge] ${m}`, d),
+  },
+}) : null;
+let llmBridgeError = llmBridge ? null : (createBridgeHost ? 'disabled (CCS_BRIDGE=off)' : 'module unavailable');
+if (llmBridge) {
+  llmBridge.start().then(() => log.info('llm-bridge ready', { url: llmBridge.baseUrl() }))
+    .catch(e => { llmBridgeError = e.message; log.warn('llm-bridge failed to start', { err: e.message }); });
+}
+
+function bridgeUp() { return !!(llmBridge && llmBridge.running() && llmBridge.baseUrl()); }
+
+/** Public summary of one resolution — what a WS frame / result meta may carry. */
+function runTargetInfo(t, extra = {}) {
+  return {
+    ref: t.ref, providerId: t.provider.id, providerLabel: t.provider.label, providerType: t.provider.type,
+    modelId: t.modelId, routing: t.routing, caps: t.caps, fallback: t.fallback || null, engineChanged: !!t.engineChanged, ...extra,
+  };
+}
+
+/**
+ * The ClaudeCLI hook (claude-cli.js setRunTargetHook). Returns what one headless run needs:
+ * { cliModel, runEnv, extraArgs, info, release } or { error }.
+ */
+function resolveRunTarget({ model, effort, engine, meta }) {
+  const t = providersLib.resolveModel(model, providerStore.registry(), { engine: engine || 'api' });
+  if (!t.ok) return { error: `Model "${model}" cannot run: ${t.error === 'no_model' ? `provider "${t.providerId}" has no model enabled` : 'not a valid model'}` };
+  if (t.fallback) log.warn('model pinned to an unavailable provider — running on the default', { model, fallback: t.fallback, ref: t.ref });
+
+  if (t.routing === 'oauth' || t.routing === 'remote') {
+    return { cliModel: t.cliModel, runEnv: providersLib.buildRunEnv(t), extraArgs: [], info: runTargetInfo(t), release: null };
+  }
+  if (bridgeUp()) {
+    const ctx = providersLib.buildRunCtx(t, { ...(meta || {}), effort: effort || null });
+    const token = llmBridge.registerRun(ctx);
+    const runEnv = providersLib.buildRunEnv(t, { baseUrl: llmBridge.baseUrl(), token });
+    return { cliModel: t.cliModel, runEnv, extraArgs: runEnv.extraArgs, info: runTargetInfo(t, { runId: ctx.runId }), release: () => llmBridge.releaseRun(token) };
+  }
+  // Bridge down: an Anthropic-shaped endpoint is still reachable the pre-bridge way —
+  // its key in the CLI's env. Worse isolation, same behaviour as before this registry.
+  if (t.provider.type !== 'openai-compatible') {
+    const runEnv = providersLib.buildRunEnv(t, { baseUrl: t.provider.baseUrl, token: t.provider.apiKey });
+    if (t.provider.authScheme === 'x-api-key') { runEnv.set.ANTHROPIC_API_KEY = t.provider.apiKey; delete runEnv.set.ANTHROPIC_AUTH_TOKEN; }
+    return { cliModel: t.cliModel, runEnv, extraArgs: runEnv.extraArgs, info: runTargetInfo(t, { routing: 'direct' }), release: null };
+  }
+  return { error: `Provider "${t.provider.label}" is OpenAI-compatible and needs the LLM bridge, which is not running (${llmBridgeError || 'starting'}).` };
+}
+ClaudeCLI.setRunTargetHook(resolveRunTarget);
+
+/** The model a stored value really runs on for `engine` — for engine decisions and badges. */
+function resolveModelFor(model, engine) {
+  return providersLib.resolveModel(model, providerStore.registry(), { engine: engine || 'api' });
+}
+
+/** The tmux Subscription engine runs the CLI's own login only; anything else goes headless. */
+function engineForModel(engine, model) {
+  return providersLib.effectiveEngine(engine, model, providerStore.registry());
+}
+
+/** Model the utility calls use (classifier/titles, compact, translate). */
+function utilityModel() {
+  return providerStore.registry().utilityModel || 'haiku';
+}
+
+/**
+ * Fold the bridge's ledger into a run's result meta. The CLI prices usage with ITS Claude
+ * table and reports a 200K window for any id it does not know — both wrong off Anthropic.
+ * `infos` = the lastRunTarget of every CLI invocation of this turn (auto-continues included).
+ */
+function withProviderUsage(resultMeta, infos) {
+  const list = (infos || []).filter(Boolean);
+  const last = list[list.length - 1];
+  if (!resultMeta || !last) return resultMeta;
+  const out = { ...resultMeta, provider: { id: last.providerId, label: last.providerLabel, model: last.modelId, routing: last.routing, ref: last.ref } };
+  if (last.providerType === 'openai-compatible' || (last.providerType === 'anthropic-compatible' && !CLAUDE_ALIAS_SET.has(last.modelId))) {
+    let cost = 0, any = false, priced = true;
+    for (const i of list) {
+      const u = i.runId ? providerStore.usageForRun(i.runId) : null;
+      if (!u) continue;
+      any = true; if (u.unpriced) priced = false; cost += u.cost || 0;
+    }
+    out.cost = any && priced ? Math.round(cost * 1e6) / 1e6 : null;
+    if (last.caps && last.caps.contextWindow) out.contextWindow = last.caps.contextWindow;
+  }
+  return out;
+}
+const CLAUDE_ALIAS_SET = new Set(providersLib.CLAUDE_ALIASES);
+
+// A chat pinned to a provider that was deleted or switched off runs on the default
+// instead of failing — and says so, once per (chat, pinned model), not on every run.
+const _fallbackNoticed = new Set();
+function noticeProviderFallback(info, { ws, sessionId, tabId } = {}) {
+  if (!info || !info.fallback || !ws) return;
+  const key = `${sessionId}|${info.ref}|${info.fallback}`;
+  if (_fallbackNoticed.has(key)) return;
+  if (_fallbackNoticed.size > 1000) _fallbackNoticed.clear();
+  _fallbackNoticed.add(key);
+  try { ws.send(JSON.stringify({ type: 'provider_notice', kind: info.fallback, ref: info.ref, providerLabel: info.providerLabel, ...(tabId ? { tabId } : {}) })); } catch {}
+}
+
+// ============================================
 // EXECUTION ENGINES
 // ============================================
 
@@ -4291,6 +4442,9 @@ async function runCliSingle(p) {
 
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   let pendingFork = !!forkSession; // only fork on first CLI call
+  // Where each CLI invocation of this turn went (provider, bridge run id) — the ledger
+  // behind withProviderUsage(); auto-continues are separate runs of the same turn.
+  const runInfos = [];
 
   // Run a single CLI invocation and return { resultData, sid, errorText, rateLimitInfo }
   const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
@@ -4320,7 +4474,10 @@ async function runCliSingle(p) {
       CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
     };
 
-    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, name, effort })
+    const _h = cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, name, effort, runMeta: { purpose: 'chat', sessionId } });
+    runInfos.push(cli.lastRunTarget);
+    noticeProviderFallback(cli.lastRunTarget, { ws, sessionId, tabId });
+    _h
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -4648,14 +4805,14 @@ async function runCliSingle(p) {
   try { if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch (e) { log.error('[THINKING-SAVE-ERR] CLI text save failed', { sessionId, error: e.message }); }
   try { stmts.setPartialText.run(null, sessionId); } catch {}
   const _modelInfo = lastResult?.modelUsage ? Object.values(lastResult.modelUsage)[0] : null;
-  const resultMeta = lastResult ? {
+  const resultMeta = withProviderUsage(lastResult ? {
     cost: totalCostUsd || lastResult.total_cost_usd,
     usage: lastResult.usage,
     lastTurnUsage,
     numTurns: lastResult.num_turns,
     durationMs: lastResult.duration_ms,
     contextWindow: _modelInfo?.contextWindow || 0,
-  } : null;
+  } : null, runInfos);
   return { cid: newCid, completed: lastResult?.subtype === 'success', resultMeta };
 }
 
@@ -5081,7 +5238,7 @@ async function pickRoomSeating({ cwd, model, prompt, mode, bots, abortController
         .send({
           prompt: botsLogic.seatingPrompt({ prompt, mode, bots }),
           model, maxTurns: 1, allowedTools: [], tools: '', settingSources: '',
-          abortController: ac, jsonSchema: botsLogic.SEATING_SCHEMA,
+          abortController: ac, jsonSchema: botsLogic.SEATING_SCHEMA, runMeta: { purpose: 'utility' },
         })
         .onText(t => { out += t; })
         .onTool((name, input) => { if (name === 'StructuredOutput' && input) out = typeof input === 'string' ? input : JSON.stringify(input); })
@@ -5111,7 +5268,8 @@ function seatingNote({ room, skipped }) {
 async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent, engine, mode } = p;
   // The engine THIS bot's turn runs on: its own choice (web chat only, see botsLogic.botEngine), else the chat's.
-  const botEngine = (bot) => botsLogic.botEngine(bot, engine, { enabled: !!p.perBotEngine, tmux: tmuxAvailable() });
+  // …and never the tmux engine for a model of another provider (providers.effectiveEngine).
+  const botEngine = (bot) => engineForModel(botsLogic.botEngine(bot, engine, { enabled: !!p.perBotEngine, tmux: tmuxAvailable() }), (bot && bot.model) || model);
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   const send = (o) => { try { ws.send(JSON.stringify({ ...o, ...(tabId ? { tabId } : {}) })); } catch {} };
   const save = (text, agentId) => { try { stmts.addMsg.run(sessionId, 'assistant', 'text', text, null, agentId, null, null); } catch {} };
@@ -5283,6 +5441,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
           // multiply its cost by the size of the room.
           contentBlocks: first && attachments.length ? attachments : null,
           model: botsLogic.botModel(bot, 'api', model),
+          runMeta: { purpose: 'room', sessionId, botId: bot.id },
           maxTurns: deliverable ? closeCap : turnCap,
           systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName(), { discussion: !deliverable }),
           // No _ccs_bots: the room is the dispatcher. See the invariants above.
@@ -5459,7 +5618,8 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
 
 async function runBotTurns(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent, engine } = p;
-  const botEngine = (bot) => botsLogic.botEngine(bot, engine, { enabled: !!p.perBotEngine, tmux: tmuxAvailable() });
+  // …and never the tmux engine for a model of another provider (providers.effectiveEngine).
+  const botEngine = (bot) => engineForModel(botsLogic.botEngine(bot, engine, { enabled: !!p.perBotEngine, tmux: tmuxAvailable() }), (bot && bot.model) || model);
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
   // Same tool set as a normal turn, plus the internal MCP tools — without
   // check_user_messages a bot cannot see a clarification the user sends mid-run.
@@ -5670,6 +5830,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
         sessionId: botSession,
         // A bot may pin its own model; otherwise it follows the chat's.
         model: botsLogic.botModel(bot, 'api', model),
+        runMeta: { purpose: 'bot', sessionId, botId: bot.id },
         maxTurns: turnCap,
         // Only applied when there is no session to resume — that is exactly why each
         // bot needs its own session rather than sharing the chat's.
@@ -5840,7 +6001,7 @@ async function runMultiAgent(p) {
     //   tools=''         → disables all built-in tools (Read, Bash, …)
     //   settingSources='' → skips user/project/local CLAUDE.md and skills
     // StructuredOutput is injected by --json-schema and remains available.
-    cli.send({ prompt:planPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], tools:'', settingSources:'', abortController, effort, jsonSchema: planSchema })
+    cli.send({ prompt:planPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], tools:'', settingSources:'', abortController, effort, jsonSchema: planSchema, runMeta: { purpose: 'multi', sessionId } })
       .onText(t => { planText+=t; })
       // With --json-schema the model emits the result via the synthetic
       // "StructuredOutput" tool_use rather than plain text. Capture its input
@@ -5989,7 +6150,7 @@ async function runMultiAgent(p) {
             // worker would pay for it once per agent.
             contentBlocks: (agentContinues === 0 && isFirstWave && Array.isArray(userContent)) ? userContent : null,
             sessionId: agentSessionId, model, maxTurns:agentTurnCap, systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, forkSession: agentFork, effort,
-            extraEnv: agentInterruptEnv, extraSettings: agentInterruptSettings })
+            extraEnv: agentInterruptEnv, extraSettings: agentInterruptSettings, runMeta: { purpose: 'multi', sessionId } })
             .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
             .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
             .onResult(r => { agentResult = r; })
@@ -6090,7 +6251,7 @@ Provide a clear summary of what was accomplished. Be concise.`;
   await new Promise(res => {
     let _settled = false;
     const _res = () => { if (!_settled) { _settled = true; res(); } };
-    cli.send({ prompt:summaryPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController, effort })
+    cli.send({ prompt:summaryPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController, effort, runMeta: { purpose: 'multi', sessionId } })
       .onText(t => { summaryText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:'summarizer', ...(tabId ? { tabId } : {}) })); } catch {} })
       .onSessionId(sid => { currentSessionId = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
       .onError(() => _res())
@@ -6994,9 +7155,17 @@ app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
   const langName = LANG_NAMES[targetLang] || 'English';
 
   const bin = claudeCli.claudeBin;
+  // Routed like every other run (the utility model, on its provider); the only direct
+  // spawn left outside ClaudeCLI.send, so it asks the same hook itself.
+  const target = ClaudeCLI.resolveRunTarget({ model: utilityModel(), engine: 'api', meta: { purpose: 'utility' } });
+  if (target && target.error) return res.status(502).json({ error: 'Translation failed', detail: target.error });
   const env = { ...process.env };
   delete env.CLAUDECODE;
+  if (target && target.runEnv) providersLib.applyRunEnv(env, target.runEnv);
+  // Same rule as claude-cli.js: this child has Read/Write on a prompt built from user text.
+  for (const k of ClaudeCLI.SERVER_ONLY_ENV) delete env[k];
   if (!env.ANTHROPIC_BASE_URL) delete env.ANTHROPIC_API_KEY;
+  const releaseTarget = () => { if (target && typeof target.release === 'function') { try { target.release(); } catch {} } };
 
   // Write source text to temp file — avoids CLI argument length limits
   const tmpId = `claude-translate-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
@@ -7010,9 +7179,10 @@ app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
   const prompt = `Read the file ${srcFile}. Translate the entire content to ${langName}. Write ONLY the pure translation (no comments, no explanations, preserve all line breaks and structure) to ${dstFile}.`;
   const args = [
     '--print',
-    '--model', 'haiku',
+    '--model', (target && target.cliModel) || 'haiku',
     '--max-turns', '3',
     '--no-session-persistence',
+    ...((target && target.extraArgs) || []),
     '--dangerously-skip-permissions',
     '--tools', 'Read,Write',
     '--output-format', 'text',
@@ -7034,6 +7204,7 @@ app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
 
   proc.on('close', code => {
     clearTimeout(timeout);
+    releaseTarget();
     if (responded) return;
     responded = true;
     try {
@@ -7060,6 +7231,7 @@ app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
 
   proc.on('error', err => {
     clearTimeout(timeout);
+    releaseTarget();
     if (responded) return;
     responded = true;
     console.error('[translate] spawn error', err.message);
@@ -9106,7 +9278,8 @@ ${transcript}`;
 
       cli.send({
         prompt: compactPrompt,
-        model: 'haiku',
+        model: utilityModel(),
+        runMeta: { purpose: 'utility', sessionId: sid },
         maxTurns: 1,
         tools: '',
         mcpServers: {},
@@ -10773,11 +10946,14 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       mode,
       workdir,
       tabId: sessionId,
+      // The chat's own effort dial — Telegram used to drop it and run every turn on Auto.
+      effort: chatDefaults.effortToFlag(session.effort) || null,
     };
 
     // Check if the active project is a remote SSH project
     const _activeProj = findRemoteProject(workdir);
-    const _isSubscriptionEngine = (session.run_engine || 'api') === 'subscription';
+    // Same rule as the web chat: the tmux engine is the CLI login only.
+    const _isSubscriptionEngine = engineForModel((session.run_engine || 'api') === 'subscription' ? 'subscription' : 'api', model) === 'subscription';
     const _botsAvail = botsLogic.botsAvailability({ remote: !!_activeProj, runEngine: session.run_engine });
     if (tgBots.length && !_botsAvail.available) {
       // Bots run through the headless `api` engine only (runBotTurns spawns its own
@@ -11522,6 +11698,208 @@ app.get('/api/bots', (req, res) => {
 app.get('/api/models', async (req, res) => {
   const r = await modelCatalog.get();
   res.json({ models: r.models, ...(r.error ? { error: r.error } : {}), ...(r.stale ? { stale: true } : {}) });
+});
+
+// ─── Providers (providers.js / providers-store.js / llm-bridge) ─────────────────
+// Keys go in, never out: every answer is providerStore.publicProvider() (hasKey, masked
+// secret headers). Model ids carry `/` and `:`, so they travel in the body or the
+// query string, never as a path segment.
+function providersPayload() {
+  const pub = providerStore.publicList();
+  return {
+    ...pub,
+    presets: providersLib.PRESETS,
+    dialects: providersLib.DIALECTS,
+    bridge: { running: bridgeUp(), error: bridgeUp() ? null : (llmBridgeError || 'starting') },
+    lastStatus: providerStore.lastStatusByProvider(),
+  };
+}
+
+async function refreshProviderCatalog(id) {
+  const p = providerStore.get(id);
+  if (!p) return { ok: false, error: 'not_found' };
+  if (p.type === 'claude-subscription') {
+    const st = require('./claude-cli').claudeCliStatus();
+    const lastTest = { ok: st.available && st.authenticated, at: Date.now(), error: !st.available ? 'cli_missing' : (!st.authenticated ? 'not_logged_in' : null) };
+    providerStore.update(id, { lastTest });
+    return { ok: lastTest.ok, total: 0, noCatalog: true, error: lastTest.error };
+  }
+  const r = await providersCatalog.fetchCatalog(p);
+  let merged = null;
+  if (r.ok && r.models.length) merged = providerStore.upsertCatalog(id, r.models);
+  providerStore.update(id, { lastTest: { ok: r.ok, at: Date.now(), models: r.models.length, error: r.error || null, noCatalog: !!r.noCatalog } });
+  return { ok: r.ok, total: r.models.length, added: merged ? merged.added : 0, autoEnabled: merged ? merged.autoEnabled : false, noCatalog: !!r.noCatalog, error: r.error || null };
+}
+
+/** Two real requests through the bridge: a forced tool call and a plain reply. */
+async function probeProviderModel(providerId, modelId) {
+  if (!bridgeUp()) return { ok: false, error: 'bridge_down' };
+  const t = providersLib.resolveModel(providersLib.formatModelRef(providerId, modelId), providerStore.registry(), { engine: 'api' });
+  if (!t.ok || t.fallback || t.routing !== 'bridge') return { ok: false, error: t.error || t.fallback || 'not_probeable' };
+  const ctx = providersLib.buildRunCtx(t, { purpose: 'probe' });
+  const token = llmBridge.registerRun(ctx);
+  const call = async (body) => {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 90000);
+    const t0 = Date.now();
+    try {
+      const r = await fetch(`${llmBridge.baseUrl()}/v1/messages`, { method: 'POST', signal: ctl.signal,
+        headers: { 'content-type': 'application/json', 'x-api-key': token, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: t.cliModel, max_tokens: 512, ...body }) });
+      const j = await r.json().catch(() => null);
+      return { status: r.status, body: j, ms: Date.now() - t0 };
+    } finally { clearTimeout(timer); }
+  };
+  try {
+    const tool = await call({
+      messages: [{ role: 'user', content: 'Connectivity probe. Call the tool `ping` with value 7. Do not answer in text.' }],
+      tools: [{ name: 'ping', description: 'Connectivity probe — call it with the number you were given.', input_schema: { type: 'object', properties: { value: { type: 'integer' } }, required: ['value'] } }],
+      tool_choice: { type: 'any' },
+    });
+    const text = await call({ messages: [{ role: 'user', content: 'Reply with exactly the word OK and nothing else.' }] });
+    const errOf = (x) => (x.status >= 400 ? (x.body && x.body.error && x.body.error.message) || `HTTP ${x.status}` : null);
+    const use = tool.body && Array.isArray(tool.body.content) ? tool.body.content.find(b => b.type === 'tool_use') : null;
+    const txt = text.body && Array.isArray(text.body.content) ? text.body.content.filter(b => b.type === 'text').map(b => b.text).join('') : '';
+    const verified = {
+      at: Date.now(),
+      tools: !!(use && use.name === 'ping' && Number(use.input && use.input.value) === 7),
+      text: /\bOK\b/i.test(txt),
+      latencyMs: text.ms,
+      error: errOf(tool) || errOf(text),
+    };
+    providerStore.setModel(providerId, modelId, { verified });
+    return { ok: verified.text || verified.tools, verified };
+  } catch (e) {
+    return { ok: false, error: e.name === 'AbortError' ? 'timeout' : e.message };
+  } finally {
+    llmBridge.releaseRun(token, { graceMs: 0 });
+  }
+}
+
+app.get('/api/providers', (req, res) => res.json(providersPayload()));
+
+app.post('/api/providers', async (req, res) => {
+  const v = providersLib.validateProviderInput(req.body || {}, { creating: true });
+  if (v.errors.length) return res.status(400).json({ error: 'invalid', fields: v.errors });
+  try { providerStore.create(v.value); }
+  catch (e) { if (e.code === 'exists') return res.status(409).json({ error: 'exists' }); throw e; }
+  const refresh = await refreshProviderCatalog(v.value.id).catch(e => ({ ok: false, error: e.message }));
+  res.json({ ok: true, provider: providerStore.publicProvider(providerStore.get(v.value.id)), refresh });
+});
+
+app.put('/api/providers/:id', (req, res) => {
+  const cur = providerStore.get(req.params.id);
+  if (!cur) return res.status(404).json({ error: 'not_found' });
+  const body = req.body || {};
+  // The CLI-login row has no URL, key or type to edit — only whether it is offered.
+  const raw = cur.type === 'claude-subscription' ? { enabled: body.enabled } : body;
+  const v = providersLib.validateProviderInput(raw, { creating: false });
+  if (v.errors.length) return res.status(400).json({ error: 'invalid', fields: v.errors });
+  providerStore.update(cur.id, { ...v.value, clearApiKey: cur.type !== 'claude-subscription' && body.clearApiKey === true });
+  const reg = providerStore.registry();
+  if (v.value.enabled === false && reg.defaultProviderId === cur.id) providerStore.setDefault(providersLib.BUILTIN_CLAUDE_ID);
+  if (llmBridge && llmBridge.updateProviders) { try { llmBridge.updateProviders({}); } catch {} }
+  res.json({ ok: true, provider: providerStore.publicProvider(providerStore.get(cur.id)) });
+});
+
+app.delete('/api/providers/:id', (req, res) => {
+  if (req.params.id === providersLib.BUILTIN_CLAUDE_ID) return res.status(400).json({ error: 'builtin' });
+  if (!providerStore.get(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  providerStore.remove(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/providers/:id/default', (req, res) => {
+  if (!providerStore.setDefault(req.params.id)) return res.status(400).json({ error: 'unavailable' });
+  res.json({ ok: true, defaultProviderId: req.params.id });
+});
+
+app.put('/api/providers-settings', (req, res) => {
+  const { utilityModel: um } = req.body || {};
+  if (um !== undefined) {
+    if (um !== '' && um !== null && !providersLib.isKnownModel(String(um), providerStore.registry())) return res.status(400).json({ error: 'invalid', fields: ['utilityModel'] });
+    providerStore.setSetting('utilityModel', um || '');
+  }
+  res.json({ ok: true, utilityModel: providerStore.registry().utilityModel });
+});
+
+app.post('/api/providers/:id/test', async (req, res) => {
+  if (!providerStore.get(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  res.json(await refreshProviderCatalog(req.params.id).catch(e => ({ ok: false, error: e.message })));
+});
+
+// Test a DRAFT before saving it (the SSH-host "test-new" pattern). A blank key on an
+// existing id means "the stored one" — the form never receives the key to resend.
+app.post('/api/providers-test', async (req, res) => {
+  const body = req.body || {};
+  const v = providersLib.validateProviderInput({ ...body, id: undefined }, { creating: false });
+  if (v.errors.length) return res.status(400).json({ error: 'invalid', fields: v.errors });
+  const stored = body.id ? providerStore.get(String(body.id)) : null;
+  const draft = { type: v.value.type || (stored && stored.type), baseUrl: v.value.baseUrl || (stored && stored.baseUrl),
+    apiKey: v.value.apiKey || (stored && stored.apiKey) || '', authScheme: v.value.authScheme || (stored && stored.authScheme) || 'bearer',
+    headers: v.value.headers || (stored && stored.headers) || {} };
+  if (!draft.type || !draft.baseUrl) return res.status(400).json({ error: 'invalid', fields: ['baseUrl'] });
+  const r = await providersCatalog.fetchCatalog(draft).catch(e => ({ ok: false, models: [], error: e.message }));
+  res.json({ ok: r.ok, total: r.models.length, sample: r.models.slice(0, 8).map(m => m.id), noCatalog: !!r.noCatalog, error: r.error || null });
+});
+
+app.post('/api/providers/:id/models/refresh', async (req, res) => {
+  if (!providerStore.get(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  const r = await refreshProviderCatalog(req.params.id).catch(e => ({ ok: false, error: e.message }));
+  res.json({ ...r, provider: providerStore.publicProvider(providerStore.get(req.params.id)) });
+});
+
+app.post('/api/providers/:id/models', (req, res) => {
+  const p = providerStore.get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'not_found' });
+  if (p.type === 'claude-subscription') return res.status(400).json({ error: 'builtin' });
+  const { modelId, label, caps } = req.body || {};
+  const m = providerStore.addManualModel(p.id, String(modelId || '').trim(), { label, caps });
+  if (!m) return res.status(400).json({ error: 'invalid', fields: ['modelId'] });
+  res.json({ ok: true, model: m });
+});
+
+app.put('/api/providers/:id/models', (req, res) => {
+  const { modelId, enabled, label, caps, pricing } = req.body || {};
+  const m = providerStore.setModel(req.params.id, String(modelId || ''), { enabled, label, caps, pricing });
+  if (!m) return res.status(404).json({ error: 'not_found' });
+  res.json({ ok: true, model: m });
+});
+
+// Bulk on/off for a big catalogue: { modelIds:[…], enabled }.
+app.put('/api/providers/:id/models/bulk', (req, res) => {
+  const { modelIds, enabled } = req.body || {};
+  if (!Array.isArray(modelIds) || modelIds.length > 2000) return res.status(400).json({ error: 'invalid' });
+  let n = 0;
+  for (const id of modelIds) if (providerStore.setModel(req.params.id, String(id), { enabled: !!enabled })) n++;
+  res.json({ ok: true, changed: n });
+});
+
+app.delete('/api/providers/:id/models', (req, res) => {
+  const modelId = String(req.query.modelId || '');
+  if (!providerStore.removeModel(req.params.id, modelId)) return res.status(404).json({ error: 'not_found' });
+  res.json({ ok: true });
+});
+
+app.post('/api/providers/:id/models/probe', async (req, res) => {
+  const { modelId } = req.body || {};
+  if (!providerStore.get(req.params.id)) return res.status(404).json({ error: 'not_found' });
+  res.json(await probeProviderModel(req.params.id, String(modelId || '')));
+});
+
+// What every model picker renders (chat toolbar, bot editor, Kanban, schedule, Telegram).
+app.get('/api/models/choices', (req, res) => {
+  res.json({ ...providersLib.listChoices(providerStore.registry()), bridge: { running: bridgeUp() } });
+});
+
+app.get('/api/llm-usage', (req, res) => {
+  res.json({ rows: providerStore.usageSummary(parseInt(req.query.days, 10) || 30) });
+});
+
+app.get('/api/llm-bridge/log', async (req, res) => {
+  if (!llmBridge) return res.json({ running: false, entries: [] });
+  try { res.json({ running: bridgeUp(), entries: await llmBridge.recentLog() }); }
+  catch (e) { res.json({ running: bridgeUp(), entries: [], error: e.message }); }
 });
 
 // A bot row carries the projects it is available in. The UI needs this to say
@@ -12440,7 +12818,14 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=_cd.effort, engine='api' } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=_cd.effort, engine: engineDial='api' } = msg;
+      // What the toolbar says (persisted as the chat's run_engine) vs what the run can
+      // use: the tmux Subscription engine is the CLI's own login, so a model of another
+      // provider runs headless (providers.effectiveEngine) — and the user is told once.
+      const engine = engineForModel(engineDial === 'subscription' ? 'subscription' : 'api', model);
+      if (engineDial === 'subscription' && engine !== 'subscription') {
+        try { ws.send(JSON.stringify({ type: 'provider_notice', kind: 'engine_api', ref: model, ...(effectiveTabId ? { tabId: effectiveTabId } : {}) })); } catch {}
+      }
       // Two different things, deliberately kept apart: `effort` is what the chat is
       // SET to (may be the spelled-out 'auto'), `_effortFlag` is what the CLI gets
       // (no flag at all for auto). Storing the flag would erase the difference
@@ -12531,7 +12916,7 @@ wss.on('connection', (ws) => {
         localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
       // Persist engine choice (coerce anything other than 'subscription' to 'api')
-      try { db.prepare(`UPDATE sessions SET run_engine=? WHERE id=?`).run(engine === 'subscription' ? 'subscription' : 'api', localSessionId); } catch {}
+      try { db.prepare(`UPDATE sessions SET run_engine=? WHERE id=?`).run(engineDial === 'subscription' ? 'subscription' : 'api', localSessionId); } catch {}
 
       // Auto-title: use LLM-generated title if available, otherwise smart-truncate message
       if (isNewSession || DEFAULT_SESSION_TITLES.has(existSess?.title)) {
@@ -13555,7 +13940,7 @@ wss.on('connection', (ws) => {
               // Same hardening as runMultiAgent's plan call: tools='' disables built-in tools,
               // settingSources='' skips CLAUDE.md + skills, --json-schema makes the model emit
               // via the synthetic StructuredOutput tool — captured in .onTool below.
-              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.claude_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [], tools: '', settingSources: '', jsonSchema: planSchema })
+              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.claude_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [], tools: '', settingSources: '', jsonSchema: planSchema, effort: effort || null, runMeta: { purpose: 'dispatch', sessionId: session?.id || null } })
                 .onText(t => { planText += t; })
                 .onTool((name, input) => { if (name === 'StructuredOutput' && input) planText = typeof input === 'string' ? input : JSON.stringify(input); })
                 .onError(() => { if (!done) { done = true; resolve(); } })
