@@ -169,7 +169,9 @@ console.log('\nwhich task dials each run path actually receives:');
   // The subscription path is the mirror image.
   check('subscription run receives mode', has(sub, 'mode'), true);
   check('subscription run does NOT receive maxTurns', has(sub, 'maxTurns'), false);
-  check('subscription run does NOT receive effort', has(sub, 'effort'), false);
+  // Effort used to be dropped on this engine; `--effort` is a spawn flag of the
+  // interactive CLI too, so claude-interactive.js now passes it (providers work).
+  check('subscription run receives effort', has(sub, 'effort'), true);
   // agent_mode reaches neither: it is read only when the session is first created.
   check('neither run path receives agentMode', has(api, 'agentMode') || has(sub, 'agentMode'), false);
 }

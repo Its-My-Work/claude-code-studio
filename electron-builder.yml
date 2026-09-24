@@ -27,6 +27,9 @@ asarUnpack:
   # level deeper than the entry point: mcp-bots.js unpacked fine and still died on
   # `Cannot find module './bots.js'`. Pinned by test/asar-helpers.test.js.
   - "bots.js"
+  # The LLM bridge child (server.js spawns llm-bridge/child.js with the plain `node`).
+  # It requires only its own directory and Node core modules.
+  - "llm-bridge/**"
 
 files:
   - "**/*"

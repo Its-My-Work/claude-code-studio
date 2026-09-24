@@ -18,6 +18,11 @@ const SERVER_URL = process.env.TASK_MANAGER_SERVER_URL || 'http://127.0.0.1:3000
 const TASK_ID = process.env.TASK_MANAGER_TASK_ID || '';
 const SESSION_ID = process.env.TASK_MANAGER_SESSION_ID || '';
 const SECRET = process.env.TASK_MANAGER_SECRET || '';
+// Models used to be a fixed enum of four Claude aliases. The studio now routes any
+// provider's model ("deepseek::deepseek-chat"), so the field is free text and the list
+// of what is actually configured arrives from the server; the endpoint re-validates.
+const MODEL_CHOICES = String(process.env.TASK_MANAGER_MODELS || 'haiku, sonnet, opus, fable').slice(0, 4000);
+const MODEL_HELP = `One of: ${MODEL_CHOICES}. An unknown value is ignored and the current task's model is used.`;
 const MAX_STDIN_BUFFER = 10 * 1024 * 1024; // 10 MB
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────
@@ -47,7 +52,7 @@ const TOOLS = [
         context: {
           description: 'Curated context to pass to the child task. Include ONLY what the child needs — issue details, code snippets, error messages, etc. Can be a string or a JSON object. The child reads this via get_current_task.',
         },
-        model: { type: 'string', enum: ['haiku', 'sonnet', 'opus', 'fable'], description: 'AI model for the task (default: inherit from current task)' },
+        model: { type: 'string', description: `AI model for the task (default: inherit from current task). ${MODEL_HELP}` },
         depends_on: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must complete before this task starts' },
         chain_id: { type: 'string', description: 'Add this task to an existing chain' },
         scheduled_at: { type: 'string', description: 'ISO 8601 datetime for delayed execution' },
@@ -71,7 +76,7 @@ const TOOLS = [
               title: { type: 'string' },
               description: { type: 'string' },
               context: { description: 'Context for this specific task' },
-              model: { type: 'string', enum: ['haiku', 'sonnet', 'opus', 'fable'] },
+              model: { type: 'string', description: MODEL_HELP },
               max_turns: { type: 'number' },
               depends_on_index: { type: 'array', items: { type: 'number' }, description: 'Indices (0-based) of tasks in this chain that must complete first. If omitted, depends on previous task.' },
             },
@@ -79,7 +84,7 @@ const TOOLS = [
           },
           description: 'Array of task definitions (max 10)',
         },
-        model: { type: 'string', enum: ['haiku', 'sonnet', 'opus', 'fable'], description: 'Default model for all tasks' },
+        model: { type: 'string', description: `Default model for all tasks. ${MODEL_HELP}` },
         scheduled_at: { type: 'string', description: 'ISO 8601 datetime for delayed execution' },
         recurrence: { type: 'string', pattern: '^(hourly|daily|weekly|monthly|every:[1-9][0-9]*:(hour|day|week|month)|times:[1-9][0-9]*:month)$', description: 'Repeat schedule. A preset (hourly|daily|weekly|monthly), or "every:N:unit" where unit = hour|day|week|month (e.g. "every:2:hour", "every:10:day", "every:6:month"), or "times:N:month" = N runs per calendar month (e.g. "times:3:month").' },
         recurrence_end_at: { type: 'string', description: 'ISO 8601 datetime to stop recurring' },

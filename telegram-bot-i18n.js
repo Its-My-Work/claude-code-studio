@@ -190,7 +190,7 @@ const BOT_I18N = {
     'time_ago_long': 'давно',
 
     // Help
-    'help_text': '📖 <b>Команди Claude Code Studio</b>\n\n<b>Навігація:</b>\n/projects — список проектів\n/project <code>&lt;n&gt;</code> — вибрати проект\n/chats — чати поточного проекту\n/chat <code>&lt;n&gt;</code> — відкрити чат\n/back — повернутися назад\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень (5)\n/full — повна остання відповідь\n/tasks — завдання (Kanban)\n/bots — боти цього проєкту\n/files <code>[path]</code> — файли в workspace\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff в workspace\n/log <code>[n]</code> — останні git коміти\n\n<b>Дії:</b>\n/new <code>[title]</code> — нова сесія\n/stop — зупинити поточне завдання\n\n<b>Remote Access:</b>\n/tunnel — керування доступом\n/url — показати публічний URL\n\n<b>Forum Mode:</b>\n/forum — налаштування Forum Mode\n\n<b>Налаштування:</b>\n/status — стан Studio\n/notify <code>on/off</code> — сповіщення\n/unlink — відключити цей пристрій',
+    'help_text': '📖 <b>Команди Claude Code Studio</b>\n\n<b>Навігація:</b>\n/projects — список проектів\n/project <code>&lt;n&gt;</code> — вибрати проект\n/chats — чати поточного проекту\n/chat <code>&lt;n&gt;</code> — відкрити чат\n/back — повернутися назад\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень (5)\n/full — повна остання відповідь\n/tasks — завдання (Kanban)\n/bots — боти цього проєкту\n/files <code>[path]</code> — файли в workspace\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff в workspace\n/log <code>[n]</code> — останні git коміти\n\n<b>Дії:</b>\n/new <code>[title]</code> — нова сесія\n/stop — зупинити поточне завдання\n/model — модель цього чату\n/effort — рівень міркування\n\n<b>Remote Access:</b>\n/tunnel — керування доступом\n/url — показати публічний URL\n\n<b>Forum Mode:</b>\n/forum — налаштування Forum Mode\n\n<b>Налаштування:</b>\n/status — стан Studio\n/notify <code>on/off</code> — сповіщення\n/unlink — відключити цей пристрій',
 
     // Back navigation
     'back_to_chats': '↩️ Повернулися до списку чатів. Введіть /chats',
@@ -335,6 +335,24 @@ const BOT_I18N = {
     'header_chat': '💬 <b>{title}</b>',
     'header_none': '📭 Нічого не обрано',
     'header_separator': ' / ',
+    // /model and /effort (providers)
+    'model_no_chat': '💬 Спочатку відкрийте чат — модель і рівень міркування належать чату.',
+    'model_unavailable': '⚠️ Список моделей зараз недоступний.',
+    'model_current': '🧠 Модель чату: <b>{model}</b>',
+    'model_pick_provider': 'Оберіть провайдера (★ — за замовчуванням):',
+    'model_mode_subscription': 'підписка',
+    'model_mode_api': 'API',
+    'model_pick_model': 'Моделі провайдера <b>{provider}</b>:',
+    'model_set': '✅ Модель чату: <b>{model}</b>. Діє з наступного повідомлення.',
+    'model_no_tools': '⚠ Ця модель без інструментів: вона не зможе читати й змінювати файли.',
+    'effort_current': '🎚 Рівень міркування: <b>{effort}</b>',
+    'effort_set': '✅ Рівень міркування: <b>{effort}</b>. Діє з наступного повідомлення.',
+    'effort_auto': 'Авто',
+    'effort_low': 'Низький',
+    'effort_medium': 'Середній',
+    'effort_high': 'Високий',
+    'effort_xhigh': 'Дуже високий',
+    'effort_max': 'Максимум',
   },
   en: {
     'rate_limit': '⚠️ Too many requests. Please wait a minute.',
@@ -507,7 +525,7 @@ const BOT_I18N = {
     'time_ago_day': '{n}d ago',
     'time_ago_long': 'long ago',
 
-    'help_text': '📖 <b>Claude Code Studio Commands</b>\n\n<b>Navigation:</b>\n/projects — list projects\n/project <code>&lt;n&gt;</code> — select project\n/chats — chats of current project\n/chat <code>&lt;n&gt;</code> — open chat\n/back — go back\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages (5)\n/full — full last response\n/tasks — tasks (Kanban)\n/bots — bots of this project\n/files <code>[path]</code> — files in workspace\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff in workspace\n/log <code>[n]</code> — recent git commits\n\n<b>Actions:</b>\n/new <code>[title]</code> — new session\n/stop — stop current task\n\n<b>Remote Access:</b>\n/tunnel — manage remote access\n/url — show public URL\n\n<b>Forum Mode:</b>\n/forum — set up Forum Mode\n\n<b>Settings:</b>\n/status — Studio status\n/notify <code>on/off</code> — notifications\n/unlink — unlink this device',
+    'help_text': '📖 <b>Claude Code Studio Commands</b>\n\n<b>Navigation:</b>\n/projects — list projects\n/project <code>&lt;n&gt;</code> — select project\n/chats — chats of current project\n/chat <code>&lt;n&gt;</code> — open chat\n/back — go back\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages (5)\n/full — full last response\n/tasks — tasks (Kanban)\n/bots — bots of this project\n/files <code>[path]</code> — files in workspace\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff in workspace\n/log <code>[n]</code> — recent git commits\n\n<b>Actions:</b>\n/new <code>[title]</code> — new session\n/stop — stop current task\n/model — this chat\'s model\n/effort — reasoning effort\n\n<b>Remote Access:</b>\n/tunnel — manage remote access\n/url — show public URL\n\n<b>Forum Mode:</b>\n/forum — set up Forum Mode\n\n<b>Settings:</b>\n/status — Studio status\n/notify <code>on/off</code> — notifications\n/unlink — unlink this device',
 
     'back_to_chats': '↩️ Back to chat list. Type /chats',
     'back_to_projects': '↩️ Back to project list. Type /projects',
@@ -647,6 +665,24 @@ const BOT_I18N = {
     'header_chat': '💬 <b>{title}</b>',
     'header_none': '📭 Nothing selected',
     'header_separator': ' / ',
+    // /model and /effort (providers)
+    'model_no_chat': '💬 Open a chat first — the model and the effort belong to a chat.',
+    'model_unavailable': '⚠️ The model list is unavailable right now.',
+    'model_current': '🧠 Chat model: <b>{model}</b>',
+    'model_pick_provider': 'Pick a provider (★ = default):',
+    'model_mode_subscription': 'subscription',
+    'model_mode_api': 'API',
+    'model_pick_model': 'Models of <b>{provider}</b>:',
+    'model_set': '✅ Chat model: <b>{model}</b>. Takes effect from the next message.',
+    'model_no_tools': '⚠ This model has no tools: it cannot read or change files.',
+    'effort_current': '🎚 Reasoning effort: <b>{effort}</b>',
+    'effort_set': '✅ Reasoning effort: <b>{effort}</b>. Takes effect from the next message.',
+    'effort_auto': 'Auto',
+    'effort_low': 'Low',
+    'effort_medium': 'Medium',
+    'effort_high': 'High',
+    'effort_xhigh': 'X-High',
+    'effort_max': 'Max',
   },
   ru: {
     'rate_limit': '⚠️ Слишком много запросов. Подождите минуту.',
@@ -819,7 +855,7 @@ const BOT_I18N = {
     'time_ago_day': '{n} д назад',
     'time_ago_long': 'давно',
 
-    'help_text': '📖 <b>Команды Claude Code Studio</b>\n\n<b>Навигация:</b>\n/projects — список проектов\n/project <code>&lt;n&gt;</code> — выбрать проект\n/chats — чаты текущего проекта\n/chat <code>&lt;n&gt;</code> — открыть чат\n/back — вернуться назад\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений (5)\n/full — полный последний ответ\n/tasks — задачи (Kanban)\n/bots — боты этого проекта\n/files <code>[path]</code> — файлы в workspace\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff в workspace\n/log <code>[n]</code> — последние git коммиты\n\n<b>Действия:</b>\n/new <code>[title]</code> — новая сессия\n/stop — остановить текущую задачу\n\n<b>Remote Access:</b>\n/tunnel — управление доступом\n/url — показать публичный URL\n\n<b>Forum Mode:</b>\n/forum — настройка Forum Mode\n\n<b>Настройки:</b>\n/status — состояние Studio\n/notify <code>on/off</code> — уведомления\n/unlink — отключить это устройство',
+    'help_text': '📖 <b>Команды Claude Code Studio</b>\n\n<b>Навигация:</b>\n/projects — список проектов\n/project <code>&lt;n&gt;</code> — выбрать проект\n/chats — чаты текущего проекта\n/chat <code>&lt;n&gt;</code> — открыть чат\n/back — вернуться назад\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений (5)\n/full — полный последний ответ\n/tasks — задачи (Kanban)\n/bots — боты этого проекта\n/files <code>[path]</code> — файлы в workspace\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff в workspace\n/log <code>[n]</code> — последние git коммиты\n\n<b>Действия:</b>\n/new <code>[title]</code> — новая сессия\n/stop — остановить текущую задачу\n/model — модель этого чата\n/effort — уровень рассуждения\n\n<b>Remote Access:</b>\n/tunnel — управление доступом\n/url — показать публичный URL\n\n<b>Forum Mode:</b>\n/forum — настройка Forum Mode\n\n<b>Настройки:</b>\n/status — состояние Studio\n/notify <code>on/off</code> — уведомления\n/unlink — отключить это устройство',
 
     'back_to_chats': '↩️ Вернулись к списку чатов. Введите /chats',
     'back_to_projects': '↩️ Вернулись к списку проектов. Введите /projects',
@@ -959,6 +995,24 @@ const BOT_I18N = {
     'header_chat': '💬 <b>{title}</b>',
     'header_none': '📭 Ничего не выбрано',
     'header_separator': ' / ',
+    // /model and /effort (providers)
+    'model_no_chat': '💬 Сначала откройте чат — модель и уровень рассуждения принадлежат чату.',
+    'model_unavailable': '⚠️ Список моделей сейчас недоступен.',
+    'model_current': '🧠 Модель чата: <b>{model}</b>',
+    'model_pick_provider': 'Выберите провайдера (★ — по умолчанию):',
+    'model_mode_subscription': 'подписка',
+    'model_mode_api': 'API',
+    'model_pick_model': 'Модели провайдера <b>{provider}</b>:',
+    'model_set': '✅ Модель чата: <b>{model}</b>. Действует со следующего сообщения.',
+    'model_no_tools': '⚠ У этой модели нет инструментов: она не сможет читать и менять файлы.',
+    'effort_current': '🎚 Уровень рассуждения: <b>{effort}</b>',
+    'effort_set': '✅ Уровень рассуждения: <b>{effort}</b>. Действует со следующего сообщения.',
+    'effort_auto': 'Авто',
+    'effort_low': 'Низкий',
+    'effort_medium': 'Средний',
+    'effort_high': 'Высокий',
+    'effort_xhigh': 'Очень высокий',
+    'effort_max': 'Максимум',
   },
   fr: {
     // Pairing & auth
@@ -1147,7 +1201,7 @@ const BOT_I18N = {
     'time_ago_long': 'il y a longtemps',
 
     // Help
-    'help_text': '📖 <b>Commandes Claude Code Studio</b>\n\n<b>Navigation :</b>\n/projects — liste des projets\n/project <code>&lt;n&gt;</code> — sélectionner un projet\n/chats — chats du projet actuel\n/chat <code>&lt;n&gt;</code> — ouvrir un chat\n/back — revenir en arrière\n\n<b>Affichage :</b>\n/last <code>[n]</code> — les N derniers messages (5)\n/full — dernière réponse complète\n/tasks — tâches (Kanban)\n/bots — bots de ce projet\n/files <code>[path]</code> — fichiers du workspace\n/cat <code>&lt;file&gt;</code> — contenu d\'un fichier\n/diff — git diff du workspace\n/log <code>[n]</code> — derniers commits git\n\n<b>Actions :</b>\n/new <code>[title]</code> — nouvelle session\n/stop — arrêter la tâche en cours\n\n<b>Remote Access :</b>\n/tunnel — gérer l\'accès distant\n/url — afficher l\'URL publique\n\n<b>Forum Mode :</b>\n/forum — configurer le Forum Mode\n\n<b>Paramètres :</b>\n/status — état de Studio\n/notify <code>on/off</code> — notifications\n/unlink — dissocier cet appareil',
+    'help_text': '📖 <b>Commandes Claude Code Studio</b>\n\n<b>Navigation :</b>\n/projects — liste des projets\n/project <code>&lt;n&gt;</code> — sélectionner un projet\n/chats — chats du projet actuel\n/chat <code>&lt;n&gt;</code> — ouvrir un chat\n/back — revenir en arrière\n\n<b>Affichage :</b>\n/last <code>[n]</code> — les N derniers messages (5)\n/full — dernière réponse complète\n/tasks — tâches (Kanban)\n/bots — bots de ce projet\n/files <code>[path]</code> — fichiers du workspace\n/cat <code>&lt;file&gt;</code> — contenu d\'un fichier\n/diff — git diff du workspace\n/log <code>[n]</code> — derniers commits git\n\n<b>Actions :</b>\n/new <code>[title]</code> — nouvelle session\n/stop — arrêter la tâche en cours\n/model — modèle de ce chat\n/effort — niveau de raisonnement\n\n<b>Remote Access :</b>\n/tunnel — gérer l\'accès distant\n/url — afficher l\'URL publique\n\n<b>Forum Mode :</b>\n/forum — configurer le Forum Mode\n\n<b>Paramètres :</b>\n/status — état de Studio\n/notify <code>on/off</code> — notifications\n/unlink — dissocier cet appareil',
 
     // Back navigation
     'back_to_chats': '↩️ Retour à la liste des chats. Tapez /chats',
@@ -1292,6 +1346,24 @@ const BOT_I18N = {
     'header_chat': '💬 <b>{title}</b>',
     'header_none': '📭 Rien de sélectionné',
     'header_separator': ' / ',
+    // /model and /effort (providers)
+    'model_no_chat': '💬 Ouvrez d’abord un chat — le modèle et l’effort appartiennent à un chat.',
+    'model_unavailable': '⚠️ La liste des modèles est indisponible pour le moment.',
+    'model_current': '🧠 Modèle du chat : <b>{model}</b>',
+    'model_pick_provider': 'Choisissez un fournisseur (★ = par défaut) :',
+    'model_mode_subscription': 'abonnement',
+    'model_mode_api': 'API',
+    'model_pick_model': 'Modèles de <b>{provider}</b> :',
+    'model_set': '✅ Modèle du chat : <b>{model}</b>. Effectif dès le prochain message.',
+    'model_no_tools': '⚠ Ce modèle n’a pas d’outils : il ne peut ni lire ni modifier les fichiers.',
+    'effort_current': '🎚 Effort de raisonnement : <b>{effort}</b>',
+    'effort_set': '✅ Effort de raisonnement : <b>{effort}</b>. Effectif dès le prochain message.',
+    'effort_auto': 'Auto',
+    'effort_low': 'Faible',
+    'effort_medium': 'Moyen',
+    'effort_high': 'Élevé',
+    'effort_xhigh': 'Très élevé',
+    'effort_max': 'Maximum',
   },
   he: {
     // Pairing & auth
@@ -1480,7 +1552,7 @@ const BOT_I18N = {
     'time_ago_long': 'מזמן',
 
     // Help
-    'help_text': '📖 <b>פקודות Claude Code Studio</b>\n\n<b>ניווט:</b>\n/projects — רשימת פרויקטים\n/project <code>&lt;n&gt;</code> — בחירת פרויקט\n/chats — צ\'אטים של הפרויקט הנוכחי\n/chat <code>&lt;n&gt;</code> — פתיחת צ\'אט\n/back — חזרה אחורה\n\n<b>תצוגה:</b>\n/last <code>[n]</code> — N ההודעות האחרונות (5)\n/full — התשובה האחרונה במלואה\n/tasks — משימות (Kanban)\n/bots — הבוטים של הפרויקט הזה\n/files <code>[path]</code> — קבצים ב-workspace\n/cat <code>&lt;file&gt;</code> — תוכן קובץ\n/diff — git diff ב-workspace\n/log <code>[n]</code> — קומיטים אחרונים\n\n<b>פעולות:</b>\n/new <code>[title]</code> — סשן חדש\n/stop — עצירת המשימה הנוכחית\n\n<b>Remote Access:</b>\n/tunnel — ניהול גישה מרחוק\n/url — הצגת ה-URL הציבורי\n\n<b>Forum Mode:</b>\n/forum — הגדרת Forum Mode\n\n<b>הגדרות:</b>\n/status — מצב Studio\n/notify <code>on/off</code> — התראות\n/unlink — ניתוק המכשיר הזה',
+    'help_text': '📖 <b>פקודות Claude Code Studio</b>\n\n<b>ניווט:</b>\n/projects — רשימת פרויקטים\n/project <code>&lt;n&gt;</code> — בחירת פרויקט\n/chats — צ\'אטים של הפרויקט הנוכחי\n/chat <code>&lt;n&gt;</code> — פתיחת צ\'אט\n/back — חזרה אחורה\n\n<b>תצוגה:</b>\n/last <code>[n]</code> — N ההודעות האחרונות (5)\n/full — התשובה האחרונה במלואה\n/tasks — משימות (Kanban)\n/bots — הבוטים של הפרויקט הזה\n/files <code>[path]</code> — קבצים ב-workspace\n/cat <code>&lt;file&gt;</code> — תוכן קובץ\n/diff — git diff ב-workspace\n/log <code>[n]</code> — קומיטים אחרונים\n\n<b>פעולות:</b>\n/new <code>[title]</code> — סשן חדש\n/stop — עצירת המשימה הנוכחית\n/model — המודל של הצ׳אט הזה\n/effort — רמת החשיבה\n\n<b>Remote Access:</b>\n/tunnel — ניהול גישה מרחוק\n/url — הצגת ה-URL הציבורי\n\n<b>Forum Mode:</b>\n/forum — הגדרת Forum Mode\n\n<b>הגדרות:</b>\n/status — מצב Studio\n/notify <code>on/off</code> — התראות\n/unlink — ניתוק המכשיר הזה',
 
     // Back navigation
     'back_to_chats': '↩️ חזרנו לרשימת הצ\'אטים. הקלידו /chats',
@@ -1625,6 +1697,24 @@ const BOT_I18N = {
     'header_chat': '💬 <b>{title}</b>',
     'header_none': '📭 לא נבחר כלום',
     'header_separator': ' / ',
+    // /model and /effort (providers)
+    'model_no_chat': '💬 פתח קודם צ׳אט — המודל ורמת החשיבה שייכים לצ׳אט.',
+    'model_unavailable': '⚠️ רשימת המודלים אינה זמינה כרגע.',
+    'model_current': '🧠 מודל הצ׳אט: <b>{model}</b>',
+    'model_pick_provider': 'בחר ספק (★ = ברירת מחדל):',
+    'model_mode_subscription': 'מנוי',
+    'model_mode_api': 'API',
+    'model_pick_model': 'המודלים של <b>{provider}</b>:',
+    'model_set': '✅ מודל הצ׳אט: <b>{model}</b>. בתוקף מההודעה הבאה.',
+    'model_no_tools': '⚠ למודל הזה אין כלים: הוא לא יכול לקרוא או לשנות קבצים.',
+    'effort_current': '🎚 רמת החשיבה: <b>{effort}</b>',
+    'effort_set': '✅ רמת החשיבה: <b>{effort}</b>. בתוקף מההודעה הבאה.',
+    'effort_auto': 'אוטומטי',
+    'effort_low': 'נמוכה',
+    'effort_medium': 'בינונית',
+    'effort_high': 'גבוהה',
+    'effort_xhigh': 'גבוהה מאוד',
+    'effort_max': 'מרבית',
   },
 };
 

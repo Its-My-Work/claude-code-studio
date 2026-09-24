@@ -1,0 +1,223 @@
+{
+  "captured": "claude CLI 2.1.281",
+  "note": "Real request body captured by test/llm-bridge-contract.test.js (CCS_CONTRACT_CAPTURE=1). Paths, ids and env details replaced by placeholders; long system/tool texts trimmed.",
+  "headers": {
+    "anthropic-version": "2023-06-01",
+    "anthropic-beta": "claude-code-20250219,interleaved-thinking-2025-05-14,mid-conversation-system-2026-04-07,effort-2025-11-24",
+    "content-type": "application/json",
+    "accept": "application/json",
+    "x-app": "cli",
+    "x-claude-code-session-id": "SESSION_ID",
+    "url": "/v1/messages?beta=true"
+  },
+  "body": {
+    "model": "fake-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Update note.txt: replace \"original line\" with \"changed by the bridge\"."
+      },
+      {
+        "role": "system",
+        "content": "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /WORKDIR\n - Is a git repository: false\n - Platform: PLATFORM\n - Shell: SHELL\n - OS Version: OS_VERSION\n\nYou are powered by the model fake-model.\n\n<total_tokens>N tokens left</total_tokens>\n\nToday's date is YYYY-MM-DD."
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "I should look at the file first.",
+            "signature": "ccsb1:eyJwIjoiZmFrZSJ9"
+          },
+          {
+            "type": "text",
+            "text": "Reading the file."
+          },
+          {
+            "type": "tool_use",
+            "id": "call_read_1",
+            "name": "Read",
+            "input": {
+              "file_path": "/WORKDIR/note.txt"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "call_read_1",
+            "type": "tool_result",
+            "content": "1\toriginal line\n2\t"
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": "<total_tokens>N tokens left</total_tokens>"
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "Now change it.",
+            "signature": "ccsb1:eyJwIjoiZmFrZSJ9"
+          },
+          {
+            "type": "tool_use",
+            "id": "call_edit_1",
+            "name": "Edit",
+            "input": {
+              "replace_all": false,
+              "file_path": "/WORKDIR/note.txt",
+              "old_string": "original line",
+              "new_string": "changed by the bridge"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "call_edit_1",
+            "type": "tool_result",
+            "content": "The file /WORKDIR/note.txt has been updated successfully. (file state is current in your context — no need to Read it back)",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": "<total_tokens>N tokens left</total_tokens>"
+      }
+    ],
+    "system": [
+      {
+        "type": "text",
+        "text": "x-anthropic-billing-header: cc_version=2.1.281.1c5; cc_entrypoint=sdk-cli;"
+      },
+      {
+        "type": "text",
+        "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      },
+      {
+        "type": "text",
+        "text": "\nYou are an interactive agent that helps users with software engineering tasks.\n\nIMPORTANT: Assist with authorized security testing, defensive security, CTF challenges, and educational contexts. Refuse requests for destructive techniques, DoS attacks, mass targeting, supply chain compromise, or detection evasion for malicious purposes. Dual-use security tools (C2 frameworks, credential testing, ex…[5094 more chars trimmed from the fixture]",
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    ],
+    "tools": [
+      {
+        "name": "Edit",
+        "description": "Performs exact string replacement in a file.\n\n- You must Read the file in this conversation before editing, or the call will fail.\n- `old_string` must match the file exactly, including indentation, an…[160 more chars trimmed from the fixture]",
+        "input_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "description": "The absolute path to the file to modify",
+              "type": "string"
+            },
+            "old_string": {
+              "description": "The text to replace",
+              "type": "string"
+            },
+            "new_string": {
+              "description": "The text to replace it with (must be different from old_string)",
+              "type": "string"
+            },
+            "replace_all": {
+              "description": "Replace all occurrences of old_string (default false)",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "file_path",
+            "old_string",
+            "new_string"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "Read",
+        "description": "Reads a file from the local filesystem.\n\n- `file_path` must be an absolute path.\n- Reads up to 2000 lines by default.\n- When you already know which part of the file you need, only read that part. This…[590 more chars trimmed from the fixture]",
+        "input_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "description": "The absolute path to the file to read",
+              "type": "string"
+            },
+            "offset": {
+              "description": "The line number to start reading from. Only provide if the file is too large to read at once",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "limit": {
+              "description": "The number of lines to read. Only provide if the file is too large to read at once.",
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "pages": {
+              "description": "Page range for PDF files (e.g., \"1-5\", \"3\", \"10-20\"). Only applicable to PDF files. Maximum 20 pages per request.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file_path"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "Write",
+        "description": "Writes a file to the local filesystem, overwriting if one exists.\n\nWhen to use: creating a new file, or fully replacing one you've already Read. Overwriting an existing file you haven't Read will fail…[40 more chars trimmed from the fixture]",
+        "input_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "description": "The absolute path to the file to write (must be absolute, not relative)",
+              "type": "string"
+            },
+            "content": {
+              "description": "The content to write to the file",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file_path",
+            "content"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "metadata": {
+      "user_id": "{\"device_id\":\"DEVICE_ID\",\"account_uuid\":\"\",\"session_id\":\"SESSION_ID\"}"
+    },
+    "max_tokens": 32000,
+    "thinking": {
+      "type": "adaptive"
+    },
+    "output_config": {
+      "effort": "high"
+    },
+    "stream": true
+  }
+}

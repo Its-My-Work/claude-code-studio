@@ -32,11 +32,11 @@ const BOT_READ_TOOLS = ['Read', 'Glob', 'Grep'], BOT_WORK_TOOLS = ['Bash', 'Read
 
 const NAMES = ['ROOM_CLOSING', 'ClaudeCLI', 'stmts', 'ROOM_SEATING', 'botsLogic', 'getUserLang', 'pickRoomSeating', 'WORKDIR', 'seatingNote', 'botLangName',
   'roomFiles', 'MULTI_AGENT_MAX_TURNS_CAP', 'mcpServersForBot', 'runInteractiveSingle', 'killInteractiveTmux', 'isAgentSuccess',
-  'roomStopReason', 'BOT_READ_TOOLS', 'BOT_WORK_TOOLS', 'tmuxAvailable', 'ROOM_GIT', 'roomGit', 'WM'];
+  'roomStopReason', 'BOT_READ_TOOLS', 'BOT_WORK_TOOLS', 'tmuxAvailable', 'ROOM_GIT', 'roomGit', 'WM', 'runEngineFor'];
 const build = (deps) => new Function(...NAMES, `${toolsSrc}\n return ${roomSrc.trim().replace(/^async function runConversationRoom/, 'async function runConversationRoom')};`)(...NAMES.map(n => deps[n]));
 
 /** Runs one room turn. `script(call)` decides what each CLI run does: { text, subtype, error, write: [[relPath, data]] }. */
-async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns = 5, prompt = 'Доработайте ТЗ', userContent = 'Доработайте ТЗ', rows = [], workdir, engine = 'api', lang = 'ru', perBotEngine = false, tmux = true, git = 'none', gitOn = true }) {
+async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns = 5, prompt = 'Доработайте ТЗ', userContent = 'Доработайте ТЗ', rows = [], workdir, engine = 'api', model = 'sonnet', lang = 'ru', perBotEngine = false, tmux = true, git = 'none', gitOn = true }) {
   const saved = [], sent = [], calls = [], interactive = [], gitCalls = [];
   class FakeCLI {
     send(opts) {
@@ -67,13 +67,17 @@ async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns =
     getUserLang: () => lang, pickRoomSeating: async () => null, WORKDIR: workdir, seatingNote: () => '', botLangName: () => (lang === 'ru' ? 'Russian' : 'English'),
     MULTI_AGENT_MAX_TURNS_CAP: 200, mcpServersForBot: (base) => base, runInteractiveSingle: async (o) => { interactive.push(o); return { fullText: `subscription answer of ${o.agent}`, completed: true, toolEvents: [] }; }, killInteractiveTmux() {},
     tmuxAvailable: () => tmux,
+    // server.js runEngineFor, for a registry whose DEFAULT provider is an API one (a gateway):
+    // a `claude::` ref is the CLI login and runs on the subscription while tmux exists, a
+    // bare alias is the gateway's model and runs headless.
+    runEngineFor: (m) => ((tmux && /^claude::/.test(String(m || ''))) ? 'subscription' : 'api'),
     ROOM_GIT: gitOn, WM: {},
     // `git`: 'none' = not a repo the app manages; a function = the checkpoint result for call n (1-based)
     roomGit: { checkpoint: (dir, msg) => { gitCalls.push({ dir, msg }); return typeof git === 'function' ? git(gitCalls.length, dir, msg) : { managed: false }; } },
   };
   const run = build(deps);
   const ws = { send: (x) => sent.push(JSON.parse(x)) };
-  await run({ mcpServers: {}, model: 'sonnet', maxTurns, ws, sessionId: 's1', abortController: new AbortController(), workdir, tabId: 't1', effort: null, userContent, engine, mode, perBotEngine },
+  await run({ mcpServers: {}, model, maxTurns, ws, sessionId: 's1', abortController: new AbortController(), workdir, tabId: 't1', effort: null, userContent, engine, mode, perBotEngine },
     { bots, prompt, rosterBots: bots });
   return { saved, sent, calls, interactive, gitCalls };
 }
@@ -229,10 +233,10 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
     fs.rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log('a bot can run on its own engine (the planner on the subscription in an API chat):');
+  console.log('a bot runs on the engine of its own model (the planner on the subscription in an API chat):');
   {
     const dir = tmp();
-    const planner = { ...B('b'), run_engine: 'subscription' };
+    const planner = { ...B('b'), model: 'claude::opus' };
     const mixed = [B('a'), planner, B('c')];
     const r = await runRoom({ bots: mixed, workdir: dir, perBotEngine: true, closing: false, script: discuss });
     check('the pinned bot goes through the interactive engine, once per round it speaks', r.interactive.map(o => o.agent).every(a => a === 'b') && r.interactive.length >= 1, true);
@@ -244,13 +248,13 @@ const discuss = (call) => (call.closing ? null : (call.n <= 3 ? { text: `contrib
   }
   {
     const dir = tmp();
-    const planner = { ...B('b'), run_engine: 'subscription' };
+    const planner = { ...B('b'), model: 'claude::opus' };
     const off = await runRoom({ bots: [B('a'), planner, B('c')], workdir: dir, perBotEngine: false, closing: false, script: discuss });
     check('where the override is not enabled (Telegram) the pinned bot follows the chat', [off.interactive.length, off.calls.some(c => c.who === 'b')], [0, true]);
     const noTmux = await runRoom({ bots: [B('a'), planner, B('c')], workdir: dir, perBotEngine: true, tmux: false, closing: false, script: discuss });
     check('without tmux the pinned bot follows the chat instead of failing', [noTmux.interactive.length, noTmux.calls.some(c => c.who === 'b')], [0, true]);
-    const pinnedApi = await runRoom({ bots: [B('a'), { ...B('b'), run_engine: 'api' }, B('c')], workdir: dir, perBotEngine: true, engine: 'subscription', closing: false, script: discuss });
-    check('a bot pinned to api runs headless inside a subscription chat, the rest use the interactive engine', [pinnedApi.calls.some(c => c.who === 'b'), pinnedApi.interactive.some(o => o.agent === 'a')], [true, true]);
+    const pinnedApi = await runRoom({ bots: [B('a'), { ...B('b'), model: 'kilo::gpt-x' }, B('c')], workdir: dir, perBotEngine: true, engine: 'subscription', model: 'claude::sonnet', closing: false, script: discuss });
+    check('a bot on another provider\'s model runs headless inside a subscription chat, the rest use the interactive engine', [pinnedApi.calls.some(c => c.who === 'b'), pinnedApi.interactive.some(o => o.agent === 'a')], [true, true]);
     fs.rmSync(dir, { recursive: true, force: true });
   }
 

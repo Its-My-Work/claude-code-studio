@@ -408,9 +408,6 @@ textarea.inp{ resize:vertical; min-height:80px; }
     <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Refresh" data-i18n-title="hdr.refresh">&#8635;</button>
     <button class="hb" onclick="openAddChainModal()" id="addGroupBtn">&#xFF0B; <span id="addGroupBtnLabel" data-i18n="hdr.group">Group</span></button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel" data-i18n="hdr.add">Task</span></button>
-    <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
-    </a>
   </div>
 </div>
 
@@ -505,7 +502,8 @@ const TR = {
     'nav.schedule':'Розклад','nav.dashboard':'Панель','hdr.project':'Проект','hdr.refresh':'Оновити',
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача','agent.single':'Один','agent.multi':'Мульти',
     'effort.auto':'Авто','effort.low':'Низьке','effort.med':'Середнє','effort.high':'Високе','effort.xhigh':'Дуже високе','effort.max':'Максимальне',
-    'engine.api':'API','engine.sub':'Підписка','tmux.required':'Потрібен tmux на сервері',
+    'engine.api':'API','engine.sub':'Підписка',
+    'model.more':'Інші моделі…','model.more.tip':'Моделі всіх провайдерів',
   },
   en: {
     'modal.task_cfg':'Run settings','modal.task_cfg_note':'Changes are saved and affect the next run, not the one in progress. Which dials take effect depends on the task engine and on whether it already has a session.',
@@ -553,7 +551,8 @@ const TR = {
     'nav.schedule':'Schedule','nav.dashboard':'Dashboard','hdr.project':'Project','hdr.refresh':'Refresh',
     'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Task','agent.single':'Single','agent.multi':'Multi',
     'effort.auto':'Auto','effort.low':'Low','effort.med':'Medium','effort.high':'High','effort.xhigh':'XHigh','effort.max':'Max',
-    'engine.api':'API','engine.sub':'Subscription','tmux.required':'tmux is required on the server',
+    'engine.api':'API','engine.sub':'Subscription',
+    'model.more':'Other models…','model.more.tip':'Models of every provider',
   },
   ru: {
     'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Изменения сохраняются и влияют на следующий запуск, а не на текущий. Какие именно настройки подействуют, зависит от движка задачи и от того, есть ли у неё уже сессия.',
@@ -601,7 +600,8 @@ const TR = {
     'nav.schedule':'Расписание','nav.dashboard':'Панель','hdr.project':'Проект','hdr.refresh':'Обновить',
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача','agent.single':'Один','agent.multi':'Мульти',
     'effort.auto':'Авто','effort.low':'Низкое','effort.med':'Среднее','effort.high':'Высокое','effort.xhigh':'Очень высокое','effort.max':'Максимальное',
-    'engine.api':'API','engine.sub':'Подписка','tmux.required':'Нужен tmux на сервере',
+    'engine.api':'API','engine.sub':'Подписка',
+    'model.more':'Другие модели…','model.more.tip':'Модели всех провайдеров',
   },
   fr: {
     'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Les modifications sont enregistrées et affectent le prochain lancement, pas celui en cours. Les réglages qui prennent effet dépendent du moteur de la tâche et du fait qu elle ait déjà une session.',
@@ -649,7 +649,8 @@ const TR = {
     'nav.schedule':'Planning','nav.dashboard':'Tableau de bord','hdr.project':'Projet','hdr.refresh':'Actualiser',
     'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Tâche','agent.single':'Simple','agent.multi':'Multi',
     'effort.auto':'Auto','effort.low':'Faible','effort.med':'Moyen','effort.high':'Élevé','effort.xhigh':'Très élevé','effort.max':'Maximal',
-    'engine.api':'API','engine.sub':'Abonnement','tmux.required':'tmux est requis sur le serveur',
+    'engine.api':'API','engine.sub':'Abonnement',
+    'model.more':'Autres modèles…','model.more.tip':'Modèles de tous les fournisseurs',
   },
   he: {
     'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'השינויים נשמרים ומשפיעים על ההרצה הבאה, לא על זו שרצה כעת. אילו הגדרות ייכנסו לתוקף תלוי במנוע המשימה ובשאלה אם כבר יש לה סשן.',
@@ -697,7 +698,8 @@ const TR = {
     'nav.schedule':'לוח זמנים','nav.dashboard':'לוח מחוונים','hdr.project':'פרויקט','hdr.refresh':'רענון',
     'mode.auto':'אוטומטי','mode.plan':'תכנון','mode.task':'משימה','agent.single':'יחיד','agent.multi':'מרובה',
     'effort.auto':'אוטומטי','effort.low':'נמוך','effort.med':'בינוני','effort.high':'גבוה','effort.xhigh':'גבוה מאוד','effort.max':'מרבי',
-    'engine.api':'API','engine.sub':'מנוי','tmux.required':'נדרש tmux בשרת',
+    'engine.api':'API','engine.sub':'מנוי',
+    'model.more':'מודלים נוספים…','model.more.tip':'מודלים של כל הספקים',
   },
 };
 // `let`, not `const`: this page is reachable directly (/kanban, /schedule) in a
@@ -750,16 +752,75 @@ let curWorkdir=null,lastEtag='',refreshTimer=null,modalMode=null,editingId=null,
 let pendingAttachments=[]; // [{name, type, base64}]
 
 // ─── Session settings (persisted) ─────────────────────────────────────────
-let kbSettings={mode:'auto',agent_mode:'single',model:'sonnet',max_turns:30,run_engine:'api'};
+let kbSettings={mode:'auto',agent_mode:'single',model:'sonnet',max_turns:30};
 try{
   const _ks=JSON.parse(localStorage.getItem('kanban_sess_cfg')||'null');
   if(_ks&&typeof _ks==='object') kbSettings={...kbSettings,..._ks};
 }catch{}
-// Subscription engine capability + global default — populated from /api/version on load.
-let _kbTmuxAvailable=true, _kbDefaultEngine='api';
+// tmux capability (the subscription engine needs it) — populated from /api/version on load.
+let _kbTmuxAvailable=true;
 
 // ─── Utils ────────────────────────────────────────────────────────────────
 const UI_LOCALES={uk:'uk-UA',en:'en-US',ru:'ru-RU',fr:'fr-FR',he:'he-IL'};
+
+// ─── Other providers' models (/api/models/choices, providers.js) ──────────────
+// The four alias buttons stay; this select adds every other configured model. Its choice
+// rides a hidden `.sc-btn.on` inside the same segment, so every reader of
+// `.sc-seg[data-group] .sc-btn.on` — and scOpt's reset — keeps working unchanged.
+let _mdlChoices = null;
+const _MDL_ALIASES = ['haiku', 'sonnet', 'opus', 'fable'];
+async function loadModelChoicesPage() {
+  try { const r = await fetch('/api/models/choices'); _mdlChoices = r.ok ? await r.json() : { providers: [] }; }
+  catch { _mdlChoices = { providers: [] }; }
+  return _mdlChoices;
+}
+/** "deepseek::deepseek-chat" -> "DeepSeek · deepseek-chat"; an alias stays as it is. */
+function modelLabelPage(v) {
+  const s = String(v || '');
+  const i = s.indexOf('::');
+  if (i === -1) return s;
+  const p = ((_mdlChoices && _mdlChoices.providers) || []).find(x => x.id === s.slice(0, i));
+  const m = p && (p.models || []).find(x => x.id === s.slice(i + 2));
+  return `${p ? (p.builtin ? 'Claude' : p.label) : s.slice(0, i)} · ${m ? (m.alias ? m.id : (m.label || m.id)) : s.slice(i + 2)}`;
+}
+function modelMoreHtml(cur, handler) {
+  const c = _mdlChoices || { providers: [] };
+  const isAlias = !cur || _MDL_ALIASES.includes(cur);
+  let found = isAlias;
+  let opts = `<option value="">${escH(t('model.more'))}</option>`;
+  for (const p of c.providers || []) {
+    const items = (p.models || []).filter(m => !(m.alias && p.isDefault));
+    if (!items.length) continue;
+    // Each provider says how it is billed — the engine follows it (kbEngineOf).
+    const mode = p.type === 'claude-subscription' ? t('engine.sub') : t('engine.api');
+    opts += `<optgroup label="${escH((p.builtin ? 'Claude' : p.label) + ' — ' + mode)}">` + items.map(m => {
+      if (m.ref === cur) found = true;
+      return `<option value="${escH(m.ref)}"${m.ref === cur ? ' selected' : ''}>${escH(m.alias ? m.id : (m.label || m.id))}</option>`;
+    }).join('') + '</optgroup>';
+  }
+  if (!found) opts += `<option value="${escH(cur)}" selected>${escH(cur)}</option>`;
+  const hidden = isAlias ? '' : `<button type="button" class="sc-btn on" data-v="${escH(cur)}" data-more="1" hidden></button>`;
+  return `<select class="sc-turns sc-model-more" style="width:auto;max-width:190px" title="${escH(t('model.more.tip'))}" onchange="${handler || 'pickModelMore'}(this)">${opts}</select>${hidden}`;
+}
+/** Make the select's choice the segment's `.sc-btn.on`; '' falls back to Sonnet. Returns the value. */
+function pickModelMore(sel) {
+  const grp = sel.closest('.sc-seg'); if (!grp) return null;
+  grp.querySelectorAll('.sc-btn').forEach(b => b.classList.remove('on'));
+  let h = grp.querySelector('.sc-btn[data-more]');
+  if (!sel.value) {
+    if (h) h.remove();
+    const s = grp.querySelector('.sc-btn[data-v="sonnet"]'); if (s) s.classList.add('on');
+    return 'sonnet';
+  }
+  if (!h) { h = document.createElement('button'); h.type = 'button'; h.className = 'sc-btn'; h.dataset.more = '1'; h.hidden = true; grp.appendChild(h); }
+  h.dataset.v = sel.value; h.classList.add('on');
+  return sel.value;
+}
+function kbPickModelMore(sel){
+  const v=pickModelMore(sel);
+  if(v)kbSettings.model=v;
+  try{localStorage.setItem('kanban_sess_cfg',JSON.stringify(kbSettings));}catch{}
+}
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // Escape for a single-quoted JS string inside a double-quoted HTML attribute (inline onclick).
 function escArg(s){return escH(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"));}
@@ -857,11 +918,6 @@ async function loadProjects(){
   try{
     const ver=await fetch('/api/version').then(r=>r.json());
     _kbTmuxAvailable=ver.tmuxAvailable!==false;
-    _kbDefaultEngine=ver.defaultEngine==='subscription'?'subscription':'api';
-    // Seed engine default if the user has not chosen one yet.
-    if(kbSettings.run_engine==null||kbSettings.run_engine==='api'){
-      kbSettings.run_engine=(_kbDefaultEngine==='subscription'&&_kbTmuxAvailable)?'subscription':'api';
-    }
   }catch{}
   renderProjDropdownList('');
   // #25: ?all=1 opens the cross-project board no matter which project was last
@@ -1289,7 +1345,7 @@ function kbBlockedInfo(tk){
 // It mirrors server.js/startTask exactly:
 //   model  = taskBot?.model || session?.model || task.model || 'sonnet'
 //   effort = task.effort || null
-//   engine = task.run_engine === 'subscription' ? 'subscription' : 'api'
+//   engine = runEngineFor(model) — the model's PROVIDER decides it (kbEngineOf)
 // `sess_model` alone — what the card showed before — was wrong twice over: blank on a
 // task that has never run (so a board of unstarted cards said nothing about settings
 // the user had already chosen), and silent about a bot's model, which OVERRIDES the
@@ -1297,17 +1353,32 @@ function kbBlockedInfo(tk){
 // up in `kbBots`, which is only fetched when a modal opens and is `[]` at first paint.
 //
 // Effort and engine render only when they are NOT the default. 'auto' effort and the
-// 'api' engine are what nearly every card carries; a badge repeated on all of them is
+// API engine are what nearly every card carries; a badge repeated on all of them is
 // noise, and this footer already competes for width with the project, schedule,
 // session and retry badges.
 const KB_EFFORT_KEY={low:'low',medium:'med',high:'high',xhigh:'xhigh',max:'max'};
+// The engine a model runs on, as server.js runEngineFor decides it: a model of the CLI
+// login (provider type claude-subscription) runs on the subscription when tmux exists,
+// every other provider on the API. A bare value is the DEFAULT provider's model. Until
+// the provider list has loaded only an explicit `claude::` ref is known to be Claude's.
+function kbEngineOf(m){
+  const s=String(m||''), i=s.indexOf('::');
+  const provs=(typeof _mdlChoices!=='undefined'&&_mdlChoices&&_mdlChoices.providers)||[];
+  const p=i===-1?provs.find(x=>x.isDefault):provs.find(x=>x.id===s.slice(0,i));
+  const type=p?p.type:(i!==-1&&s.slice(0,i)==='claude'?'claude-subscription':null);
+  const tmux=typeof _kbTmuxAvailable==='undefined'?true:!!_kbTmuxAvailable;
+  return (tmux&&type==='claude-subscription')?'subscription':'api';
+}
 function kbRunBadges(tk){
-  const out=[{text:tk.bot_model||tk.sess_model||tk.model||'sonnet',title:t('tb.model')}];
+  const _m=tk.bot_model||tk.sess_model||tk.model||'sonnet';
+  // A provider ref reads as "Provider · model" (modelLabelPage); an alias is shown as it is.
+  const out=[{text:typeof modelLabelPage==='function'?modelLabelPage(_m):_m,title:t('tb.model')}];
   const eff=String(tk.effort||'').trim();
   // An unknown value is shown verbatim rather than dropped: it is what the run will be
   // given, and a silently missing badge is how a bad stored dial stays invisible.
   if(eff)out.push({text:KB_EFFORT_KEY[eff]?t('effort.'+KB_EFFORT_KEY[eff]):eff,title:t('tb.effort')});
-  if(tk.run_engine==='subscription')out.push({text:t('engine.sub'),title:t('tb.engine')});
+  // No engine dial: the model's provider decides (startTask → runEngineFor).
+  if(kbEngineOf(_m)==='subscription')out.push({text:t('engine.sub'),title:t('tb.engine')});
   return out;
 }
 function makeCard(tk){
@@ -1651,9 +1722,8 @@ function buildChainForm(chain){
           <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
           <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
+          ${modelMoreHtml(mdl, 'kbPickModelMore')}
         </div>
-        <div class="sc-sep" style="display:none"></div>
-        ${engineSegHtml(chain.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
           <span class="sc-lbl">${t('tb.bot')}</span>
@@ -1913,21 +1983,6 @@ async function openEditModal(id){
   setTimeout(()=>$i('fTitle')?.focus(),60);
 }
 
-// Engine (api/subscription) segment — distinct from the vestigial 'engine'
-// (cli) notion. Uses data-group="run_engine". Subscription disabled w/o tmux.
-function engineSegHtml(val){
-  // Clamp to API when tmux is unavailable (mirrors Chat's resolveEngineForView)
-  const raw=val||kbSettings.run_engine||'api';
-  const eng=(raw==='subscription'&&_kbTmuxAvailable)?'subscription':'api';
-  const subDisabled=!_kbTmuxAvailable;
-  const subAttrs=subDisabled?` disabled style="opacity:0.4;cursor:not-allowed" title="${escH(t('tmux.required'))}"`:'';
-  return `<div class="sc-seg" data-group="run_engine">
-    <span class="sc-lbl">${t('tb.engine')}</span>
-    <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">${escH(t('engine.api'))}</button>
-    <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>${escH(t('engine.sub'))}</button>
-  </div>`;
-}
-
 function buildForm(tk={}){
   const isNew=!tk.id;
   const m=tk.mode||kbSettings.mode||'auto', ag=tk.agent_mode||kbSettings.agent_mode||'single', mdl=tk.model||kbSettings.model||'sonnet', eng=tk.engine||kbSettings.engine||'cli';
@@ -1938,7 +1993,7 @@ function buildForm(tk={}){
   //
   // These dials are read from the TASK row on every run, not from the session:
   // `effectiveTaskMaxTurns = task.max_turns`, `mode: task.mode`, `task.effort`,
-  // `task.run_engine` (server.js, startTask). Hiding them once a session existed
+  // (server.js, startTask). Hiding them once a session existed
   // meant the settings that actually drive each run became uneditable the moment
   // the task first ran — issue #79.
   //
@@ -2023,9 +2078,8 @@ function buildForm(tk={}){
           <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
           <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
+          ${modelMoreHtml(mdl, 'kbPickModelMore')}
         </div>
-        <div class="sc-sep" style="display:none"></div>
-        ${engineSegHtml(tk.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
           <span class="sc-lbl">${t('tb.bot')}</span>
@@ -2128,6 +2182,7 @@ function scOpt(btn){
   if(!grp)return;
   grp.querySelectorAll('.sc-btn').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
+  const mm=grp.querySelector('.sc-model-more'); if(mm)mm.value='';
   const g=grp.dataset.group;
   if(g==='agent')kbSettings.agent_mode=btn.dataset.v;
   else if(g)kbSettings[g]=btn.dataset.v;
@@ -2137,12 +2192,12 @@ function onFSessionChange(){
   const hasSess=!!$i('fSession')?.value;
   const cfg=$i('newSessCfg');
   // While CREATING, the block is about the session that is about to be made, so it
-  // follows the session picker. While EDITING it stays: mode, turns, effort and
-  // engine are read off the task on every run regardless of which session it uses.
+  // follows the session picker. While EDITING it stays: mode, turns and effort are
+  // read off the task on every run regardless of which session it uses.
   if(cfg&&modalMode!=='edit')cfg.classList.toggle('visible',!hasSess);
 }
 function getSessCfg(){
-  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',run_engine:kbSettings.run_engine||'api',maxTurns:30,effort:'',bot_id:null};
+  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',maxTurns:30,effort:'',bot_id:null};
   const cfg=$i('newSessCfg');
   if(!cfg)return defaults;
   const result={};
@@ -2235,7 +2290,6 @@ async function saveTask(){
     agent_mode:cfg.agent,
     max_turns:cfg.maxTurns,
     effort:cfg.effort||null,
-    run_engine:cfg.run_engine||'api',
     bot_id:cfg.bot_id||null,
     attachments:pendingAttachments.length?JSON.stringify(pendingAttachments):null,
   };
@@ -2328,6 +2382,8 @@ function closeModal(){closeOverlay('taskOv');}
     tc.onmessage=e=>{if(e.data?.type==='task_deleted'||e.data?.type==='task_changed'||e.data?.type==='chain_deleted'||e.data?.type==='chain_changed')refresh(true);};
   }catch{}
 })();
+// The cards' engine badge reads the provider list (kbEngineOf): repaint once it is here.
+loadModelChoicesPage().then(()=>{try{renderBoard();}catch{}});
 </script>
 </body>
 </html>

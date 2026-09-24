@@ -140,6 +140,20 @@ const MODEL_MAP = {
   'fable':  'fable',
 };
 
+// ─── Provider routing (providers.js; wired by server.js) ─────────────────────
+// Every headless run asks this hook where it goes: which model id the CLI gets, which
+// ANTHROPIC_* the child sees (the local llm-bridge + a run token, or the CLI's own
+// login), and extra flags. One choke point on purpose — chat, bots, rooms, multi-agent,
+// tasks and the utility calls all reach the CLI through send(), so none of them can
+// forget to route. null = the pre-registry behaviour (inherit the server's env).
+let _runTargetHook = null;
+function setRunTargetHook(fn) { _runTargetHook = typeof fn === 'function' ? fn : null; }
+function resolveRunTarget(req) {
+  if (!_runTargetHook) return null;
+  try { return _runTargetHook(req) || null; }
+  catch (e) { return { error: `provider routing failed: ${e.message}` }; }
+}
+
 // ─── MCP config file cache ──────────────────────────────────────────────────
 // Reuses temp files by content hash instead of creating/deleting per request.
 // Key: SHA-256 hash of JSON content → { path, refCount }
@@ -184,6 +198,30 @@ process.on('exit', () => {
   }
 });
 
+/** Same shape providers.applyRunEnv() uses; kept local so this file needs no registry. */
+function applyRunEnvTo(env, runEnv) {
+  for (const k of runEnv.unset || []) delete env[k];
+  for (const [k, v] of Object.entries(runEnv.set || {})) { if (v != null && v !== '') env[k] = String(v); }
+  return env;
+}
+
+/** A run that never starts: the caller still gets its onError and exactly one onDone,
+ *  on a later tick so the handlers it chains after send() are attached. */
+function failedHandle(message) {
+  const h = {};
+  setImmediate(() => {
+    try { if (h.onError) h.onError(String(message)); } catch {}
+    try { if (h.onDone) h.onDone(null); } catch {}
+  });
+  const self = {
+    onText() { return self; }, onTool() { return self; }, onThinking() { return self; }, onRateLimit() { return self; },
+    onResult() { return self; }, onUsage() { return self; }, onSessionId() { return self; },
+    onError(fn) { h.onError = fn; return self; }, onDone(fn) { h.onDone = fn; return self; },
+    process: null, runTarget: null,
+  };
+  return self;
+}
+
 class ClaudeCLI {
   constructor(options = {}) {
     // A POSIX-absolute cwd on Windows is almost always a REMOTE path that leaked into a
@@ -200,7 +238,23 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, name, effort, jsonSchema }) {
+  send(opts = {}) {
+    // Where this run goes. An unresolvable choice fails the run the normal way (onError
+    // then onDone, asynchronously) instead of silently falling back to some other model.
+    const target = resolveRunTarget({ model: opts.model, effort: opts.effort, engine: 'api', meta: opts.runMeta || {} });
+    this.lastRunTarget = target && !target.error ? (target.info || null) : null;
+    if (target && target.error) return failedHandle(target.error);
+    try {
+      return this._send(opts, target);
+    } catch (e) {
+      // Anything that throws before the child exists — spawn() refuses a prompt holding a
+      // NUL byte, a temp write can fail — would otherwise leave the run token valid forever.
+      if (target && typeof target.release === 'function') { try { target.release(); } catch {} }
+      throw e;
+    }
+  }
+
+  _send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, name, effort, jsonSchema }, target) {
     const args = ['--print'];
 
     // --setting-sources: control which setting sources to load (user, project, local)
@@ -226,7 +280,13 @@ class ClaudeCLI {
       console.warn('[claude-cli] rejected non-UUID sessionId for --resume:', typeof sessionId, String(sessionId).substring(0, 60));
     }
 
-    if (model) args.push('--model', MODEL_MAP[model] || model);
+    // With a routing target the CLI gets the provider's own model id (a bare alias on a
+    // provider that serves no Claude has already been mapped through its roles). A run
+    // on the CLI login with no model chosen keeps passing no flag, as before.
+    const cliModel = target
+      ? ((model || target.routing !== 'oauth') ? target.cliModel : null)
+      : (model ? (MODEL_MAP[model] || model) : null);
+    if (cliModel) args.push('--model', cliModel);
     if (maxTurns) args.push('--max-turns', String(maxTurns));
 
     // --effort: thinking-effort dial for the current session.
@@ -309,6 +369,10 @@ class ClaudeCLI {
       args.push('--settings', JSON.stringify(extraSettings));
     }
 
+    // Provider-specific flags (e.g. `--disallowedTools WebSearch` off Anthropic, where the
+    // server-side search tool does not exist and the nested call answers without searching).
+    if (target && Array.isArray(target.extraArgs) && target.extraArgs.length) args.push(...target.extraArgs);
+
     // CRITICAL: bypass permission prompts in non-interactive mode
     args.push('--dangerously-skip-permissions');
 
@@ -362,6 +426,10 @@ class ClaudeCLI {
     // Unset CLAUDECODE to allow nested invocation from dev environment.
     const env = { ...process.env, ...(extraEnv || {}) };
     delete env.CLAUDECODE;
+    // The provider decision: every inherited ANTHROPIC_* is stripped first, then the
+    // run's own set (bridge URL + run token, role models, window/output caps). A routed
+    // run therefore never sees the server's long-lived gateway token.
+    if (target && target.runEnv) applyRunEnvTo(env, target.runEnv);
     // The child runs with Bash on a prompt an untrusted document can steer, so it must
     // not inherit this server's own credentials — none of them are its to use. Deleted
     // AFTER the extraEnv spread so a caller cannot re-introduce one by accident.
@@ -405,6 +473,14 @@ class ClaudeCLI {
     // Track temp attachment files + parent dir for cleanup
     let attFiles = _tempFiles.slice();
     let attDir = _tempDir;
+    // The run token dies with the process (the bridge keeps a short grace for the
+    // CLI's last in-flight request).
+    let targetReleased = false;
+    const releaseTarget = () => {
+      if (targetReleased || !target || typeof target.release !== 'function') return;
+      targetReleased = true;
+      try { target.release(); } catch {}
+    };
 
     // ─── Watchdog timers ─────────────────────────────────────────────────────
     // Escalate to SIGKILL 3 s after SIGTERM if the process ignores it (Unix only —
@@ -526,6 +602,7 @@ class ClaudeCLI {
         }
       }
       releaseMcpConfig(mcpHash); mcpHash = null;
+      releaseTarget();
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
       if (attDir) { try { fs.rmSync(attDir, { recursive: true, force: true }); } catch {} attDir = null; }
       attFiles = [];
@@ -556,6 +633,7 @@ class ClaudeCLI {
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
       // Clean up MCP config and temp attachments even when the process fails to start
       releaseMcpConfig(mcpHash); mcpHash = null;
+      releaseTarget();
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
       if (attDir) { try { fs.rmSync(attDir, { recursive: true, force: true }); } catch {} attDir = null; }
       attFiles = [];
@@ -583,6 +661,7 @@ class ClaudeCLI {
       onResult(fn) { h.onResult = fn; return this; },
       onUsage(fn) { h.onUsage = fn; return this; },
       process: proc,
+      runTarget: this.lastRunTarget,
     };
   }
 
@@ -670,3 +749,6 @@ class ClaudeCLI {
 module.exports = ClaudeCLI;
 module.exports.findClaudeBin = findClaudeBin;
 module.exports.claudeCliStatus = claudeCliStatus;
+module.exports.setRunTargetHook = setRunTargetHook;
+module.exports.resolveRunTarget = resolveRunTarget;
+module.exports.SERVER_ONLY_ENV = SERVER_ONLY_ENV;

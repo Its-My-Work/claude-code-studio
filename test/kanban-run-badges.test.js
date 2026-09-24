@@ -46,13 +46,19 @@ function lift(names) {
   // translation is deliberate: it lets every assertion below name the i18n key the
   // badge asked for, so a key that does not exist in the dictionaries shows up here
   // as a wrong string rather than as a card rendering `effort.med` to a user.
-  const sandbox = { t: k => k };
+  // The provider list the page fetched (/api/models/choices): a gateway is the default,
+  // `claude` is the CLI login. kbEngineOf reads it as `_mdlChoices`, like the real page.
+  const sandbox = { t: k => k, _kbTmuxAvailable: true, _mdlChoices: { providers: [
+    { id: 'claude', type: 'claude-subscription', builtin: true, isDefault: false, models: [] },
+    { id: 'kilo', type: 'anthropic-compatible', isDefault: true, models: [] },
+  ] } };
   vm.createContext(sandbox);
-  vm.runInContext(parts.join('\n') + '\nthis.__api={kbRunBadges,KB_EFFORT_KEY};', sandbox);
-  return sandbox.__api;
+  vm.runInContext(parts.join('\n') + '\nthis.__api={kbRunBadges,KB_EFFORT_KEY,kbEngineOf};', sandbox);
+  return sandbox;
 }
 
-const { kbRunBadges, KB_EFFORT_KEY } = lift(['const KB_EFFORT_KEY=', 'kbRunBadges']);
+const SANDBOX = lift(['const KB_EFFORT_KEY=', 'kbEngineOf', 'kbRunBadges']);
+const { kbRunBadges, KB_EFFORT_KEY } = SANDBOX.__api;
 // Array.from, not .map: the helper builds its array inside the vm realm, so its
 // prototype is a different object and deepStrictEqual rejects it while printing two
 // identical-looking values. Copying into a host array is what makes a failure here
@@ -90,19 +96,25 @@ check('an unknown effort is shown verbatim, not dropped', texts({ model: 'sonnet
 check('the map covers exactly the five values the modal offers',
   Object.keys(KB_EFFORT_KEY).sort(), ['high', 'low', 'max', 'medium', 'xhigh']);
 
-// ── 3. Engine renders only for `subscription` ───────────────────────────────
+// ── 3. Engine: no dial — the model's provider decides, and only subscription is shown ──
 console.log('\nengine badge:');
-check('the api engine is the default and adds no badge', texts({ model: 'sonnet', run_engine: 'api' }), ['sonnet']);
-check('an unset engine adds no badge', texts({ model: 'sonnet', run_engine: null }), ['sonnet']);
-check('subscription is announced', texts({ model: 'sonnet', run_engine: 'subscription' }), ['sonnet', 'engine.sub']);
+check('a model of the default (API) provider adds no badge', texts({ model: 'sonnet' }), ['sonnet']);
+check('a stored run_engine is ignored — the dial is gone', texts({ model: 'sonnet', run_engine: 'subscription' }), ['sonnet']);
+check('a model of the CLI login is announced as the subscription', texts({ model: 'claude::opus' }).slice(-1), ['engine.sub']);
 check('all three together, in order',
-  texts({ model: 'opus', effort: 'high', run_engine: 'subscription' }),
-  ['opus', 'effort.high', 'engine.sub']);
+  texts({ model: 'claude::opus', effort: 'high' }).slice(1), ['effort.high', 'engine.sub']);
+check('a bot\'s model decides, not the task row\'s', texts({ model: 'claude::opus', bot_model: 'kilo::gpt-x' }).includes('engine.sub'), false);
+SANDBOX._kbTmuxAvailable = false;
+check('without tmux the CLI login runs headless, so no badge', texts({ model: 'claude::opus' }).includes('engine.sub'), false);
+SANDBOX._kbTmuxAvailable = true;
+SANDBOX._mdlChoices = null;
+check('before the provider list loads, an explicit claude:: ref is still known', texts({ model: 'claude::opus' }).includes('engine.sub'), true);
+check('…and a bare alias is not guessed', texts({ model: 'sonnet' }), ['sonnet']);
 
 // ── 4. Every badge carries a title, and it is a real i18n key ───────────────
 console.log('\ntitles:');
 check('titles name the toolbar labels',
-  titles({ model: 'opus', effort: 'high', run_engine: 'subscription' }),
+  titles({ model: 'claude::opus', effort: 'high' }),
   ['tb.model', 'tb.effort', 'tb.engine']);
 // Those keys have to exist in all five dictionaries or the tooltip renders the key.
 // i18n-completeness.test.js owns parity between languages; this only pins that the
@@ -119,8 +131,9 @@ console.log('\nthe card and the runner agree:');
 check('startTask still resolves model as bot -> session -> task -> sonnet',
   /model:\s*taskBot\?\.model\s*\|\|\s*session\?\.model\s*\|\|\s*task\.model\s*\|\|\s*'sonnet'/.test(SERVER), true);
 check('startTask still reads effort off the TASK row', /effort:\s*task\.effort\s*\|\|\s*null/.test(SERVER), true);
-check('startTask still treats any non-subscription run_engine as api',
-  /task\.run_engine === 'subscription'\)\s*\?\s*'subscription'\s*:\s*'api'/.test(SERVER), true);
+check('startTask derives the engine from the same model chain (runEngineFor)',
+  /_taskEngine = runEngineFor\(taskBot\?\.model\s*\|\|\s*session\?\.model\s*\|\|\s*task\.model\s*\|\|\s*'sonnet'\)/.test(SERVER), true);
+check('and no longer reads task.run_engine', /_taskEngine[^\n]*task\.run_engine/.test(SERVER), false);
 
 // getTasks has to actually ship bot_model, or the first branch of the chain is dead
 // weight and every bot-assigned card quietly falls back to the session's model.
