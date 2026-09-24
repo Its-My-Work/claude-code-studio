@@ -16694,7 +16694,8 @@ async function loadFiles(dir = '') {
       treeEl.appendChild(el);
     }
 
-    if (!items.length) treeEl.innerHTML = `<div style="padding:14px;color:var(--muted);text-align:center;font-size:11px">${t('files.empty')}</div>`;
+    // Append, not replace: an empty subfolder must keep its ".." row to get back out.
+    if (!items.length) treeEl.insertAdjacentHTML('beforeend', `<div style="padding:14px;color:var(--muted);text-align:center;font-size:11px">${t('files.empty')}</div>`);
     // A capped listing that says nothing reads as "this is the whole directory".
     else if (d.truncated) {
       const w = document.createElement('div');
