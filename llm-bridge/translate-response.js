@@ -182,10 +182,13 @@ function createTranslator(o) {
   function chunk(c) {
     if (st.ended || st.failed || !c || typeof c !== 'object') return null;
     st.sawChunk = true;
-    if (c.error !== undefined && c.error !== null && !Array.isArray(c.choices)) return { error: c.error };
+    // OpenRouter's mid-stream failure carries BOTH `error` and a choice with finish_reason
+    // "error"; either one alone means the answer is incomplete and must not end as end_turn.
+    if (c.error !== undefined && c.error !== null && c.error !== '') return { error: c.error };
     if (c.usage && typeof c.usage === 'object') st.usage = c.usage;
     const ch = Array.isArray(c.choices) ? c.choices[0] : null;
     if (!ch || typeof ch !== 'object') return null;
+    if (ch.finish_reason === 'error') return { error: { message: 'upstream stream ended with finish_reason "error"' } };
     const d = ch.delta || ch.message || {};
     const r = reasoningOf(d);
     const det = Array.isArray(d.reasoning_details) ? d.reasoning_details : null;

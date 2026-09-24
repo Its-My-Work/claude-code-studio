@@ -59,17 +59,18 @@ function getRun(token) {
 }
 
 async function start(msg) {
-  for (const r of msg.runs || []) if (r && r.token) runs.set(r.token, r);
-  const options = msg.options || {};
-  if (options.debug) debugOn = true;
-  srv = createBridgeServer({
-    getRun,
-    onUsage: (record) => send({ t: 'usage', record }),
-    log,
-    pingIntervalMs: options.pingIntervalMs,
-    retryDelayMs: options.retryDelayMs != null ? () => options.retryDelayMs : undefined,
-  });
   try {
+    if (srv) return; // a second init (should not happen) must not open a second listener
+    for (const r of msg.runs || []) if (r && r.token) runs.set(r.token, r);
+    const options = msg.options || {};
+    if (options.debug) debugOn = true;
+    srv = createBridgeServer({
+      getRun,
+      onUsage: (record) => send({ t: 'usage', record }),
+      log,
+      pingIntervalMs: options.pingIntervalMs,
+      retryDelayMs: options.retryDelayMs != null ? () => options.retryDelayMs : undefined,
+    });
     const { port } = await srv.listen(msg.port || 0, msg.host || '127.0.0.1');
     send({ t: 'ready', port, pid: process.pid });
   } catch (e) {

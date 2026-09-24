@@ -10,6 +10,25 @@ const { createSseParser, parseEventJson } = require('./sse');
 const { readAll } = require('./upstream');
 const { transportError } = require('./errors');
 const { estimateInputTokens } = require('./estimate');
+const { SIG_PREFIX } = require('./ids');
+
+/**
+ * Thinking blocks signed by THIS bridge (a turn served by a translated provider earlier in the
+ * same session) can never be verified by Anthropic — it answers 400 "invalid signature" and the
+ * resumed session is stuck. Drop them; returns null when nothing had to change.
+ */
+function stripBridgeThinking(messages) {
+  if (!Array.isArray(messages)) return null;
+  let changed = false;
+  const out = messages.map((m) => {
+    if (!m || m.role !== 'assistant' || !Array.isArray(m.content)) return m;
+    const kept = m.content.filter((b) => !(b && b.type === 'thinking' && typeof b.signature === 'string' && b.signature.startsWith(SIG_PREFIX)));
+    if (kept.length === m.content.length) return m;
+    changed = true;
+    return { ...m, content: kept.length ? kept : [{ type: 'text', text: '(no content)' }] };
+  });
+  return changed ? out : null;
+}
 
 /** `<base>/v1/messages` — unless the base already ends in /v1, then `<base>/messages`. */
 function anthropicUrl(baseUrl, suffix) {
@@ -125,6 +144,8 @@ async function handlePassthrough(rc, env, kind) {
       }
     }
   }
+  const stripped = stripBridgeThinking(out.messages);
+  if (stripped) { out = { ...out, messages: stripped }; changed = true; }
   if (isPlainObject(opts.extraBody)) { out = deepMerge(out, opts.extraBody); changed = true; }
   const payload = changed ? Buffer.from(JSON.stringify(out)) : rc.raw;
 
@@ -217,4 +238,4 @@ async function handlePassthrough(rc, env, kind) {
   });
 }
 
-module.exports = { handlePassthrough, anthropicUrl, passthroughHeaders, authHeaders, extraHeaders, createUsageTap, pickResponseHeaders };
+module.exports = { handlePassthrough, anthropicUrl, passthroughHeaders, authHeaders, extraHeaders, createUsageTap, pickResponseHeaders, stripBridgeThinking };

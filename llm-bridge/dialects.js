@@ -32,6 +32,8 @@
 //                             prefix stable for provider-side prompt caching); 'all' = fold every one
 //   noUserAfterTool           a user text message may not directly follow tool messages (Mistral):
 //                             such text is appended to the last tool message instead
+//   sendUser                  send metadata.user_id (hashed) as `user`; off where the API rejects
+//                             unknown fields (Mistral answers 422 "Extra inputs are not permitted")
 
 const BASE_EFFORT = { low: 'low', medium: 'medium', high: 'high', xhigh: 'high', max: 'high', none: null };
 
@@ -52,6 +54,7 @@ const DEFAULTS = {
   upstreamStream: true,
   systemFold: 'leading',
   noUserAfterTool: false,
+  sendUser: true,
 };
 
 const PRESETS = {
@@ -65,9 +68,10 @@ const PRESETS = {
     effortMap: { ...BASE_EFFORT, none: 'none' },
   },
   deepseek: { effortParam: 'thinking', reasoningEcho: 'reasoning_content' },
-  gemini: { schemaSanitize: 'strict', effortMap: { ...BASE_EFFORT, none: 'none' } },
+  gemini: { schemaSanitize: 'strict', sendUser: false, effortMap: { ...BASE_EFFORT, none: 'none' } },
   qwen: { effortParam: 'enable_thinking', reasoningEcho: 'reasoning_content' },
-  mistral: { effortParam: 'none', toolIdStyle: 'mistral9', noUserAfterTool: true },
+  // Mistral validates strictly (422 on unknown fields) and reports usage in the last chunk anyway
+  mistral: { effortParam: 'none', toolIdStyle: 'mistral9', noUserAfterTool: true, sendUser: false, streamUsage: false },
   ollama: { effortParam: 'reasoning_effort', effortRequiresCaps: true, allowTopK: true },
 };
 

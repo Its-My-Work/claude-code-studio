@@ -214,7 +214,11 @@ async function handleTranslate(rc, env) {
         try { json = JSON.parse(text); } catch { /* handled below */ }
         if (!json || typeof json !== 'object') { failWith(transportError(new UpstreamError('EBADJSON', 'upstream returned a body that is not JSON'), label)); return; }
         if (json.error && !Array.isArray(json.choices)) { failWith(streamChunkError(json.error, label, chunkErrorOpts)); return; }
-        try { tl.chunk(completionToChunk(json)); complete(); } catch (e) { internal(e); }
+        try {
+          const r = tl.chunk(completionToChunk(json));
+          if (r && r.error !== undefined) failWith(streamChunkError(r.error, label, chunkErrorOpts));
+          else complete();
+        } catch (e) { internal(e); }
       });
       return;
     }

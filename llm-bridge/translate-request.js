@@ -383,7 +383,7 @@ function toOpenAI(body, { ctx, dialect, upstreamModel, caps }) {
   }
 
   const uid = body.metadata && body.metadata.user_id;
-  if (typeof uid === 'string' && uid) up.user = sha256hex(uid).slice(0, 32);
+  if (dialect.sendUser && typeof uid === 'string' && uid) up.user = sha256hex(uid).slice(0, 32);
 
   // structured output (`--json-schema`): Anthropic output_config.format -> OpenAI response_format
   const fmt = body.output_config && body.output_config.format;

@@ -288,6 +288,17 @@ const msg = (extra = {}) => ({ model: 'm1', max_tokens: 1000, messages: [{ role:
   const ptj = await call(port, { token: 'tok-anthropic', raw: unchanged });
   check('non-stream JSON passes through, usage tapped', [ptj.json.content[0].text, usage[0].inputTokens, usage[0].outputTokens], ['ok', 11, 7]);
   check('a body that needed no change is forwarded byte-for-byte', up.seen[0].raw, unchanged);
+  const mixed = msg({ model: 'claude-sonnet-5', messages: [
+    { role: 'user', content: 'q' },
+    { role: 'assistant', content: [{ type: 'thinking', thinking: 'from deepseek', signature: 'ccsb1:eyJwIjoiZHMifQ' }, { type: 'text', text: 'a1' }] },
+    { role: 'user', content: 'q2' },
+    { role: 'assistant', content: [{ type: 'thinking', thinking: 'from claude', signature: 'EqQBCkYIBxgCKkB-real' }, { type: 'text', text: 'a2' }] },
+    { role: 'user', content: 'q3' },
+  ] });
+  up.reset((req, res) => jsonRes(res, 200, { id: 'msg_3', type: 'message', role: 'assistant', model: 'claude-sonnet-5', content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }));
+  await call(port, { token: 'tok-anthropic', body: mixed });
+  const sentAsst = up.seen[0].body.messages.filter((m) => m.role === 'assistant').map((m) => m.content.map((b) => b.type + (b.signature ? `:${b.signature.slice(0, 6)}` : '')));
+  check('passthrough drops thinking signed by this bridge (Anthropic would 400), keeps real ones', sentAsst, [['text'], ['thinking:EqQBCk', 'text']]);
   up.reset((req, res) => jsonRes(res, 429, { type: 'error', error: { type: 'rate_limit_error', message: 'Number of requests has exceeded your rate limit' } }, { 'retry-after': '12', 'request-id': 'req_429' }));
   const pt429 = await call(port, { token: 'tok-anthropic', body: msg({ model: 'claude-sonnet-5', stream: true }) });
   check('upstream non-2xx: status, body and retry headers pass through', [pt429.status, pt429.json.error.type, pt429.headers['retry-after'], pt429.headers['request-id']], [429, 'rate_limit_error', '12', 'req_429']);
