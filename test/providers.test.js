@@ -96,7 +96,7 @@ console.log('run environment:');
   check('the real window, the output cap and the thinking switch reach the CLI', [e.set.CLAUDE_CODE_MAX_CONTEXT_TOKENS, e.set.CLAUDE_CODE_MAX_OUTPUT_TOKENS, e.set.CLAUDE_CODE_DISABLE_THINKING], ['128000', '8192', '1']);
   check('non-Anthropic: betas off, quiet CLI, WebSearch disallowed', [e.set.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, e.set.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, e.extraArgs], ['1', '1', ['--disallowedTools', 'WebSearch']]);
   const r = P.buildRunEnv(P.resolveModel('deepseek::deepseek-reasoner', reg, {}), { baseUrl: 'b', token: 't' });
-  check('a reasoning model gets effort forced on and the output cap clamped to 32K', [r.set.CLAUDE_CODE_ALWAYS_ENABLE_EFFORT, r.set.CLAUDE_CODE_MAX_OUTPUT_TOKENS, r.set.CLAUDE_CODE_DISABLE_THINKING], ['1', '32000', undefined]);
+  check('a reasoning model keeps thinking on and gets the output cap clamped to 32K', [r.set.CLAUDE_CODE_MAX_OUTPUT_TOKENS, r.set.CLAUDE_CODE_DISABLE_THINKING], ['32000', undefined]);
 }
 {
   const e = P.buildRunEnv(P.resolveModel('sonnet', reg, {}), { baseUrl: 'b', token: 't' });
@@ -105,7 +105,7 @@ console.log('run environment:');
   check('…unless a role was pinned', [pinned.set.ANTHROPIC_DEFAULT_HAIKU_MODEL, pinned.set.ANTHROPIC_DEFAULT_SONNET_MODEL], ['x/fast', undefined]);
   const anth = { id: 'anthropic', type: 'anthropic', label: 'A', enabled: true, models: [], roles: {}, options: {} };
   const a = P.buildRunEnv(P.resolveModel('anthropic::opus', { providers: [claude, anth] }, {}), { baseUrl: 'b', token: 't' });
-  check('first-party Anthropic keeps WebSearch and the CLI defaults', [a.extraArgs, a.set.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, a.set.CLAUDE_CODE_ALWAYS_ENABLE_EFFORT], [[], undefined, undefined]);
+  check('first-party Anthropic keeps WebSearch and the CLI defaults', [a.extraArgs, a.set.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, a.set.CLAUDE_CODE_MAX_CONTEXT_TOKENS], [[], undefined, undefined]);
 }
 
 console.log('bridge run context:');
@@ -113,7 +113,7 @@ console.log('bridge run context:');
   const ctx = P.buildRunCtx(P.resolveModel('deepseek::deepseek-reasoner', reg, {}), { purpose: 'task', taskId: 't1', effort: 'high' });
   check('carries provider credentials for the bridge only', [ctx.provider.apiKey, ctx.provider.baseUrl, ctx.provider.dialect], ['sk-ds', 'https://api.deepseek.com/v1', 'deepseek']);
   check('main model, caps of every role model, alias map, fallback', [ctx.model, Object.keys(ctx.models).sort(), ctx.modelMap.haiku, ctx.modelMap.opus, ctx.fallbackModel], ['deepseek-reasoner', ['deepseek-chat', 'deepseek-reasoner'], 'deepseek-chat', 'deepseek-reasoner', 'deepseek-chat']);
-  check('effort is the source of truth, validated', [ctx.effort, P.buildRunCtx(P.resolveModel('deepseek::deepseek-chat', reg, {}), { effort: 'auto' }).effort], ['high', null]);
+  check('effort is the source of truth; Auto means "send none", never the CLI\'s own "high"', [ctx.effort, P.buildRunCtx(P.resolveModel('deepseek::deepseek-chat', reg, {}), { effort: 'auto' }).effort, P.buildRunCtx(P.resolveModel('deepseek::deepseek-chat', reg, {}), {}).effort], ['high', 'auto', 'auto']);
   check('metadata for the usage ledger', [ctx.purpose, ctx.taskId, typeof ctx.runId], ['task', 't1', 'string']);
 }
 

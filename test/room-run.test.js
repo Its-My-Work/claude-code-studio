@@ -32,7 +32,7 @@ const BOT_READ_TOOLS = ['Read', 'Glob', 'Grep'], BOT_WORK_TOOLS = ['Bash', 'Read
 
 const NAMES = ['ROOM_CLOSING', 'ClaudeCLI', 'stmts', 'ROOM_SEATING', 'botsLogic', 'getUserLang', 'pickRoomSeating', 'WORKDIR', 'seatingNote', 'botLangName',
   'roomFiles', 'MULTI_AGENT_MAX_TURNS_CAP', 'mcpServersForBot', 'runInteractiveSingle', 'killInteractiveTmux', 'isAgentSuccess',
-  'roomStopReason', 'BOT_READ_TOOLS', 'BOT_WORK_TOOLS', 'tmuxAvailable', 'ROOM_GIT', 'roomGit', 'WM'];
+  'roomStopReason', 'BOT_READ_TOOLS', 'BOT_WORK_TOOLS', 'tmuxAvailable', 'ROOM_GIT', 'roomGit', 'WM', 'engineForModel'];
 const build = (deps) => new Function(...NAMES, `${toolsSrc}\n return ${roomSrc.trim().replace(/^async function runConversationRoom/, 'async function runConversationRoom')};`)(...NAMES.map(n => deps[n]));
 
 /** Runs one room turn. `script(call)` decides what each CLI run does: { text, subtype, error, write: [[relPath, data]] }. */
@@ -67,6 +67,9 @@ async function runRoom({ closing = true, bots, script, mode = 'auto', maxTurns =
     getUserLang: () => lang, pickRoomSeating: async () => null, WORKDIR: workdir, seatingNote: () => '', botLangName: () => (lang === 'ru' ? 'Russian' : 'English'),
     MULTI_AGENT_MAX_TURNS_CAP: 200, mcpServersForBot: (base) => base, runInteractiveSingle: async (o) => { interactive.push(o); return { fullText: `subscription answer of ${o.agent}`, completed: true, toolEvents: [] }; }, killInteractiveTmux() {},
     tmuxAvailable: () => tmux,
+    // providers.effectiveEngine: every model in these rooms is a Claude alias, for which the
+    // rule is the identity — the tmux engine stays the tmux engine.
+    engineForModel: (e) => e,
     ROOM_GIT: gitOn, WM: {},
     // `git`: 'none' = not a repo the app manages; a function = the checkpoint result for call n (1-based)
     roomGit: { checkpoint: (dir, msg) => { gitCalls.push({ dir, msg }); return typeof git === 'function' ? git(gitCalls.length, dir, msg) : { managed: false }; } },

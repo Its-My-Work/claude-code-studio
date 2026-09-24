@@ -4222,6 +4222,8 @@ const llmBridge = (createBridgeHost && process.env.CCS_BRIDGE !== 'off') ? creat
   childPath: helperPath('llm-bridge', 'child.js'),
   port: parseInt(process.env.CCS_BRIDGE_PORT || '0', 10) || 0,
   onUsage: onBridgeUsage,
+  // The child holds provider keys (over IPC) but needs none of the server's own secrets.
+  env: { PATH: process.env.PATH || '', NODE_ENV: process.env.NODE_ENV || '', LANG: process.env.LANG || '', ...(process.env.CCS_LLM_BRIDGE_DEBUG ? { CCS_LLM_BRIDGE_DEBUG: '1' } : {}) },
   log: {
     debug: (m, d) => log.debug(`[llm-bridge] ${m}`, d),
     info: (m, d) => log.info(`[llm-bridge] ${m}`, d),

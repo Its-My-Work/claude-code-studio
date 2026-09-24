@@ -330,9 +330,6 @@ function buildRunEnv(target, bridge = {}) {
     // For an id the CLI does not recognise it assumes a 200K window and compacts on
     // that — too late for a 128K model, far too early for a 1M one.
     if (caps.contextWindow) set.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(caps.contextWindow);
-    // The CLI sends --effort only for models it knows support it; the bridge maps the
-    // run's effort itself, but an Anthropic-compatible upstream needs the field.
-    if (caps.reasoning !== false) set.CLAUDE_CODE_ALWAYS_ENABLE_EFFORT = '1';
     // WebSearch is an Anthropic SERVER tool: behind any other endpoint the nested call
     // answers without searching. The `web` MCP server (SearXNG) is the working substitute.
     extraArgs.push('--disallowedTools', 'WebSearch');
@@ -381,7 +378,10 @@ function buildRunCtx(target, meta = {}) {
     model: target.modelId,
     models, modelMap,
     fallbackModel: supportsAliases(p) ? null : (roleModel(p, 'fast') || target.modelId),
-    effort: ['low', 'medium', 'high', 'xhigh', 'max'].includes(meta.effort) ? meta.effort : null,
+    // 'auto' = send the provider no effort at all. Measured on CLI 2.1.281: with no --effort
+    // flag the CLI still sends effort "high" itself, so null ("use the request's") would turn
+    // the toolbar's Auto into High on every reasoning model.
+    effort: ['low', 'medium', 'high', 'xhigh', 'max'].includes(meta.effort) ? meta.effort : 'auto',
   };
 }
 

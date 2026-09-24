@@ -128,7 +128,9 @@ function runInterrupt(msg, { busy = false } = {}) {
 // with defaults and written straight back onto the row.
 const DESTRUCTURE = pick(/const \{ text:userMessage, attachments=\[\][\s\S]*?\} = msg;/, 'processChat destructure');
 const WRITEBACK = pick(/try \{ stmts\.updateConfig\.run\(JSON\.stringify\(mIds\)[\s\S]*?catch \(e\) \{[\s\S]*?throw e; \}/, 'updateConfig call');
-const ENGINE_WRITE = pick(/db\.prepare\(`UPDATE sessions SET run_engine=\? WHERE id=\?`\)\.run\(engine === 'subscription' \? 'subscription' : 'api', localSessionId\);/, 'run_engine write');
+// `engineDial` is the toolbar's value as sent (providers: the run itself may use the API
+// engine for a non-Claude model, but the chat keeps the dial the user set).
+const ENGINE_WRITE = pick(/db\.prepare\(`UPDATE sessions SET run_engine=\? WHERE id=\?`\)\.run\(engineDial === 'subscription' \? 'subscription' : 'api', localSessionId\);/, 'run_engine write');
 
 // Feed one dispatched message through processChat's own config-persisting path.
 function persistConfigFor(dispatchedMsg) {
