@@ -218,31 +218,39 @@ function createProviderStore(db, { encrypt, decrypt, log } = {}) {
   }
 
   /** Patch semantics: an absent field is unchanged; apiKey '' is unchanged, `clearApiKey` clears it;
-   *  a header value '***' keeps the stored one. Any edit of an env-seeded row makes it the user's. */
+   *  a header value '***' keeps the stored one; an option set to null is removed. Only a field
+   *  whose value really CHANGES counts — pressing Save on an untouched env-seeded row must not
+   *  detach it from .env — and any real edit of such a row makes it the user's. */
   function update(id, patch, { fromEnv } = {}) {
     const cur = get(id);
     if (!cur) return null;
     const sets = [], vals = {};
-    const put = (col, val) => { sets.push(`${col} = @${col}`); vals[col] = val; };
-    if (patch.label !== undefined) put('label', patch.label);
-    if (patch.baseUrl !== undefined && cur.type !== 'claude-subscription') put('base_url', patch.baseUrl);
-    if (patch.authScheme !== undefined) put('auth_scheme', patch.authScheme);
-    if (patch.dialect !== undefined) put('dialect', patch.dialect);
-    if (patch.clearApiKey) put('api_key_enc', '');
-    else if (typeof patch.apiKey === 'string' && patch.apiKey !== '') put('api_key_enc', enc(patch.apiKey));
+    let userEdit = false;
+    const put = (col, val, isUserField = true) => { sets.push(`${col} = @${col}`); vals[col] = val; if (isUserField) userEdit = true; };
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    if (patch.label !== undefined && patch.label !== cur.label) put('label', patch.label);
+    if (patch.baseUrl !== undefined && cur.type !== 'claude-subscription' && patch.baseUrl !== cur.baseUrl) put('base_url', patch.baseUrl);
+    if (patch.type !== undefined && cur.type !== 'claude-subscription' && patch.type !== cur.type) put('type', patch.type);
+    if (patch.authScheme !== undefined && patch.authScheme !== cur.authScheme) put('auth_scheme', patch.authScheme);
+    if (patch.dialect !== undefined && patch.dialect !== cur.dialect) put('dialect', patch.dialect);
+    if (patch.clearApiKey) { if (cur.apiKey) put('api_key_enc', ''); }
+    else if (typeof patch.apiKey === 'string' && patch.apiKey !== '' && patch.apiKey !== cur.apiKey) put('api_key_enc', enc(patch.apiKey));
     if (patch.headers !== undefined) {
       const merged = {};
       for (const [k, v] of Object.entries(patch.headers || {})) merged[k] = (v === '***' && cur.headers[k] !== undefined) ? cur.headers[k] : v;
-      put('headers_enc', Object.keys(merged).length ? enc(JSON.stringify(merged)) : '');
+      if (!same(merged, cur.headers)) put('headers_enc', Object.keys(merged).length ? enc(JSON.stringify(merged)) : '');
     }
-    if (patch.options !== undefined) put('options', JSON.stringify({ ...cur.options, ...patch.options }));
-    if (patch.roles !== undefined) put('roles', JSON.stringify(patch.roles || {}));
-    if (patch.aliases !== undefined) put('aliases', patch.aliases ? 1 : 0);
-    if (patch.enabled !== undefined) put('enabled', patch.enabled ? 1 : 0);
-    if (patch.lastTest !== undefined) put('last_test', patch.lastTest ? JSON.stringify(patch.lastTest) : null);
-    if (patch.sortOrder !== undefined) put('sort_order', patch.sortOrder);
-    const userEdit = sets.some(s => !/^(last_test|sort_order|enabled) /.test(s));
-    if (!fromEnv && cur.source === 'env' && userEdit) put('source', 'user');
+    if (patch.options !== undefined) {
+      const merged = { ...cur.options, ...patch.options };
+      for (const k of Object.keys(merged)) if (merged[k] === null || merged[k] === undefined) delete merged[k];
+      if (!same(merged, cur.options)) put('options', JSON.stringify(merged));
+    }
+    if (patch.roles !== undefined && !same(patch.roles || {}, cur.roles || {})) put('roles', JSON.stringify(patch.roles || {}));
+    if (patch.aliases !== undefined && !!patch.aliases !== !!cur.aliases) put('aliases', patch.aliases ? 1 : 0);
+    if (patch.enabled !== undefined && !!patch.enabled !== !!cur.enabled) put('enabled', patch.enabled ? 1 : 0, false);
+    if (patch.lastTest !== undefined) put('last_test', patch.lastTest ? JSON.stringify(patch.lastTest) : null, false);
+    if (patch.sortOrder !== undefined) put('sort_order', patch.sortOrder, false);
+    if (!fromEnv && cur.source === 'env' && userEdit) put('source', 'user', false);
     if (!sets.length) return cur;
     sets.push(`updated_at = datetime('now')`);
     db.prepare(`UPDATE providers SET ${sets.join(', ')} WHERE id = @id`).run({ ...vals, id });
@@ -373,6 +381,34 @@ function createProviderStore(db, { encrypt, decrypt, log } = {}) {
    * Later boots: an env-sourced row follows the env (edit .env + restart still works, as
    * before), until it is edited in the UI — then it is the user's and env is ignored.
    */
+  /** The part of the env the CLI used to read directly, as a provider's roles and headers. */
+  function envShape(env) {
+    const roles = {};
+    const pick = (k) => { const v = String(env[k] || '').trim(); return v && P.MODEL_ID_RE.test(v) ? v : null; };
+    const main = pick('ANTHROPIC_DEFAULT_SONNET_MODEL'), fast = pick('ANTHROPIC_DEFAULT_HAIKU_MODEL') || pick('ANTHROPIC_SMALL_FAST_MODEL');
+    const strong = pick('ANTHROPIC_DEFAULT_OPUS_MODEL'), fable = pick('ANTHROPIC_DEFAULT_FABLE_MODEL'), sub = pick('CLAUDE_CODE_SUBAGENT_MODEL');
+    if (main) roles.main = main; if (fast) roles.fast = fast; if (strong) roles.strong = strong; if (fable) roles.fable = fable; if (sub) roles.subagent = sub;
+    // ANTHROPIC_CUSTOM_HEADERS: "Name: value" lines, as the CLI parses them.
+    const headers = {};
+    for (const line of String(env.ANTHROPIC_CUSTOM_HEADERS || '').split(/\r?\n/)) {
+      const i = line.indexOf(':');
+      if (i <= 0) continue;
+      const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim();
+      if (/^[A-Za-z0-9-]{1,64}$/.test(k) && v && !/[\r\n]/.test(v)) headers[k] = v;
+    }
+    return { roles, headers };
+  }
+
+  /**
+   * First boot: the CLI-login row always exists; ANTHROPIC_BASE_URL (+ its token, the
+   * ANTHROPIC_DEFAULT_*_MODEL remaps and ANTHROPIC_CUSTOM_HEADERS the CLI used to read
+   * directly) becomes a provider 'gateway' and the DEFAULT, because that is what every run
+   * used until now — a bare "sonnet" in an existing row must keep landing on the same model.
+   * Later boots: an env-sourced row follows the env (edit .env + restart still works, as
+   * before), until it is edited in the UI — then it is the user's and env is ignored. An
+   * env row whose variable was REMOVED is switched off (and stops being the default), which
+   * is what removing it used to mean: back to the CLI login.
+   */
   function seedFromEnv(env) {
     if (!st.get.get(P.BUILTIN_CLAUDE_ID)) {
       st.insert.run({ id: P.BUILTIN_CLAUDE_ID, type: 'claude-subscription', label: 'Claude', base_url: '', auth_scheme: 'bearer',
@@ -382,35 +418,58 @@ function createProviderStore(db, { encrypt, decrypt, log } = {}) {
     const baseUrl = String(env.ANTHROPIC_BASE_URL || '').trim().replace(/\/+$/, '');
     const authToken = String(env.ANTHROPIC_AUTH_TOKEN || '').trim();
     const apiKey = String(env.ANTHROPIC_API_KEY || '').trim();
+    const shape = envShape(env);
     const seeded = getSetting('seededFromEnv');
-    const envRow = registry().providers.find(p => p.source === 'env');
+    const envRows = registry().providers.filter(p => p.source === 'env');
+    const gwRow = envRows.find(p => p.type === 'anthropic-compatible');
+    const anRow = envRows.find(p => p.type === 'anthropic');
+
+    const disableEnvRow = (row) => {
+      if (!row.enabled) return;
+      update(row.id, { enabled: false }, { fromEnv: true });
+      setSetting(`envDisabled:${row.id}`, '1');
+      if (getSetting('defaultProvider') === row.id) setSetting('defaultProvider', P.BUILTIN_CLAUDE_ID);
+      L.info('env provider switched off — its variable is gone', { id: row.id });
+    };
+    const syncEnvRow = (row, fields) => {
+      const wasEnvDisabled = getSetting(`envDisabled:${row.id}`);
+      update(row.id, { ...fields, ...(wasEnvDisabled ? { enabled: true } : {}) }, { fromEnv: true });
+      if (wasEnvDisabled) { setSetting(`envDisabled:${row.id}`, ''); if (!getSetting('defaultProvider') || getSetting('defaultProvider') === P.BUILTIN_CLAUDE_ID) setSetting('defaultProvider', row.id); }
+    };
 
     if (baseUrl && /^https?:\/\//i.test(baseUrl)) {
       const key = authToken || apiKey;
       const scheme = authToken ? 'bearer' : 'x-api-key';
-      if (envRow) {
-        if (envRow.baseUrl !== baseUrl || envRow.apiKey !== key || envRow.authScheme !== scheme) {
-          update(envRow.id, { baseUrl, apiKey: key || undefined, clearApiKey: !key, authScheme: scheme }, { fromEnv: true });
-          L.info('provider synced from env', { id: envRow.id });
-        }
+      const fields = { baseUrl, apiKey: key || undefined, clearApiKey: !key, authScheme: scheme, roles: shape.roles, headers: shape.headers };
+      if (gwRow) {
+        syncEnvRow(gwRow, fields);
       } else if (!seeded) {
         let host = baseUrl;
         try { host = new URL(baseUrl).host; } catch {}
         const id = st.get.get('gateway') ? 'gateway-env' : 'gateway';
         create({ id, type: 'anthropic-compatible', label: host.substring(0, 60), baseUrl, apiKey: key, authScheme: scheme,
-          aliases: true, source: 'env', options: { quietCli: false } });
+          aliases: true, source: 'env', options: { quietCli: false }, roles: shape.roles, headers: shape.headers });
         setSetting('defaultProvider', id);
         L.info('provider seeded from ANTHROPIC_BASE_URL', { id, host });
       }
-    } else if (!seeded && authToken) {
-      // Without a base URL the old code still passed ANTHROPIC_AUTH_TOKEN through (and
-      // dropped ANTHROPIC_API_KEY so the CLI used the subscription): keep both behaviours.
-      create({ id: 'anthropic', type: 'anthropic', label: 'Anthropic API', baseUrl: 'https://api.anthropic.com', apiKey: authToken,
-        authScheme: 'bearer', aliases: true, source: 'env' });
-      setSetting('defaultProvider', 'anthropic');
-    } else if (!seeded && apiKey) {
-      create({ id: 'anthropic', type: 'anthropic', label: 'Anthropic API', baseUrl: 'https://api.anthropic.com', apiKey,
-        authScheme: 'x-api-key', aliases: true, source: 'env' });
+    } else if (gwRow) {
+      disableEnvRow(gwRow);
+    }
+
+    if (!baseUrl) {
+      if (anRow) {
+        if (authToken || apiKey) syncEnvRow(anRow, { apiKey: authToken || apiKey, authScheme: authToken ? 'bearer' : 'x-api-key' });
+        else disableEnvRow(anRow);
+      } else if (!seeded && authToken) {
+        // Without a base URL the old code still passed ANTHROPIC_AUTH_TOKEN through (and
+        // dropped ANTHROPIC_API_KEY so the CLI used the subscription): keep both behaviours.
+        create({ id: 'anthropic', type: 'anthropic', label: 'Anthropic API', baseUrl: 'https://api.anthropic.com', apiKey: authToken,
+          authScheme: 'bearer', aliases: true, source: 'env' });
+        setSetting('defaultProvider', 'anthropic');
+      } else if (!seeded && apiKey) {
+        create({ id: 'anthropic', type: 'anthropic', label: 'Anthropic API', baseUrl: 'https://api.anthropic.com', apiKey,
+          authScheme: 'x-api-key', aliases: true, source: 'env' });
+      }
     }
     if (!seeded) setSetting('seededFromEnv', String(Date.now()));
   }

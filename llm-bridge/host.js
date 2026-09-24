@@ -226,6 +226,13 @@ function createBridgeHost(o = {}) {
     },
 
     running() { return o.inProcess ? !!inproc && ready : !!child && ready && !gaveUp; },
+    /** 'running' | 'starting' (first start or a restart pending) | 'down' (gave up) | 'stopped'. */
+    state() {
+      if (this.running()) return 'running';
+      if (gaveUp) return 'down';
+      if (stopping) return 'stopped';
+      return (restartTimer || child) ? 'starting' : 'stopped';
+    },
     baseUrl() { return this.running() ? `http://127.0.0.1:${port}` : null; },
     pid() { return child ? child.pid : null; },
 

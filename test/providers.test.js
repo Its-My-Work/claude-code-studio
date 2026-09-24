@@ -232,6 +232,46 @@ console.log('pickers and validation:');
   check('a refusal names the status and the upstream message', await fetchCatalog({ type: 'openai-compatible', baseUrl: 'https://x/v1', apiKey: 'bad' }, { fetchImpl: fake(() => ({ status: 401, body: { error: { message: 'Incorrect API key' } } })) }), { ok: false, models: [], status: 401, error: 'HTTP 401: Incorrect API key' });
   check('the CLI login has no catalogue to fetch', await fetchCatalog({ type: 'claude-subscription' }), { ok: true, models: [], noCatalog: true });
 
+  console.log('review fixes:');
+  {
+    const db2 = openDatabase(path.join(dir, 'r.db'));
+    const st2 = createProviderStore(db2, { encrypt, decrypt });
+    st2.seedFromEnv({ ANTHROPIC_BASE_URL: 'https://kilo.example', ANTHROPIC_AUTH_TOKEN: 'kgw_1',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'z-ai/glm-4.6', ANTHROPIC_DEFAULT_HAIKU_MODEL: 'z-ai/glm-4.5-air', ANTHROPIC_DEFAULT_OPUS_MODEL: 'z-ai/glm-5',
+      CLAUDE_CODE_SUBAGENT_MODEL: 'z-ai/glm-4.5-air', ANTHROPIC_CUSTOM_HEADERS: 'cf-aig-authorization: Bearer abc\nX-Title: studio' });
+    const g = st2.get('gateway');
+    check('the env model remaps become the seeded row\'s roles (a bare "sonnet" keeps meaning glm-4.6)', g.roles, { main: 'z-ai/glm-4.6', fast: 'z-ai/glm-4.5-air', strong: 'z-ai/glm-5', subagent: 'z-ai/glm-4.5-air' });
+    check('ANTHROPIC_CUSTOM_HEADERS becomes the row\'s headers', g.headers, { 'cf-aig-authorization': 'Bearer abc', 'X-Title': 'studio' });
+    const env = P.buildRunEnv(P.resolveModel('sonnet', st2.registry(), {}), { baseUrl: 'b', token: 't' });
+    check('…and they reach the run as before the registry', [env.set.ANTHROPIC_DEFAULT_SONNET_MODEL, env.set.ANTHROPIC_DEFAULT_HAIKU_MODEL, env.set.CLAUDE_CODE_SUBAGENT_MODEL], ['z-ai/glm-4.6', 'z-ai/glm-4.5-air', 'z-ai/glm-4.5-air']);
+    check('a Claude alias behind a Claude gateway keeps WebSearch', env.extraArgs, []);
+    check('bridge runs strip the cloud-backend switches; the CLI login keeps them', [env.unset.includes('CLAUDE_CODE_USE_BEDROCK'), env.unset.includes('CLAUDE_CODE_OAUTH_TOKEN'), P.buildRunEnv(P.resolveModel('opus', st2.registry(), { engine: 'subscription' })).unset.includes('CLAUDE_CODE_USE_BEDROCK')], [true, true, false]);
+    st2.update('gateway', { label: g.label, baseUrl: g.baseUrl, authScheme: g.authScheme, dialect: g.dialect, headers: { 'cf-aig-authorization': '***', 'X-Title': 'studio' }, options: g.options, roles: g.roles, aliases: true, enabled: true });
+    check('pressing Save on an untouched env row does not detach it from .env', st2.get('gateway').source, 'env');
+    st2.seedFromEnv({});
+    check('removing ANTHROPIC_BASE_URL switches the env row off and hands the default back to the CLI login', [st2.get('gateway').enabled, st2.registry().defaultProviderId], [false, 'claude']);
+    st2.seedFromEnv({ ANTHROPIC_BASE_URL: 'https://kilo.example', ANTHROPIC_AUTH_TOKEN: 'kgw_2' });
+    check('putting it back re-enables the row as the default, with the new token', [st2.get('gateway').enabled, st2.registry().defaultProviderId, st2.get('gateway').apiKey], [true, 'gateway', 'kgw_2']);
+    st2.update('gateway', { options: { timeoutMs: 60000, extraBody: { temperature: 2 } } });
+    st2.update('gateway', { options: { timeoutMs: null, extraBody: null } });
+    check('a cleared option is removed, not kept', [st2.get('gateway').options.timeoutMs, st2.get('gateway').options.extraBody, st2.get('gateway').options.quietCli], [undefined, undefined, false]);
+    check('validation passes a cleared option through as null', P.validateProviderInput({ options: { timeoutMs: null, maxConcurrency: '', extraBody: null } }).value.options, { timeoutMs: null, maxConcurrency: null, extraBody: null });
+    st2.create({ id: 'x', type: 'openai-compatible', label: 'X', baseUrl: 'https://x/v1' });
+    st2.update('x', { type: 'anthropic-compatible' });
+    check('changing the API type is stored (it was silently dropped)', st2.get('x').type, 'anthropic-compatible');
+    db2.close();
+  }
+  {
+    const r2 = { providers: [claude, { ...gateway, models: [{ id: 'z-ai/glm-5:free', enabled: true, caps: {} }] }, deepseek], defaultProviderId: 'gateway' };
+    check('a bare non-alias id is known only if the default provider lists it', ['z-ai/glm-5:free', 'gpt-4o', 'haiku'].map(v => P.isKnownModel(v, r2)), [true, false, true]);
+    const f = P.resolveModel('ghost::haiku', { ...r2, defaultProviderId: 'deepseek' }, {});
+    check('a fallback keeps an alias\'s tier (haiku → the fast role, not main)', [f.provider.id, f.cliModel, f.fallback], ['deepseek', 'deepseek-chat', 'provider_missing']);
+    const ff = P.resolveModel('ghost::opus', { ...r2, defaultProviderId: 'deepseek' }, {});
+    check('…opus → the strong role', ff.cliModel, 'deepseek-reasoner');
+    const fab = P.buildRunEnv(P.resolveModel('sonnet', { providers: [claude, { ...deepseek, roles: { ...deepseek.roles, fable: 'deepseek-reasoner' } }], defaultProviderId: 'deepseek' }, {}), { baseUrl: 'b', token: 't' });
+    check('a pinned fable role reaches ANTHROPIC_DEFAULT_FABLE_MODEL', fab.set.ANTHROPIC_DEFAULT_FABLE_MODEL, 'deepseek-reasoner');
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

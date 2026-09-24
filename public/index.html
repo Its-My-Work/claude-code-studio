@@ -12361,7 +12361,7 @@ function setOpt(btn, group) {
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') { curModel = v; syncModelMore(); applyModelDependentDials(); }
-  else if (group === 'engine') { curEngine = v; syncDefaultStar(); }
+  else if (group === 'engine') { curEngine = v; _engineForcedFrom = null; syncDefaultStar(); }
   updInd();
   // Sync mobile UI
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
@@ -12385,6 +12385,7 @@ function syncDefaultStar() {
 // runs last produces the correct result.
 function resolveEngineForView() {
   const want = _curSessionRunEngine || _globalDefaultEngine;
+  _engineForcedFrom = null;
   // …and never the tmux engine for a model of another provider (subscriptionAllowedFor).
   curEngine = (want === 'subscription' && _tmuxAvailable && subscriptionAllowedFor(curModel)) ? 'subscription' : 'api';
   syncBtn('engine', curEngine);
@@ -15506,17 +15507,19 @@ document.addEventListener('keydown', e => {
 let _editingAgentId = null;
 
 // ─── Providers & model choices (providers.js on the server) ─────────────────
+// State below is `var`, not `let`/`const`, on purpose: syncBtn() → modelInfo() can run
+// during boot from code ABOVE this block, and a `let` read there is a TDZ ReferenceError.
 // A model is one string: a bare alias ("sonnet" — the DEFAULT provider's, which is what
 // the four toolbar chips have always sent) or "provider::model". `_modelChoices` feeds
 // every picker on this page — the toolbar's "⋯" menu, the bot editor's list, the
 // utility-model select — and never carries a key.
-let _providersData = null;   // GET /api/providers (public view)
-let _modelChoices = null;    // GET /api/models/choices
-let _editingProviderId = null;
-let _provEdit = null;        // the provider open in the modal (public view), null while creating
-const _MODEL_ALIASES = ['haiku', 'sonnet', 'opus', 'fable'];
-const _MODEL_ALIAS_LABEL = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
-const _PROV_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+var _providersData = null;   // GET /api/providers (public view)
+var _modelChoices = null;    // GET /api/models/choices
+var _editingProviderId = null;
+var _provEdit = null;        // the provider open in the modal (public view), null while creating
+var _MODEL_ALIASES = ['haiku', 'sonnet', 'opus', 'fable'];
+var _MODEL_ALIAS_LABEL = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
+var _PROV_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 
 async function loadModelChoices() {
   try {
@@ -15608,9 +15611,15 @@ function applyModelDependentDials() {
   }
   if (!subOk && curEngine === 'subscription') {
     curEngine = 'api';
+    _engineForcedFrom = 'subscription';   // remembered: a Claude model picked next gets it back
     syncBtn('engine', 'api');
     if (typeof syncDefaultStar === 'function') syncDefaultStar();
     toast(t('engine.switched_api'));
+  } else if (subOk && tmuxOk && _engineForcedFrom === 'subscription' && curEngine === 'api') {
+    _engineForcedFrom = null;
+    curEngine = 'subscription';
+    syncBtn('engine', 'subscription');
+    if (typeof syncDefaultStar === 'function') syncDefaultStar();
   }
   const es = $i('effortSel');
   if (es) {
@@ -15622,7 +15631,10 @@ function applyModelDependentDials() {
 }
 
 // ── The "⋯" picker ──────────────────────────────────────────────────────────
-let _mdlPickAnchor = null, _mdlPickKb = -1, _mdlPickRefs = [];
+var _mdlPickAnchor = null, _mdlPickKb = -1, _mdlPickRefs = [];
+// Set when a non-Claude model pushed the engine off Subscription; a manual engine choice or
+// a chat switch forgets it, a Claude model picked next restores it.
+var _engineForcedFrom = null;
 
 function _ensureModelPicker() {
   let el = $i('mdlPick');
@@ -16116,8 +16128,8 @@ async function saveProvider() {
 }
 
 // ── Models tab ──────────────────────────────────────────────────────────────
-const PROV_MODELS_SHOWN = 200;
-let _provModelEditOpen = new Set();
+var PROV_MODELS_SHOWN = 200;
+var _provModelEditOpen = new Set();
 
 function _provModelsVisible() {
   const p = _provEdit; if (!p) return [];

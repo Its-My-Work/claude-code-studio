@@ -238,13 +238,23 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, name, effort, jsonSchema, runMeta }) {
+  send(opts = {}) {
     // Where this run goes. An unresolvable choice fails the run the normal way (onError
     // then onDone, asynchronously) instead of silently falling back to some other model.
-    const target = resolveRunTarget({ model, effort, engine: 'api', meta: runMeta || {} });
+    const target = resolveRunTarget({ model: opts.model, effort: opts.effort, engine: 'api', meta: opts.runMeta || {} });
     this.lastRunTarget = target && !target.error ? (target.info || null) : null;
     if (target && target.error) return failedHandle(target.error);
+    try {
+      return this._send(opts, target);
+    } catch (e) {
+      // Anything that throws before the child exists — spawn() refuses a prompt holding a
+      // NUL byte, a temp write can fail — would otherwise leave the run token valid forever.
+      if (target && typeof target.release === 'function') { try { target.release(); } catch {} }
+      throw e;
+    }
+  }
 
+  _send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, name, effort, jsonSchema }, target) {
     const args = ['--print'];
 
     // --setting-sources: control which setting sources to load (user, project, local)

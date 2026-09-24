@@ -31,7 +31,7 @@ const PROVIDER_TYPES = ['claude-subscription', 'anthropic', 'anthropic-compatibl
 const DIALECTS = ['generic', 'openai', 'openrouter', 'deepseek', 'gemini', 'qwen', 'mistral', 'ollama'];
 const AUTH_SCHEMES = ['bearer', 'x-api-key', 'both'];
 const CLAUDE_ALIASES = ['haiku', 'sonnet', 'opus', 'fable'];
-const ROLE_KEYS = ['main', 'fast', 'strong', 'subagent'];
+const ROLE_KEYS = ['main', 'fast', 'strong', 'fable', 'subagent'];
 const REF_SEP = '::';
 const BUILTIN_CLAUDE_ID = 'claude';
 
@@ -208,7 +208,8 @@ function roleModel(p, role) {
   return first ? first.id : null;
 }
 
-const ALIAS_ROLE = { haiku: 'fast', sonnet: 'main', opus: 'strong', fable: 'main' };
+// roleModel() falls back to `main` for an unset role, so `fable` means main unless pinned.
+const ALIAS_ROLE = { haiku: 'fast', sonnet: 'main', opus: 'strong', fable: 'fable' };
 
 function capsFor(p, modelId) {
   const m = (Array.isArray(p.models) ? p.models : []).find(x => x && x.id === modelId);
@@ -251,7 +252,9 @@ function resolveModel(value, registry, opts = {}) {
   }
 
   let modelId = parsed.modelId;
-  if (fallback) {
+  // On a fallback an ALIAS keeps meaning its tier ("claude::haiku" for titles stays a fast
+  // model on the default); any other id of the lost provider means nothing here → main.
+  if (fallback && !CLAUDE_ALIASES.includes(modelId)) {
     modelId = supportsAliases(provider) ? 'sonnet' : roleModel(provider, 'main');
   } else if (CLAUDE_ALIASES.includes(modelId) && !supportsAliases(provider)) {
     modelId = roleModel(provider, ALIAS_ROLE[modelId]);
@@ -285,6 +288,15 @@ function effectiveEngine(engine, value, registry) {
 // Every variable a provider decision may set. They are stripped from the inherited
 // environment FIRST, so a stale ANTHROPIC_BASE_URL in the server's own env (docker
 // compose still passes it) can never leak into a run that chose another provider.
+// Switches that route the CLI to a cloud backend (or an OAuth token that outranks the
+// login). They rank ABOVE ANTHROPIC_BASE_URL in the CLI, so a bridge or direct run must
+// not inherit them — but a run on the CLI's own configuration (routing 'oauth') keeps them.
+const BACKEND_ENV_VARS = [
+  'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY',
+  'ANTHROPIC_BEDROCK_BASE_URL', 'ANTHROPIC_VERTEX_BASE_URL', 'ANTHROPIC_FOUNDRY_BASE_URL',
+  'ANTHROPIC_FOUNDRY_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN',
+];
+
 const PROVIDER_ENV_VARS = [
   'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL',
   'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
@@ -306,8 +318,12 @@ function buildRunEnv(target, bridge = {}) {
   if (!target || !target.ok || target.routing === 'oauth' || target.routing === 'remote') {
     return { set, unset, extraArgs };
   }
+  unset.push(...BACKEND_ENV_VARS);
   const p = target.provider, caps = target.caps || UNKNOWN_CAPS, o = p.options || {};
   const firstParty = p.type === 'anthropic';
+  // A gateway that serves the Claude aliases, running a Claude model, is Claude as far as
+  // the CLI is concerned — before the registry every run looked exactly like this.
+  const claudeViaGateway = supportsAliases(p) && (CLAUDE_ALIASES.includes(target.modelId) || /^claude-/i.test(target.modelId));
   set.ANTHROPIC_BASE_URL = bridge.baseUrl;
   set.ANTHROPIC_AUTH_TOKEN = bridge.token;
 
@@ -322,7 +338,9 @@ function buildRunEnv(target, bridge = {}) {
   const sonnet = aliases ? (r.main || null) : (roleModel(p, 'main') || target.modelId);
   const opus = aliases ? (r.strong || null) : (roleModel(p, 'strong') || target.modelId);
   if (haiku) { set.ANTHROPIC_DEFAULT_HAIKU_MODEL = haiku; set.ANTHROPIC_SMALL_FAST_MODEL = haiku; }
-  if (sonnet) { set.ANTHROPIC_DEFAULT_SONNET_MODEL = sonnet; set.ANTHROPIC_DEFAULT_FABLE_MODEL = sonnet; }
+  const fable = aliases ? (r.fable || r.main || null) : (roleModel(p, 'fable') || target.modelId);
+  if (sonnet) set.ANTHROPIC_DEFAULT_SONNET_MODEL = sonnet;
+  if (fable) set.ANTHROPIC_DEFAULT_FABLE_MODEL = fable;
   if (opus) set.ANTHROPIC_DEFAULT_OPUS_MODEL = opus;
   if (r.subagent) set.CLAUDE_CODE_SUBAGENT_MODEL = r.subagent;
 
@@ -332,7 +350,8 @@ function buildRunEnv(target, bridge = {}) {
     if (caps.contextWindow) set.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(caps.contextWindow);
     // WebSearch is an Anthropic SERVER tool: behind any other endpoint the nested call
     // answers without searching. The `web` MCP server (SearXNG) is the working substitute.
-    extraArgs.push('--disallowedTools', 'WebSearch');
+    // A Claude model behind a Claude gateway keeps it, as it always had.
+    if (!claudeViaGateway) extraArgs.push('--disallowedTools', 'WebSearch');
   }
   if (caps.maxOutput) set.CLAUDE_CODE_MAX_OUTPUT_TOKENS = String(Math.min(caps.maxOutput, MAX_OUTPUT_CEILING));
   if (caps.reasoning === false) set.CLAUDE_CODE_DISABLE_THINKING = '1';
@@ -351,6 +370,15 @@ function applyRunEnv(env, runEnv) {
 }
 
 // ── Bridge run context ──────────────────────────────────────────────────────
+/** The provider as the bridge sees it (llm-bridge/server.js ProviderCfg). */
+function providerCfg(p) {
+  return {
+    id: p.id, label: p.label, type: p.type,
+    baseUrl: p.baseUrl, apiKey: p.apiKey || '', authScheme: p.authScheme || 'bearer',
+    headers: p.headers || {}, dialect: p.dialect || 'generic', options: p.options || {},
+  };
+}
+
 /** What the llm-bridge needs to serve one run (see llm-bridge/server.js RunCtx). */
 function buildRunCtx(target, meta = {}) {
   const p = target.provider;
@@ -370,11 +398,7 @@ function buildRunCtx(target, meta = {}) {
     sessionId: meta.sessionId || null,
     taskId: meta.taskId || null,
     botId: meta.botId || null,
-    provider: {
-      id: p.id, label: p.label, type: p.type,
-      baseUrl: p.baseUrl, apiKey: p.apiKey || '', authScheme: p.authScheme || 'bearer',
-      headers: p.headers || {}, dialect: p.dialect || 'generic', options: p.options || {},
-    },
+    provider: providerCfg(p),
     model: target.modelId,
     models, modelMap,
     fallbackModel: supportsAliases(p) ? null : (roleModel(p, 'fast') || target.modelId),
@@ -413,7 +437,13 @@ function listChoices(registry) {
 function isKnownModel(value, registry) {
   const r = parseModelRef(value);
   if (!r) return false;
-  if (!r.providerId) return true; // bare: always resolvable on the default provider
+  // Bare: an alias always resolves; any other bare id only if the DEFAULT provider lists
+  // it — an agent naming "gpt-4o" must not produce a task that then fails on the login.
+  if (!r.providerId) {
+    if (CLAUDE_ALIASES.includes(r.modelId)) return true;
+    const d = defaultProviderFor(registry, 'api');
+    return !!(d && (d.models || []).some(m => m && m.id === r.modelId));
+  }
   const p = findProvider(registry, r.providerId);
   if (!p || p.enabled === false) return false;
   if (supportsAliases(p) && CLAUDE_ALIASES.includes(r.modelId)) return true;
@@ -502,12 +532,15 @@ function validateProviderInput(raw, { creating } = {}) {
     if (!raw.options || typeof raw.options !== 'object' || Array.isArray(raw.options)) errors.push('options');
     else {
       const o = {};
-      const num = (k, min, max) => { if (raw.options[k] == null || raw.options[k] === '') return; const n = Number(raw.options[k]); if (!Number.isFinite(n) || n < min || n > max) errors.push(`options.${k}`); else o[k] = Math.trunc(n); };
+      // An explicit null (a cleared form field) means "remove it" — providers-store drops
+      // null keys on merge; an absent key leaves the stored value alone.
+      const num = (k, min, max) => { const v = raw.options[k]; if (v === undefined) return; if (v === null || v === '') { o[k] = null; return; } const n = Number(v); if (!Number.isFinite(n) || n < min || n > max) errors.push(`options.${k}`); else o[k] = Math.trunc(n); };
       num('timeoutMs', 10000, 3600000);
       num('apiTimeoutMs', 10000, 3600000);
       num('maxConcurrency', 1, 64);
       for (const b of ['stripBetas', 'quietCli']) if (raw.options[b] !== undefined) o[b] = !!raw.options[b];
-      if (raw.options.extraBody !== undefined && raw.options.extraBody !== null) {
+      if (raw.options.extraBody === null) o.extraBody = null;
+      else if (raw.options.extraBody !== undefined) {
         const eb = raw.options.extraBody;
         if (typeof eb !== 'object' || Array.isArray(eb) || JSON.stringify(eb).length > 8192) errors.push('options.extraBody'); else o.extraBody = eb;
       }
@@ -523,6 +556,6 @@ module.exports = {
   parseModelRef, formatModelRef, isQualifiedRef, bareModelId,
   normalizeCaps, normalizePricing, normalizeCatalog,
   findProvider, defaultProviderFor, supportsAliases, roleModel, capsFor,
-  resolveModel, effectiveEngine, buildRunEnv, applyRunEnv, buildRunCtx,
+  resolveModel, effectiveEngine, buildRunEnv, applyRunEnv, buildRunCtx, providerCfg, BACKEND_ENV_VARS,
   listChoices, isKnownModel, describeModel, computeCost, validateProviderInput,
 };

@@ -1371,7 +1371,10 @@ function kbRunBadges(tk){
   // An unknown value is shown verbatim rather than dropped: it is what the run will be
   // given, and a silently missing badge is how a bad stored dial stays invisible.
   if(eff)out.push({text:KB_EFFORT_KEY[eff]?t('effort.'+KB_EFFORT_KEY[eff]):eff,title:t('tb.effort')});
-  if(tk.run_engine==='subscription')out.push({text:t('engine.sub'),title:t('tb.engine')});
+  // The tmux engine runs Claude's own login only; a card whose model belongs to another
+  // provider runs on the API engine (startTask → engineForModel), so it must not say otherwise.
+  const _claudeModel=!String(_m).includes('::')||String(_m).startsWith('claude::');
+  if(tk.run_engine==='subscription'&&_claudeModel)out.push({text:t('engine.sub'),title:t('tb.engine')});
   return out;
 }
 function makeCard(tk){

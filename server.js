@@ -2135,6 +2135,10 @@ async function startTask(task) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
       const _ftBefore = fullText.length; // baseline to isolate THIS iteration's output (overload detection)
+      // The run's own error text. A run the provider router refused never starts, so it has
+      // no result and no output — only this — and the stop/overload checks below must see it
+      // (the chat loop passes its errorText for the same reason).
+      let _taskErrText = '';
 
       if (_taskEngine === 'subscription') {
         // One-shot: interactive Claude runs to end_turn naturally. The proxy only
@@ -2276,6 +2280,7 @@ async function startTask(task) {
           .onUsage(u => { if (u) lastTaskTurnUsage = u; })
           .onError(err => {
             hasError = true;
+            _taskErrText += String(err || '') + '\n';
             console.error(`[taskWorker] task ${task.id} error:`, err);
             try { stmts.addMsg.run(sessionId, 'assistant', 'text', `❌ ${err.substring(0, 500)}`, null, null, null, null); } catch {}
             broadcastToSession(sessionId, { type: 'error', error: err.substring(0, 500), tabId: sessionId });
@@ -2295,7 +2300,7 @@ async function startTask(task) {
       {
         const _lastTurn = fullText.slice(_ftBefore);
         const _resultText = typeof lastTaskResult?.result === 'string' ? lastTaskResult.result : '';
-        if (shouldRetryOverload({ texts: [_lastTurn, _resultText], subtype: lastTaskResult?.subtype, isError: lastTaskResult?.is_error }) &&
+        if (shouldRetryOverload({ texts: [_lastTurn, _resultText, _taskErrText], subtype: lastTaskResult?.subtype, isError: lastTaskResult?.is_error }) &&
             !(taskAbort?.signal?.aborted || stoppingTasks.has(task.id))) {
           if (taskOverloadRetryCount < MAX_OVERLOAD_RETRIES) {
             taskOverloadRetryCount++;
@@ -2323,7 +2328,7 @@ async function startTask(task) {
       {
         const _lastTurn = fullText.slice(_ftBefore);
         const _resultText = typeof lastTaskResult?.result === 'string' ? lastTaskResult.result : '';
-        taskAuthStop = detectAuthError({ texts: [_lastTurn, _resultText], subtype: lastTaskResult?.subtype, isError: lastTaskResult?.is_error });
+        taskAuthStop = detectAuthError({ texts: [_lastTurn, _resultText, _taskErrText], subtype: lastTaskResult?.subtype, isError: lastTaskResult?.is_error });
         if (taskAuthStop) {
           log.error('[taskWorker] auth failure', { taskId: task.id, kind: taskAuthStop.kind, message: taskAuthStop.message });
           const _n = authErrorNotice(taskAuthStop);
@@ -4201,6 +4206,20 @@ function decryptPassword(stored) {
 const providerStore = createProviderStore(db, { encrypt: encryptPassword, decrypt: decryptPassword, log });
 try { providerStore.seedFromEnv(process.env); } catch (e) { log.warn('provider seeding failed', { err: e.message }); }
 providerStore.pruneUsage();
+{ const _t = setInterval(() => providerStore.pruneUsage(), 24 * 3600 * 1000); if (_t.unref) _t.unref(); }
+
+// The child holds provider keys (over IPC) but needs none of the server's own secrets —
+// only what makes a node process work: TLS trust (a gateway behind a private CA worked
+// through the CLI's NODE_EXTRA_CA_CERTS and must keep working), proxies, and on Windows
+// the variables Winsock and temp files need.
+const BRIDGE_ENV_PASS = ['PATH', 'NODE_ENV', 'LANG', 'LC_ALL', 'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
+  'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy',
+  'SystemRoot', 'SYSTEMROOT', 'windir', 'TEMP', 'TMP', 'TMPDIR', 'CCS_LLM_BRIDGE_DEBUG'];
+function bridgeChildEnv() {
+  const env = {};
+  for (const k of BRIDGE_ENV_PASS) if (process.env[k] !== undefined) env[k] = process.env[k];
+  return env;
+}
 
 let createBridgeHost = null;
 try { ({ createBridgeHost } = require('./llm-bridge/host')); }
@@ -4223,7 +4242,7 @@ const llmBridge = (createBridgeHost && process.env.CCS_BRIDGE !== 'off') ? creat
   port: parseInt(process.env.CCS_BRIDGE_PORT || '0', 10) || 0,
   onUsage: onBridgeUsage,
   // The child holds provider keys (over IPC) but needs none of the server's own secrets.
-  env: { PATH: process.env.PATH || '', NODE_ENV: process.env.NODE_ENV || '', LANG: process.env.LANG || '', ...(process.env.CCS_LLM_BRIDGE_DEBUG ? { CCS_LLM_BRIDGE_DEBUG: '1' } : {}) },
+  env: bridgeChildEnv(),
   log: {
     debug: (m, d) => log.debug(`[llm-bridge] ${m}`, d),
     info: (m, d) => log.info(`[llm-bridge] ${m}`, d),
@@ -4238,6 +4257,14 @@ if (llmBridge) {
 }
 
 function bridgeUp() { return !!(llmBridge && llmBridge.running() && llmBridge.baseUrl()); }
+
+/** A rotated key / changed option reaches runs already in flight, not only the next ones. */
+function refreshBridgeProviders() {
+  if (!llmBridge || typeof llmBridge.updateProviders !== 'function') return;
+  const map = {};
+  for (const p of providerStore.registry().providers) if (p.type !== 'claude-subscription') map[p.id] = providersLib.providerCfg(p);
+  try { llmBridge.updateProviders(map); } catch {}
+}
 
 /** Public summary of one resolution — what a WS frame / result meta may carry. */
 function runTargetInfo(t, extra = {}) {
@@ -4254,7 +4281,17 @@ function runTargetInfo(t, extra = {}) {
 function resolveRunTarget({ model, effort, engine, meta }) {
   const t = providersLib.resolveModel(model, providerStore.registry(), { engine: engine || 'api' });
   if (!t.ok) return { error: `Model "${model}" cannot run: ${t.error === 'no_model' ? `provider "${t.providerId}" has no model enabled` : 'not a valid model'}` };
-  if (t.fallback) log.warn('model pinned to an unavailable provider — running on the default', { model, fallback: t.fallback, ref: t.ref });
+  if (t.fallback) {
+    log.warn('model pinned to an unavailable provider — running on the default', { model, fallback: t.fallback, ref: t.ref });
+    // Every path passes its sessionId in runMeta (chat, tasks, bots, rooms, multi-agent,
+    // dispatch), so the notice reaches whoever watches that chat — once per pinned model.
+    if (meta && meta.sessionId) {
+      noticeProviderFallback({ ...runTargetInfo(t), ref: String(model) }, {
+        ws: { send: (str) => { try { broadcastToSession(meta.sessionId, JSON.parse(str)); } catch {} } },
+        sessionId: meta.sessionId, tabId: meta.sessionId,
+      });
+    }
+  }
 
   if (t.routing === 'oauth' || t.routing === 'remote') {
     return { cliModel: t.cliModel, runEnv: providersLib.buildRunEnv(t), extraArgs: [], info: runTargetInfo(t), release: null };
@@ -4270,9 +4307,19 @@ function resolveRunTarget({ model, effort, engine, meta }) {
   if (t.provider.type !== 'openai-compatible') {
     const runEnv = providersLib.buildRunEnv(t, { baseUrl: t.provider.baseUrl, token: t.provider.apiKey });
     if (t.provider.authScheme === 'x-api-key') { runEnv.set.ANTHROPIC_API_KEY = t.provider.apiKey; delete runEnv.set.ANTHROPIC_AUTH_TOKEN; }
+    else if (t.provider.authScheme === 'both') runEnv.set.ANTHROPIC_API_KEY = t.provider.apiKey;
+    // The provider's extra headers ride the CLI's own ANTHROPIC_CUSTOM_HEADERS ("Name: value" lines).
+    const hdrs = Object.entries(t.provider.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n');
+    if (hdrs) runEnv.set.ANTHROPIC_CUSTOM_HEADERS = hdrs;
     return { cliModel: t.cliModel, runEnv, extraArgs: runEnv.extraArgs, info: runTargetInfo(t, { routing: 'direct' }), release: null };
   }
-  return { error: `Provider "${t.provider.label}" is OpenAI-compatible and needs the LLM bridge, which is not running (${llmBridgeError || 'starting'}).` };
+  // A bridge that is (re)starting is a transient condition: the phrase `overloaded_error`
+  // puts it on the loops' existing back-off-and-retry rung (rate-limit-utils) instead of the
+  // permanent stop a bridge that gave up gets (auth-errors provider_unavailable).
+  if (llmBridge && llmBridge.state && llmBridge.state() === 'starting') {
+    return { error: `LLM bridge is restarting (overloaded_error) — provider "${t.provider.label}" will be retried shortly.` };
+  }
+  return { error: `Provider "${t.provider.label}" is OpenAI-compatible and needs the LLM bridge, which is not running (${llmBridgeError || 'unavailable'}).` };
 }
 ClaudeCLI.setRunTargetHook(resolveRunTarget);
 
@@ -4495,7 +4542,6 @@ async function runCliSingle(p) {
 
     const _h = cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, name, effort, runMeta: { purpose: 'chat', sessionId } });
     runInfos.push(cli.lastRunTarget);
-    noticeProviderFallback(cli.lastRunTarget, { ws, sessionId, tabId });
     _h
       .onText(t => {
         fullText += t;
@@ -5422,7 +5468,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         ir = await runInteractiveSingle({
           prompt: botPrompt,
           systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots, botLangName(), { discussion: !deliverable }),
-          model: botsLogic.botModel(bot, 'subscription', model),
+          model: botsLogic.botModel(bot, 'subscription', model), effort,
           ws,
           sessionId: roomTmuxId,
           abortController,
@@ -5801,7 +5847,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
         ir = await runInteractiveSingle({
           prompt: botPrompt + standing,
           systemPrompt: botSp,
-          model: botsLogic.botModel(bot, 'subscription', model),
+          model: botsLogic.botModel(bot, 'subscription', model), effort,
           ws,
           sessionId: botTmuxId,
           abortController,
@@ -10973,7 +11019,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     const _activeProj = findRemoteProject(workdir);
     // Same rule as the web chat: the tmux engine is the CLI login only.
     const _isSubscriptionEngine = engineForModel((session.run_engine || 'api') === 'subscription' ? 'subscription' : 'api', model) === 'subscription';
-    const _botsAvail = botsLogic.botsAvailability({ remote: !!_activeProj, runEngine: session.run_engine });
+    const _botsAvail = botsLogic.botsAvailability({ remote: !!_activeProj, runEngine: _isSubscriptionEngine ? 'subscription' : 'api' });
     if (tgBots.length && !_botsAvail.available) {
       // Bots run through the headless `api` engine only (runBotTurns spawns its own
       // ClaudeCLI per bot) — SSH and subscription/tmux sessions silently ran the
@@ -11817,7 +11863,7 @@ app.put('/api/providers/:id', (req, res) => {
   providerStore.update(cur.id, { ...v.value, clearApiKey: cur.type !== 'claude-subscription' && body.clearApiKey === true });
   const reg = providerStore.registry();
   if (v.value.enabled === false && reg.defaultProviderId === cur.id) providerStore.setDefault(providersLib.BUILTIN_CLAUDE_ID);
-  if (llmBridge && llmBridge.updateProviders) { try { llmBridge.updateProviders({}); } catch {} }
+  refreshBridgeProviders();
   res.json({ ok: true, provider: providerStore.publicProvider(providerStore.get(cur.id)) });
 });
 
@@ -11854,9 +11900,19 @@ app.post('/api/providers-test', async (req, res) => {
   const v = providersLib.validateProviderInput({ ...body, id: undefined }, { creating: false });
   if (v.errors.length) return res.status(400).json({ error: 'invalid', fields: v.errors });
   const stored = body.id ? providerStore.get(String(body.id)) : null;
-  const draft = { type: v.value.type || (stored && stored.type), baseUrl: v.value.baseUrl || (stored && stored.baseUrl),
-    apiKey: v.value.apiKey || (stored && stored.apiKey) || '', authScheme: v.value.authScheme || (stored && stored.authScheme) || 'bearer',
-    headers: v.value.headers || (stored && stored.headers) || {} };
+  const type = v.value.type || (stored && stored.type);
+  const baseUrl = v.value.baseUrl || (stored && stored.baseUrl);
+  // The stored key and header secrets are reused ONLY against the endpoint they were saved
+  // for. Otherwise this endpoint would hand any saved key to whatever URL a request names.
+  const sameEndpoint = !!stored && baseUrl === stored.baseUrl && type === stored.type;
+  const headers = {};
+  for (const [k, hv] of Object.entries(v.value.headers || (sameEndpoint ? stored.headers : {}) || {})) {
+    if (hv === '***') { if (sameEndpoint && stored.headers[k] !== undefined) headers[k] = stored.headers[k]; }
+    else headers[k] = hv;
+  }
+  const draft = { type, baseUrl, headers,
+    apiKey: v.value.apiKey || (sameEndpoint ? stored.apiKey : '') || '',
+    authScheme: v.value.authScheme || (stored && stored.authScheme) || 'bearer' };
   if (!draft.type || !draft.baseUrl) return res.status(400).json({ error: 'invalid', fields: ['baseUrl'] });
   const r = await providersCatalog.fetchCatalog(draft).catch(e => ({ ok: false, models: [], error: e.message }));
   res.json({ ok: r.ok, total: r.models.length, sample: r.models.slice(0, 8).map(m => m.id), noCatalog: !!r.noCatalog, error: r.error || null });
@@ -11992,8 +12048,10 @@ function saveBot(req, res, mode) {
     }
   }
 
-  if (body.model !== undefined && body.model !== null && body.model !== '' && !gatewayModels.MODEL_ID_RE.test(String(body.model))) {
-    return res.status(400).json({ error: 'model must be 1-100 characters of a-z, 0-9, . _ : / -' });
+  // providers.parseModelRef is the grammar every picker offers ("provider::model", ids with
+  // `@`/`+`); the older gateway-models pattern refused refs the bot editor itself lists.
+  if (body.model !== undefined && body.model !== null && body.model !== '' && !providersLib.parseModelRef(String(body.model))) {
+    return res.status(400).json({ error: 'model must be a model id or "provider::model" (letters, digits, . _ : / @ + -)' });
   }
   // A provider ref must name a provider that exists and is switched on — a bot saved
   // against a typo would otherwise run every turn on the default and nobody would know.
