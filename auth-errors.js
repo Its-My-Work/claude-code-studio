@@ -56,6 +56,10 @@ const AUTH_ERROR_RE = new RegExp([
   "run\\s+`?claude\\s+login`?\\s+to\\s+(?:re-?)?authenticate",
   "not\\s+logged\\s+in\\s+to\\s+claude",
   "credentials\\s+(?:are\\s+)?(?:invalid|expired)",
+  // The studio's own provider router refusing a run (server.js resolveRunTarget): the
+  // run never started, and retrying cannot start it — same class as a dead login.
+  "needs\\s+the\\s+llm\\s+bridge,\\s+which\\s+is\\s+not\\s+running",
+  "model\\s+\"[^\"\\n]{1,200}\"\\s+cannot\\s+run:",
 ].join('|'), 'i');
 
 /**
@@ -72,6 +76,12 @@ function isAuthError(text = '') {
 // Each carries the ACTION that resolves it, because "authentication failed" without
 // a next step is the complaint the issue was filed about.
 const AUTH_KINDS = [
+  {
+    kind: 'provider_unavailable',
+    re: /needs\s+the\s+llm\s+bridge,\s+which\s+is\s+not\s+running|model\s+"[^"\n]{1,200}"\s+cannot\s+run:/i,
+    label: 'The chat\'s model cannot run right now',
+    hint: 'Open Providers in the sidebar: the provider needs the LLM bridge or has no model enabled — or pick a model of another provider.',
+  },
   {
     // A provider from the registry, reached through llm-bridge: the bridge prefixes every
     // upstream error with `provider "<label>": `, so this is the key of THAT provider —
@@ -159,7 +169,11 @@ function detectAuthError({ texts = [], subtype, isError } = {}) {
  * @returns {string}
  */
 function authErrorNotice(info) {
-  return `\n\n---\n🔐 **${info.label}.** ${info.hint}\n\nThis is not retried: re-authentication needs a human, so retrying would only repeat the same failure.\n\n> ${info.message}\n\n`;
+  // A provider stop is a configuration choice, not a login — say which human action it needs.
+  const why = (info.kind === 'provider_unavailable' || info.kind === 'provider_key')
+    ? 'This is not retried: the provider setup needs a human, so retrying would only repeat the same failure.'
+    : 'This is not retried: re-authentication needs a human, so retrying would only repeat the same failure.';
+  return `\n\n---\n🔐 **${info.label}.** ${info.hint}\n\n${why}\n\n> ${info.message}\n\n`;
 }
 
 module.exports = {

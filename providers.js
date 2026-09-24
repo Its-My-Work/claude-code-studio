@@ -405,7 +405,8 @@ function listChoices(registry) {
     }
     providers.push({ id: p.id, label: p.label, type: p.type, builtin: p.id === BUILTIN_CLAUDE_ID, isDefault: p.id === (registry.defaultProviderId || BUILTIN_CLAUDE_ID), models });
   }
-  return { defaultProviderId: registry && registry.defaultProviderId || BUILTIN_CLAUDE_ID, utilityModel: registry && registry.utilityModel || 'haiku', providers };
+  // utilityModel stays '' when unset: the pickers show that as "haiku on the default provider".
+  return { defaultProviderId: registry && registry.defaultProviderId || BUILTIN_CLAUDE_ID, utilityModel: (registry && registry.utilityModel) || '', providers };
 }
 
 /** Is this value something a run can use right now? (for write-time validation) */

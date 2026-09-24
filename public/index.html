@@ -2971,6 +2971,79 @@ html[dir="rtl"] .notif-card.notif-warning   { border-right-color: var(--orange);
 html[dir="rtl"] .notif-card.notif-error     { border-right-color: var(--red); }
 html[dir="rtl"] .notif-card.notif-milestone { border-right-color: var(--green); }
 html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
+/* ─── Providers (sidebar + modal) and the model picker ─── */
+.tb-btn.mdl-more { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mob-chip.mdl-more { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdl-pick {
+  position: fixed; z-index: 1300; width: 380px; max-width: calc(100vw - 16px);
+  background: var(--s2); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.35), 0 0 0 1px rgba(124,106,239,.1);
+  display: none; overflow: hidden;
+}
+.mdl-pick.open { display: block; }
+.mdl-pick-search { padding: 10px; border-bottom: 1px solid var(--border); background: rgba(124,106,239,.05); }
+.mdl-pick-search input {
+  width: 100%; background: var(--s3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 13px; color: var(--text); outline: none; font-family: inherit;
+}
+.mdl-pick-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.mdl-pick-list { max-height: min(420px, 58vh); overflow-y: auto; padding: 4px 0; }
+.mdl-pick-grp { padding: 8px 12px 3px; font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; display: flex; gap: 6px; align-items: center; }
+.mdl-pick-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: var(--text); border-left: 3px solid transparent; }
+.mdl-pick-item:hover, .mdl-pick-item.kb { background: var(--s3); }
+.mdl-pick-item.on { background: var(--abg); border-left-color: var(--accent); }
+.mdl-pick-item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdl-pick-item .sub { color: var(--muted); font-family: var(--font-mono); font-size: 11px; margin-left: 6px; }
+.mdl-pick-item .caps { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.mdl-pick-item.dim .nm { opacity: .55; }
+.mdl-pick-empty { padding: 14px 12px; color: var(--muted); font-size: 12.5px; }
+.mdl-pick-foot { border-top: 1px solid var(--border); padding: 8px 12px; font-size: 12px; }
+.mdl-pick-foot button { background: none; border: none; color: var(--accent2); cursor: pointer; font: inherit; padding: 0; }
+@media (max-width: 768px) {
+  .mdl-pick { left: 8px !important; right: 8px; bottom: 8px; top: auto !important; width: auto; }
+  .mdl-pick-list { max-height: 56vh; }
+}
+.prov-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--muted); flex-shrink: 0; opacity: .6; }
+.prov-dot.ok { background: var(--green); opacity: 1; }
+.prov-dot.err { background: var(--red); opacity: 1; }
+.prov-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--abg); color: var(--accent2); flex-shrink: 0; }
+.prov-warn { font-size: 11.5px; color: var(--orange); padding: 2px 2px 6px; line-height: 1.45; }
+.prov-warn[hidden] { display: none; }
+.prov-util { padding: 8px 2px 2px; font-size: 11.5px; color: var(--muted); }
+.prov-util select { width: 100%; margin-top: 4px; }
+.prov-usage { padding: 8px 2px 2px; font-size: 11px; color: var(--muted); }
+.prov-usage table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.prov-usage td { padding: 2px 0; }
+.prov-usage td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.prov-modal { max-width: 640px; width: calc(100vw - 24px); }
+.prov-modal .modal-body { max-height: min(70vh, 640px); overflow-y: auto; }
+.prov-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 12px; flex-wrap: wrap; }
+.prov-tab { background: none; border: none; color: var(--muted); padding: 7px 10px; cursor: pointer; border-bottom: 2px solid transparent; font: inherit; font-size: 13px; }
+.prov-tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.prov-tab[disabled] { opacity: .45; cursor: not-allowed; }
+.prov-pane[hidden], .prov-row[hidden] { display: none; }
+.prov-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); margin: 0; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.prov-check[hidden] { display: none; }
+.prov-test-res { font-size: 12px; margin-top: 6px; line-height: 1.45; word-break: break-word; }
+.prov-test-res.ok { color: var(--green); }
+.prov-test-res.err { color: var(--red); }
+.prov-models-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.prov-models-list { max-height: 44vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.prov-model { padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.prov-model:last-child { border-bottom: none; }
+.prov-model .pm-top { display: flex; gap: 8px; align-items: center; }
+.prov-model .pm-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prov-model .pm-id code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-left: 6px; }
+.prov-model .pm-caps { color: var(--muted); font-size: 11px; margin: 2px 0 0 26px; }
+.prov-model .pm-edit { display: flex; gap: 6px 10px; flex-wrap: wrap; margin: 6px 0 2px 26px; font-size: 11px; color: var(--muted); align-items: center; }
+.prov-model .pm-edit[hidden] { display: none; }
+.prov-model .pm-edit select, .prov-model .pm-edit input { width: auto; background: var(--s3); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 2px 4px; font-size: 11px; font-family: inherit; }
+.prov-model .pm-edit select { padding-right: 18px; background-position: calc(100% - 9px) 52%, calc(100% - 5px) 52%; background-size: 4px 4px, 4px 4px; }
+.prov-model .pm-edit input[type=number] { width: 86px; }
+.prov-model .pm-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 4px; }
+.prov-model .pm-btn:hover { color: var(--text); background: var(--s3); }
+.prov-model .pm-ok { color: var(--green); }
+.prov-model .pm-bad { color: var(--red); }
 </style>
 </head>
 <body>
@@ -3108,6 +3181,28 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="sec-body collapsed" id="botsBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="bots.hint">Participants in this project. Mention one with @@ in a message.</div>
         <div class="sec-list"><div id="botsList"></div></div>
+      </div>
+    </div>
+
+    <!-- Providers: where models come from (providers.js). Every model picker reads these. -->
+    <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('providers')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('providers')}">
+        <span data-i18n="sec.providers">Providers</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+          <button class="sec-add-btn" onclick="event.stopPropagation();openProviderForm()" title="Add provider" data-i18n-title="prov.add">＋</button>
+          <span class="badge" id="providersCount">0</span>
+        </div>
+      </div>
+      <div class="sec-body collapsed" id="providersBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="prov.hint">Where models come from. A model of any provider can be picked in chats, bots, tasks and schedules.</div>
+        <div class="prov-warn" id="provBridgeWarn" hidden data-i18n="prov.bridge.down">LLM bridge is not running: OpenAI-compatible providers are unavailable</div>
+        <div class="sec-list"><div id="providersList"></div></div>
+        <div class="prov-util">
+          <label for="provUtilitySel" data-i18n="prov.utility">Utility model</label>
+          <select id="provUtilitySel" class="tb-input" onchange="setUtilityModel(this.value)"></select>
+          <div style="margin-top:3px;line-height:1.4" data-i18n="prov.utility.hint">Chat titles, skill selection, history compaction, translation.</div>
+        </div>
+        <div class="prov-usage" id="provUsage"></div>
       </div>
     </div>
 
@@ -3305,6 +3400,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <button class="mob-chip on" data-mob="model" data-v="sonnet" onclick="setMobOpt(this,'model')" data-i18n-tip="model.sonnet.tip">Sonnet</button>
           <button class="mob-chip" data-mob="model" data-v="opus" onclick="setMobOpt(this,'model')" data-i18n-tip="model.opus.tip">Opus</button>
           <button class="mob-chip" data-mob="model" data-v="fable" onclick="setMobOpt(this,'model')" data-i18n-tip="model.fable.tip">Fable</button>
+          <button class="mob-chip mdl-more" id="mobMdlMoreBtn" onclick="openModelPicker(this)" aria-haspopup="dialog" data-i18n="model.more">Other models…</button>
         </div>
       </div>
       <div class="mob-sheet-section">
@@ -3452,6 +3548,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')" data-i18n-tip="model.sonnet.tip">Sonnet</button>
       <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')" data-i18n-tip="model.opus.tip">Opus</button>
       <button class="tb-btn" data-v="fable" onclick="setOpt(this,'model')" data-i18n-tip="model.fable.tip">Fable</button>
+      <button class="tb-btn mdl-more" id="mdlMoreBtn" data-v="__more" onclick="openModelPicker(this)" aria-haspopup="dialog">⋯</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -4249,6 +4346,131 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="provModal" aria-hidden="true" onclick="if(event.target===this)cancelProviderForm()">
+  <div class="modal bot-modal prov-modal" role="dialog" aria-modal="true" aria-labelledby="provModalTitle" tabindex="-1">
+    <div class="modal-hdr">
+      <h2 id="provModalTitle" data-i18n="prov.modal.add.title">＋ New provider</h2>
+      <button class="modal-close" onclick="cancelProviderForm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="prov-tabs" role="tablist">
+        <button type="button" class="prov-tab on" data-pt="main" onclick="provTab('main')" data-i18n="prov.tab.main">General</button>
+        <button type="button" class="prov-tab" data-pt="models" onclick="provTab('models')" data-i18n="prov.tab.models">Models</button>
+        <button type="button" class="prov-tab" data-pt="roles" onclick="provTab('roles')" data-i18n="prov.tab.roles">Roles</button>
+        <button type="button" class="prov-tab" data-pt="adv" onclick="provTab('adv')" data-i18n="prov.tab.adv">Advanced</button>
+      </div>
+
+      <div class="prov-pane" data-pp="main">
+        <div class="cmd-field prov-row" id="provPresetRow">
+          <label for="provPreset" data-i18n="prov.f.preset">Preset</label>
+          <select id="provPreset" onchange="applyProviderPreset(this.value)"></select>
+        </div>
+        <div class="cmd-field">
+          <label for="provLabel" data-i18n="prov.f.label">Name</label>
+          <input id="provLabel" autocomplete="off" oninput="provLabelChanged()">
+        </div>
+        <div class="cmd-field prov-row" id="provIdRow">
+          <label for="provId" data-i18n="prov.f.id">Id</label>
+          <input id="provId" autocomplete="off" spellcheck="false" oninput="this.dataset.touched='1'">
+          <div class="cmd-name-hint" data-i18n="prov.f.id.hint">Part of every model reference ("id::model"). Cannot be changed later.</div>
+        </div>
+        <div class="cmd-field prov-row" id="provTypeRow">
+          <label for="provType" data-i18n="prov.f.type">API type</label>
+          <select id="provType" onchange="provTypeChanged()">
+            <option value="anthropic-compatible" data-i18n="prov.type.anthropic-compatible">Anthropic-compatible (/v1/messages)</option>
+            <option value="openai-compatible" data-i18n="prov.type.openai-compatible">OpenAI-compatible (/chat/completions)</option>
+            <option value="anthropic" data-i18n="prov.type.anthropic">Anthropic API</option>
+          </select>
+        </div>
+        <div class="cmd-field prov-row" id="provUrlRow">
+          <label for="provUrl" data-i18n="prov.f.url">Base URL</label>
+          <input id="provUrl" autocomplete="off" spellcheck="false" data-i18n-ph="prov.f.url.ph" placeholder="https://…">
+          <div class="cmd-name-hint" id="provUrlHint"></div>
+        </div>
+        <div class="cmd-field prov-row" id="provKeyRow">
+          <label for="provKey" data-i18n="prov.f.key">API key</label>
+          <input id="provKey" type="password" autocomplete="new-password" spellcheck="false">
+          <div class="cmd-name-hint prov-row" id="provKeyKeep" data-i18n="prov.f.key.keep" hidden>Leave empty to keep the stored key</div>
+          <label class="prov-check" id="provKeyClearRow" hidden><input type="checkbox" id="provKeyClear"> <span data-i18n="prov.f.key.clear">Remove the stored key</span></label>
+          <div class="cmd-name-hint" data-i18n="prov.f.key.hint">Stored encrypted; it never reaches the browser or the agent's environment.</div>
+        </div>
+        <div class="cmd-field prov-row" id="provAuthRow">
+          <label for="provAuth" data-i18n="prov.f.auth">Auth header</label>
+          <select id="provAuth">
+            <option value="bearer" data-i18n="prov.auth.bearer">Authorization: Bearer</option>
+            <option value="x-api-key" data-i18n="prov.auth.xapikey">x-api-key</option>
+            <option value="both" data-i18n="prov.auth.both">Both headers</option>
+          </select>
+        </div>
+        <div class="cmd-field prov-row" id="provDialectRow">
+          <label for="provDialect" data-i18n="prov.f.dialect">Dialect</label>
+          <select id="provDialect"></select>
+          <div class="cmd-name-hint" data-i18n="prov.f.dialect.hint">How effort, reasoning and the token limit are passed to this provider.</div>
+        </div>
+        <label class="prov-check" id="provAliasesRow"><input type="checkbox" id="provAliases"> <span data-i18n="prov.f.aliases">The server itself serves the Claude aliases (haiku/sonnet/opus/fable)</span></label>
+        <label class="prov-check"><input type="checkbox" id="provEnabled" checked> <span data-i18n="prov.f.enabled">Enabled</span></label>
+        <div class="cmd-field">
+          <button type="button" class="bg" onclick="testProviderForm()" data-i18n="prov.test">Test</button>
+          <div class="prov-test-res" id="provTestRes"></div>
+        </div>
+      </div>
+
+      <div class="prov-pane" data-pp="models" hidden>
+        <div class="cmd-name-hint" id="provModelsNote" hidden></div>
+        <div id="provModelsBox">
+          <div class="prov-models-bar">
+            <input id="provModelSearch" style="flex:1;min-width:140px" data-i18n-ph="prov.models.search" placeholder="Search models…" oninput="renderProviderModels()">
+            <button type="button" class="bg" onclick="refreshProviderModels()" data-i18n="prov.models.refresh">Refresh catalogue</button>
+          </div>
+          <div class="prov-models-bar">
+            <span class="cmd-name-hint" id="provModelsCount" style="flex:1"></span>
+            <button type="button" class="bg" onclick="bulkProviderModels(true)" data-i18n="prov.models.all_on">Enable shown</button>
+            <button type="button" class="bg" onclick="bulkProviderModels(false)" data-i18n="prov.models.all_off">Disable shown</button>
+          </div>
+          <div class="prov-models-list" id="provModelsList"></div>
+          <div class="prov-models-bar" style="margin-top:8px">
+            <input id="provModelAddId" style="flex:1;min-width:140px" spellcheck="false" data-i18n-ph="prov.models.add.ph" placeholder="model id, e.g. gpt-5">
+            <button type="button" class="bg" onclick="addProviderModel()" data-i18n="prov.models.add">Add a model by id</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="prov-pane" data-pp="roles" hidden>
+        <div class="cmd-name-hint" style="margin-bottom:10px" data-i18n="prov.roles.hint">Which models the CLI uses for its own background calls and sub-agents. Empty = the main model.</div>
+        <div class="cmd-field"><label for="provRoleMain" data-i18n="prov.role.main">Main (sonnet, fable)</label><select id="provRoleMain"></select></div>
+        <div class="cmd-field"><label for="provRoleFast" data-i18n="prov.role.fast">Fast (haiku, background calls)</label><select id="provRoleFast"></select></div>
+        <div class="cmd-field"><label for="provRoleStrong" data-i18n="prov.role.strong">Strong (opus)</label><select id="provRoleStrong"></select></div>
+        <div class="cmd-field"><label for="provRoleSubagent" data-i18n="prov.role.subagent">Sub-agents (Task)</label><select id="provRoleSubagent"></select></div>
+      </div>
+
+      <div class="prov-pane" data-pp="adv" hidden>
+        <div class="cmd-field">
+          <label for="provHeaders" data-i18n="prov.f.headers">Extra headers</label>
+          <textarea id="provHeaders" rows="3" spellcheck="false" style="width:100%;font-family:var(--font-mono);font-size:12px"></textarea>
+          <div class="cmd-name-hint" data-i18n="prov.f.headers.hint">One per line: Name: value</div>
+        </div>
+        <div class="cmd-field">
+          <label for="provTimeout" data-i18n="prov.f.timeout">Response silence timeout, s</label>
+          <input id="provTimeout" type="number" min="10" max="3600">
+        </div>
+        <div class="cmd-field">
+          <label for="provConcurrency" data-i18n="prov.f.concurrency">Parallel requests</label>
+          <input id="provConcurrency" type="number" min="1" max="64">
+        </div>
+        <label class="prov-check" id="provStripRow"><input type="checkbox" id="provStripBetas"> <span data-i18n="prov.f.stripBetas">Do not forward the anthropic-beta header</span></label>
+        <div class="cmd-field">
+          <label for="provExtra" data-i18n="prov.f.extra">Extra request body (JSON)</label>
+          <textarea id="provExtra" rows="3" spellcheck="false" style="width:100%;font-family:var(--font-mono);font-size:12px"></textarea>
+          <div class="cmd-name-hint" data-i18n="prov.f.extra.hint">Merged into every request — for provider-specific switches.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="bg" onclick="cancelProviderForm()" data-i18n="prov.cancel">Cancel</button>
+      <button class="bp" id="provSaveBtn" onclick="saveProvider()" data-i18n="prov.create">Add</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="agentModal" aria-hidden="true" onclick="if(event.target===this)cancelAgentForm()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="agentModalTitle" tabindex="-1">
     <div class="modal-hdr">
@@ -5173,6 +5395,113 @@ const TRANSLATIONS = {
     'input.ph.mob':'Напишіть завдання...',
     'skillcat.engineering':'⚙️ Розробка','skillcat.ai':'🧠 AI та промпти','skillcat.quality':'💎 Якість коду','skillcat.security':'🔒 Безпека','skillcat.design':'🎨 Дизайн','skillcat.product':'📋 Продукт','skillcat.finance':'💼 Фінанси','skillcat.research':'🔬 Дослідження','skillcat.workflow':'📐 Робочий процес','skillcat.system':'⚙️ Система','skillcat.plugin':'🧩 Skills плагінів',
     'upd.available':'Доступне оновлення','upd.btn':'Оновити','upd.updating':'Оновлення… {time}','upd.copy_cmd':'Копіювати команду','upd.via_terminal':'Оновлення через термінал:','upd.copied':'Скопійовано ✓','upd.retry':'Повторити','upd.failed':'Оновлення не вдалося','upd.new_version':'Доступна нова версія {version}',
+    /* providers & model picker (providers.js) */
+    'sec.providers':'Провайдери',
+    'prov.add':'＋ Додати провайдера',
+    'prov.hint':'Звідки беруться моделі. Модель будь-якого провайдера можна обрати в чаті, у ботів, задач і розкладу.',
+    'prov.bridge.down':'LLM-міст не запущено: OpenAI-сумісні провайдери недоступні',
+    'prov.utility':'Службова модель',
+    'prov.utility.hint':'Заголовки чатів, вибір навичок, стиснення історії, переклад.',
+    'prov.utility.default':'haiku на провайдері за замовчуванням',
+    'prov.builtin.claude':'Claude (вхід CLI)',
+    'prov.default':'за замовч.',
+    'prov.make_default':'Зробити провайдером за замовчуванням',
+    'prov.test':'Перевірити',
+    'prov.edit':'Змінити',
+    'prov.del':'Видалити',
+    'prov.del.confirm':'Видалити провайдера «{name}»? Чати, закріплені за ним, працюватимуть на провайдері за замовчуванням.',
+    'prov.models.count':'моделей: {n}',
+    'prov.status.ok':'Працює',
+    'prov.status.unknown':'Ще не перевірявся',
+    'prov.disabled':'вимкнено',
+    'prov.type.anthropic':'Anthropic API',
+    'prov.type.anthropic-compatible':'Anthropic-сумісний (/v1/messages)',
+    'prov.type.openai-compatible':'OpenAI-сумісний (/chat/completions)',
+    'prov.type.claude-subscription':'Вхід Claude CLI (підписка)',
+    'prov.modal.add.title':'＋ Новий провайдер',
+    'prov.modal.edit.title':'Провайдер',
+    'prov.tab.main':'Основне',
+    'prov.tab.models':'Моделі',
+    'prov.tab.roles':'Ролі',
+    'prov.tab.adv':'Додатково',
+    'prov.f.preset':'Шаблон',
+    'prov.f.preset.ph':'Оберіть шаблон…',
+    'prov.f.label':'Назва',
+    'prov.f.id':'Ідентифікатор',
+    'prov.f.id.hint':'Частина кожного посилання на модель («id::модель»). Після створення не змінюється.',
+    'prov.f.type':'Тип API',
+    'prov.f.url':'Базова адреса',
+    'prov.f.url.ph':'https://…',
+    'prov.f.url.hint.oai':'Зазвичай закінчується на /v1 — до неї додається /chat/completions.',
+    'prov.f.url.hint.anth':'Без /v1/messages — його додає CLI.',
+    'prov.f.key':'API-ключ',
+    'prov.f.key.keep':'Залиште порожнім, щоб зберегти поточний ключ',
+    'prov.f.key.clear':'Видалити збережений ключ',
+    'prov.f.key.hint':'Зберігається зашифрованим і не потрапляє ні в браузер, ні в оточення агента.',
+    'prov.f.auth':'Заголовок авторизації',
+    'prov.auth.bearer':'Authorization: Bearer',
+    'prov.auth.xapikey':'x-api-key',
+    'prov.auth.both':'Обидва заголовки',
+    'prov.f.dialect':'Діалект',
+    'prov.f.dialect.hint':'Як передавати цьому провайдеру effort, міркування і ліміт токенів.',
+    'prov.f.aliases':'Сервер сам обслуговує аліаси Claude (haiku/sonnet/opus/fable)',
+    'prov.f.enabled':'Увімкнено',
+    'prov.f.headers':'Додаткові заголовки',
+    'prov.f.headers.hint':'По одному в рядку: Назва: значення',
+    'prov.f.timeout':'Тайм-аут тиші відповіді, с',
+    'prov.f.concurrency':'Паралельних запитів',
+    'prov.f.stripBetas':'Не передавати заголовок anthropic-beta',
+    'prov.f.extra':'Додаткове тіло запиту (JSON)',
+    'prov.f.extra.hint':'Об’єднується з кожним запитом — для перемикачів, специфічних для провайдера.',
+    'prov.models.search':'Пошук моделі…',
+    'prov.models.refresh':'Оновити каталог',
+    'prov.models.all_on':'Увімкнути показані',
+    'prov.models.all_off':'Вимкнути показані',
+    'prov.models.add':'Додати модель вручну',
+    'prov.models.add.ph':'id моделі, напр. gpt-5',
+    'prov.models.empty':'Каталог порожній — додайте моделі вручну.',
+    'prov.models.save_first':'Збережіть провайдера, щоб керувати його моделями.',
+    'prov.models.builtin':'Вхід CLI пропонує аліаси Claude: Haiku, Sonnet, Opus, Fable.',
+    'prov.models.enabled_n':'Увімкнено {on} з {all}',
+    'prov.models.more':'і ще {n} — уточніть пошук',
+    'prov.models.probe':'Перевірити модель: виклик інструмента й коротка відповідь',
+    'prov.models.caps':'Можливості та ціна',
+    'prov.probe.res':'Інструменти {tools} · текст {text} · {ms} мс',
+    'prov.cap.tools':'інструменти',
+    'prov.cap.vision':'зображення',
+    'prov.cap.reasoning':'міркування',
+    'prov.cap.ctx':'контекст',
+    'prov.cap.out':'макс. відповідь',
+    'prov.cap.price':'$ за 1M (вхід / вихід)',
+    'prov.roles.hint':'Які моделі CLI використовує для власних фонових викликів і субагентів. Порожньо — основна модель.',
+    'prov.role.main':'Основна (sonnet, fable)',
+    'prov.role.fast':'Швидка (haiku, фонові виклики)',
+    'prov.role.strong':'Сильна (opus)',
+    'prov.role.subagent':'Субагенти (Task)',
+    'prov.role.none':'— основна модель —',
+    'prov.cancel':'Скасувати',
+    'prov.create':'Додати',
+    'prov.save':'Зберегти',
+    'prov.saved':'Збережено',
+    'prov.test.ok':'З’єднання працює · моделей у каталозі: {n}',
+    'prov.test.nocat':'З’єднання працює · каталог моделей не публікується',
+    'prov.test.fail':'Не вдалося: {err}',
+    'prov.err.fields':'Перевірте поля: {fields}',
+    'prov.err.exists':'Провайдер з таким ідентифікатором уже існує',
+    'prov.usage':'Витрати за 30 днів (запити · токени вх/вих · $)',
+    'prov.usage.none':'Поки немає запитів через міст.',
+    'prov.notice.provider_missing':'Провайдера моделі «{ref}» більше немає — відповідь іде через провайдера за замовчуванням.',
+    'prov.notice.provider_disabled':'Провайдера моделі «{ref}» вимкнено — відповідь іде через провайдера за замовчуванням.',
+    'prov.notice.engine_api':'Модель «{ref}» — не Claude: рушій «Підписка» її не запустить, відповідь іде через API.',
+    'model.more':'Інші моделі…',
+    'model.more.tip':'Моделі всіх провайдерів',
+    'model.pick.search':'Знайти модель…',
+    'model.pick.empty':'Нічого не знайдено',
+    'model.pick.manage':'⚙ Керувати провайдерами',
+    'model.pick.notools':'Без інструментів — не зможе читати й змінювати файли',
+    'engine.sub.only_claude':'Рушій «Підписка» працює лише з моделями Claude (вхід CLI)',
+    'engine.switched_api':'Модель іншого провайдера — рушій перемкнено на API',
+    'effort.unsupported':'Ця модель не підтримує міркування',
   },
   en: {
     'dlg.model':'Model','dlg.effort':'Reasoning effort','dlg.tuning.default':'Default',
@@ -5577,6 +5906,113 @@ const TRANSLATIONS = {
     'input.ph.mob':'Write a task...',
     'skillcat.engineering':'⚙️ Engineering','skillcat.ai':'🧠 AI & Prompts','skillcat.quality':'💎 Code Quality','skillcat.security':'🔒 Security','skillcat.design':'🎨 Design','skillcat.product':'📋 Product','skillcat.finance':'💼 Finance','skillcat.research':'🔬 Research','skillcat.workflow':'📐 Workflow','skillcat.system':'⚙️ System','skillcat.plugin':'🧩 Plugin Skills',
     'upd.available':'Update available','upd.btn':'Update','upd.updating':'Updating… {time}','upd.copy_cmd':'Copy command','upd.via_terminal':'Update via Terminal:','upd.copied':'Copied ✓','upd.retry':'Retry','upd.failed':'Update failed','upd.new_version':'New version {version} available',
+    /* providers & model picker (providers.js) */
+    'sec.providers':'Providers',
+    'prov.add':'＋ Add provider',
+    'prov.hint':'Where models come from. A model of any provider can be picked in chats, bots, tasks and schedules.',
+    'prov.bridge.down':'LLM bridge is not running: OpenAI-compatible providers are unavailable',
+    'prov.utility':'Utility model',
+    'prov.utility.hint':'Chat titles, skill selection, history compaction, translation.',
+    'prov.utility.default':'haiku on the default provider',
+    'prov.builtin.claude':'Claude (CLI login)',
+    'prov.default':'default',
+    'prov.make_default':'Make it the default provider',
+    'prov.test':'Test',
+    'prov.edit':'Edit',
+    'prov.del':'Delete',
+    'prov.del.confirm':'Delete provider "{name}"? Chats pinned to it will run on the default provider.',
+    'prov.models.count':'models: {n}',
+    'prov.status.ok':'Working',
+    'prov.status.unknown':'Not tested yet',
+    'prov.disabled':'disabled',
+    'prov.type.anthropic':'Anthropic API',
+    'prov.type.anthropic-compatible':'Anthropic-compatible (/v1/messages)',
+    'prov.type.openai-compatible':'OpenAI-compatible (/chat/completions)',
+    'prov.type.claude-subscription':'Claude CLI login (subscription)',
+    'prov.modal.add.title':'＋ New provider',
+    'prov.modal.edit.title':'Provider',
+    'prov.tab.main':'General',
+    'prov.tab.models':'Models',
+    'prov.tab.roles':'Roles',
+    'prov.tab.adv':'Advanced',
+    'prov.f.preset':'Preset',
+    'prov.f.preset.ph':'Choose a preset…',
+    'prov.f.label':'Name',
+    'prov.f.id':'Id',
+    'prov.f.id.hint':'Part of every model reference ("id::model"). Cannot be changed later.',
+    'prov.f.type':'API type',
+    'prov.f.url':'Base URL',
+    'prov.f.url.ph':'https://…',
+    'prov.f.url.hint.oai':'Usually ends in /v1 — /chat/completions is appended.',
+    'prov.f.url.hint.anth':'Without /v1/messages — the CLI appends it.',
+    'prov.f.key':'API key',
+    'prov.f.key.keep':'Leave empty to keep the stored key',
+    'prov.f.key.clear':'Remove the stored key',
+    'prov.f.key.hint':'Stored encrypted; it never reaches the browser or the agent\'s environment.',
+    'prov.f.auth':'Auth header',
+    'prov.auth.bearer':'Authorization: Bearer',
+    'prov.auth.xapikey':'x-api-key',
+    'prov.auth.both':'Both headers',
+    'prov.f.dialect':'Dialect',
+    'prov.f.dialect.hint':'How effort, reasoning and the token limit are passed to this provider.',
+    'prov.f.aliases':'The server itself serves the Claude aliases (haiku/sonnet/opus/fable)',
+    'prov.f.enabled':'Enabled',
+    'prov.f.headers':'Extra headers',
+    'prov.f.headers.hint':'One per line: Name: value',
+    'prov.f.timeout':'Response silence timeout, s',
+    'prov.f.concurrency':'Parallel requests',
+    'prov.f.stripBetas':'Do not forward the anthropic-beta header',
+    'prov.f.extra':'Extra request body (JSON)',
+    'prov.f.extra.hint':'Merged into every request — for provider-specific switches.',
+    'prov.models.search':'Search models…',
+    'prov.models.refresh':'Refresh catalogue',
+    'prov.models.all_on':'Enable shown',
+    'prov.models.all_off':'Disable shown',
+    'prov.models.add':'Add a model by id',
+    'prov.models.add.ph':'model id, e.g. gpt-5',
+    'prov.models.empty':'No catalogue — add models by id.',
+    'prov.models.save_first':'Save the provider to manage its models.',
+    'prov.models.builtin':'The CLI login offers the Claude aliases: Haiku, Sonnet, Opus, Fable.',
+    'prov.models.enabled_n':'{on} of {all} enabled',
+    'prov.models.more':'and {n} more — narrow the search',
+    'prov.models.probe':'Probe the model: a tool call and a short reply',
+    'prov.models.caps':'Capabilities and price',
+    'prov.probe.res':'Tools {tools} · text {text} · {ms} ms',
+    'prov.cap.tools':'tools',
+    'prov.cap.vision':'images',
+    'prov.cap.reasoning':'reasoning',
+    'prov.cap.ctx':'context',
+    'prov.cap.out':'max output',
+    'prov.cap.price':'$ per 1M (in / out)',
+    'prov.roles.hint':'Which models the CLI uses for its own background calls and sub-agents. Empty = the main model.',
+    'prov.role.main':'Main (sonnet, fable)',
+    'prov.role.fast':'Fast (haiku, background calls)',
+    'prov.role.strong':'Strong (opus)',
+    'prov.role.subagent':'Sub-agents (Task)',
+    'prov.role.none':'— the main model —',
+    'prov.cancel':'Cancel',
+    'prov.create':'Add',
+    'prov.save':'Save',
+    'prov.saved':'Saved',
+    'prov.test.ok':'Connection works · models in the catalogue: {n}',
+    'prov.test.nocat':'Connection works · no model catalogue is published',
+    'prov.test.fail':'Failed: {err}',
+    'prov.err.fields':'Check the fields: {fields}',
+    'prov.err.exists':'A provider with this id already exists',
+    'prov.usage':'Usage, last 30 days (requests · tokens in/out · $)',
+    'prov.usage.none':'No bridge requests yet.',
+    'prov.notice.provider_missing':'The provider of "{ref}" no longer exists — running on the default provider.',
+    'prov.notice.provider_disabled':'The provider of "{ref}" is switched off — running on the default provider.',
+    'prov.notice.engine_api':'Model "{ref}" is not Claude: the Subscription engine cannot run it, so it runs on the API engine.',
+    'model.more':'Other models…',
+    'model.more.tip':'Models of every provider',
+    'model.pick.search':'Find a model…',
+    'model.pick.empty':'Nothing found',
+    'model.pick.manage':'⚙ Manage providers',
+    'model.pick.notools':'No tools — cannot read or change files',
+    'engine.sub.only_claude':'The Subscription engine runs Claude models (CLI login) only',
+    'engine.switched_api':'A model of another provider — engine switched to API',
+    'effort.unsupported':'This model does not reason',
   },
   ru: {
     'dlg.model':'Модель','dlg.effort':'Уровень рассуждений','dlg.tuning.default':'По умолчанию',
@@ -5981,6 +6417,113 @@ const TRANSLATIONS = {
     'input.ph.mob':'Напишите задачу...',
     'skillcat.engineering':'⚙️ Разработка','skillcat.ai':'🧠 AI и промпты','skillcat.quality':'💎 Качество кода','skillcat.security':'🔒 Безопасность','skillcat.design':'🎨 Дизайн','skillcat.product':'📋 Продукт','skillcat.finance':'💼 Финансы','skillcat.research':'🔬 Исследования','skillcat.workflow':'📐 Рабочий процесс','skillcat.system':'⚙️ Система','skillcat.plugin':'🧩 Skills плагинов',
     'upd.available':'Доступно обновление','upd.btn':'Обновить','upd.updating':'Обновление… {time}','upd.copy_cmd':'Копировать команду','upd.via_terminal':'Обновление через терминал:','upd.copied':'Скопировано ✓','upd.retry':'Повторить','upd.failed':'Обновление не удалось','upd.new_version':'Доступна новая версия {version}',
+    /* providers & model picker (providers.js) */
+    'sec.providers':'Провайдеры',
+    'prov.add':'＋ Добавить провайдера',
+    'prov.hint':'Откуда берутся модели. Модель любого провайдера можно выбрать в чате, у ботов, задач и расписаний.',
+    'prov.bridge.down':'LLM-мост не запущен: OpenAI-совместимые провайдеры недоступны',
+    'prov.utility':'Служебная модель',
+    'prov.utility.hint':'Заголовки чатов, выбор навыков, сжатие истории, перевод.',
+    'prov.utility.default':'haiku на провайдере по умолчанию',
+    'prov.builtin.claude':'Claude (вход CLI)',
+    'prov.default':'по умолч.',
+    'prov.make_default':'Сделать провайдером по умолчанию',
+    'prov.test':'Проверить',
+    'prov.edit':'Изменить',
+    'prov.del':'Удалить',
+    'prov.del.confirm':'Удалить провайдера «{name}»? Чаты, закреплённые за ним, будут работать на провайдере по умолчанию.',
+    'prov.models.count':'моделей: {n}',
+    'prov.status.ok':'Работает',
+    'prov.status.unknown':'Ещё не проверялся',
+    'prov.disabled':'выключен',
+    'prov.type.anthropic':'Anthropic API',
+    'prov.type.anthropic-compatible':'Anthropic-совместимый (/v1/messages)',
+    'prov.type.openai-compatible':'OpenAI-совместимый (/chat/completions)',
+    'prov.type.claude-subscription':'Вход Claude CLI (подписка)',
+    'prov.modal.add.title':'＋ Новый провайдер',
+    'prov.modal.edit.title':'Провайдер',
+    'prov.tab.main':'Основное',
+    'prov.tab.models':'Модели',
+    'prov.tab.roles':'Роли',
+    'prov.tab.adv':'Дополнительно',
+    'prov.f.preset':'Шаблон',
+    'prov.f.preset.ph':'Выберите шаблон…',
+    'prov.f.label':'Название',
+    'prov.f.id':'Идентификатор',
+    'prov.f.id.hint':'Часть каждой ссылки на модель («id::модель»). После создания не меняется.',
+    'prov.f.type':'Тип API',
+    'prov.f.url':'Базовый адрес',
+    'prov.f.url.ph':'https://…',
+    'prov.f.url.hint.oai':'Обычно заканчивается на /v1 — к нему добавляется /chat/completions.',
+    'prov.f.url.hint.anth':'Без /v1/messages — его добавляет CLI.',
+    'prov.f.key':'API-ключ',
+    'prov.f.key.keep':'Оставьте пустым, чтобы сохранить текущий ключ',
+    'prov.f.key.clear':'Удалить сохранённый ключ',
+    'prov.f.key.hint':'Хранится зашифрованным и не попадает ни в браузер, ни в окружение агента.',
+    'prov.f.auth':'Заголовок авторизации',
+    'prov.auth.bearer':'Authorization: Bearer',
+    'prov.auth.xapikey':'x-api-key',
+    'prov.auth.both':'Оба заголовка',
+    'prov.f.dialect':'Диалект',
+    'prov.f.dialect.hint':'Как передавать этому провайдеру effort, рассуждения и лимит токенов.',
+    'prov.f.aliases':'Сервер сам обслуживает алиасы Claude (haiku/sonnet/opus/fable)',
+    'prov.f.enabled':'Включён',
+    'prov.f.headers':'Дополнительные заголовки',
+    'prov.f.headers.hint':'По одному в строке: Имя: значение',
+    'prov.f.timeout':'Тайм-аут тишины ответа, с',
+    'prov.f.concurrency':'Параллельных запросов',
+    'prov.f.stripBetas':'Не передавать заголовок anthropic-beta',
+    'prov.f.extra':'Дополнительное тело запроса (JSON)',
+    'prov.f.extra.hint':'Объединяется с каждым запросом — для переключателей, специфичных для провайдера.',
+    'prov.models.search':'Поиск модели…',
+    'prov.models.refresh':'Обновить каталог',
+    'prov.models.all_on':'Включить показанные',
+    'prov.models.all_off':'Выключить показанные',
+    'prov.models.add':'Добавить модель вручную',
+    'prov.models.add.ph':'id модели, напр. gpt-5',
+    'prov.models.empty':'Каталог пуст — добавьте модели вручную.',
+    'prov.models.save_first':'Сохраните провайдера, чтобы управлять его моделями.',
+    'prov.models.builtin':'Вход CLI предлагает алиасы Claude: Haiku, Sonnet, Opus, Fable.',
+    'prov.models.enabled_n':'Включено {on} из {all}',
+    'prov.models.more':'и ещё {n} — уточните поиск',
+    'prov.models.probe':'Проверить модель: вызов инструмента и короткий ответ',
+    'prov.models.caps':'Возможности и цена',
+    'prov.probe.res':'Инструменты {tools} · текст {text} · {ms} мс',
+    'prov.cap.tools':'инструменты',
+    'prov.cap.vision':'изображения',
+    'prov.cap.reasoning':'рассуждения',
+    'prov.cap.ctx':'контекст',
+    'prov.cap.out':'макс. ответ',
+    'prov.cap.price':'$ за 1M (вход / выход)',
+    'prov.roles.hint':'Какие модели CLI использует для своих фоновых вызовов и субагентов. Пусто — основная модель.',
+    'prov.role.main':'Основная (sonnet, fable)',
+    'prov.role.fast':'Быстрая (haiku, фоновые вызовы)',
+    'prov.role.strong':'Сильная (opus)',
+    'prov.role.subagent':'Субагенты (Task)',
+    'prov.role.none':'— основная модель —',
+    'prov.cancel':'Отмена',
+    'prov.create':'Добавить',
+    'prov.save':'Сохранить',
+    'prov.saved':'Сохранено',
+    'prov.test.ok':'Соединение работает · моделей в каталоге: {n}',
+    'prov.test.nocat':'Соединение работает · каталог моделей не публикуется',
+    'prov.test.fail':'Не удалось: {err}',
+    'prov.err.fields':'Проверьте поля: {fields}',
+    'prov.err.exists':'Провайдер с таким идентификатором уже существует',
+    'prov.usage':'Расход за 30 дней (запросы · токены вх/вых · $)',
+    'prov.usage.none':'Пока нет запросов через мост.',
+    'prov.notice.provider_missing':'Провайдера модели «{ref}» больше нет — ответ идёт через провайдера по умолчанию.',
+    'prov.notice.provider_disabled':'Провайдер модели «{ref}» выключен — ответ идёт через провайдера по умолчанию.',
+    'prov.notice.engine_api':'Модель «{ref}» — не Claude: движок «Подписка» её не запустит, ответ идёт через API.',
+    'model.more':'Другие модели…',
+    'model.more.tip':'Модели всех провайдеров',
+    'model.pick.search':'Найти модель…',
+    'model.pick.empty':'Ничего не найдено',
+    'model.pick.manage':'⚙ Управлять провайдерами',
+    'model.pick.notools':'Без инструментов — не сможет читать и менять файлы',
+    'engine.sub.only_claude':'Движок «Подписка» работает только с моделями Claude (вход CLI)',
+    'engine.switched_api':'Модель другого провайдера — движок переключён на API',
+    'effort.unsupported':'Эта модель не поддерживает рассуждения',
   },
   fr: {
     'dlg.model':'Modèle','dlg.effort':'Niveau de raisonnement','dlg.tuning.default':'Par défaut',
@@ -6285,6 +6828,113 @@ const TRANSLATIONS = {
     "input.ph.mob":"Écrivez une tâche…",
     "skillcat.engineering":"⚙️ Ingénierie","skillcat.ai":"🧠 IA et prompts","skillcat.quality":"💎 Qualité du code","skillcat.security":"🔒 Sécurité","skillcat.design":"🎨 Design","skillcat.product":"📋 Produit","skillcat.finance":"💼 Finance","skillcat.research":"🔬 Recherche","skillcat.workflow":"📐 Flux de travail","skillcat.system":"⚙️ Système","skillcat.plugin":"🧩 Compétences des plugins",
     "upd.available":"Mise à jour disponible","upd.btn":"Mettre à jour","upd.updating":"Mise à jour… {time}","upd.copy_cmd":"Copier la commande","upd.via_terminal":"Mise à jour via le terminal :","upd.copied":"Copié ✓","upd.retry":"Réessayer","upd.failed":"Échec de la mise à jour","upd.new_version":"Nouvelle version {version} disponible",
+    /* providers & model picker (providers.js) */
+    'sec.providers':'Fournisseurs',
+    'prov.add':'＋ Ajouter un fournisseur',
+    'prov.hint':'D’où viennent les modèles. Un modèle de n’importe quel fournisseur se choisit dans les discussions, les bots, les tâches et les planifications.',
+    'prov.bridge.down':'Le pont LLM ne tourne pas : les fournisseurs compatibles OpenAI sont indisponibles',
+    'prov.utility':'Modèle utilitaire',
+    'prov.utility.hint':'Titres des discussions, choix des compétences, compactage de l’historique, traduction.',
+    'prov.utility.default':'haiku sur le fournisseur par défaut',
+    'prov.builtin.claude':'Claude (connexion CLI)',
+    'prov.default':'par défaut',
+    'prov.make_default':'Définir comme fournisseur par défaut',
+    'prov.test':'Tester',
+    'prov.edit':'Modifier',
+    'prov.del':'Supprimer',
+    'prov.del.confirm':'Supprimer le fournisseur « {name} » ? Les discussions qui l’utilisent passeront au fournisseur par défaut.',
+    'prov.models.count':'modèles : {n}',
+    'prov.status.ok':'Fonctionne',
+    'prov.status.unknown':'Pas encore testé',
+    'prov.disabled':'désactivé',
+    'prov.type.anthropic':'API Anthropic',
+    'prov.type.anthropic-compatible':'Compatible Anthropic (/v1/messages)',
+    'prov.type.openai-compatible':'Compatible OpenAI (/chat/completions)',
+    'prov.type.claude-subscription':'Connexion Claude CLI (abonnement)',
+    'prov.modal.add.title':'＋ Nouveau fournisseur',
+    'prov.modal.edit.title':'Fournisseur',
+    'prov.tab.main':'Général',
+    'prov.tab.models':'Modèles',
+    'prov.tab.roles':'Rôles',
+    'prov.tab.adv':'Avancé',
+    'prov.f.preset':'Modèle prérempli',
+    'prov.f.preset.ph':'Choisir un modèle prérempli…',
+    'prov.f.label':'Nom',
+    'prov.f.id':'Identifiant',
+    'prov.f.id.hint':'Fait partie de chaque référence de modèle (« id::modèle »). Non modifiable ensuite.',
+    'prov.f.type':'Type d’API',
+    'prov.f.url':'URL de base',
+    'prov.f.url.ph':'https://…',
+    'prov.f.url.hint.oai':'Se termine généralement par /v1 — /chat/completions y est ajouté.',
+    'prov.f.url.hint.anth':'Sans /v1/messages — le CLI l’ajoute.',
+    'prov.f.key':'Clé API',
+    'prov.f.key.keep':'Laisser vide pour conserver la clé enregistrée',
+    'prov.f.key.clear':'Supprimer la clé enregistrée',
+    'prov.f.key.hint':'Stockée chiffrée ; elle n’atteint jamais le navigateur ni l’environnement de l’agent.',
+    'prov.f.auth':'En-tête d’authentification',
+    'prov.auth.bearer':'Authorization: Bearer',
+    'prov.auth.xapikey':'x-api-key',
+    'prov.auth.both':'Les deux en-têtes',
+    'prov.f.dialect':'Dialecte',
+    'prov.f.dialect.hint':'Comment transmettre à ce fournisseur l’effort, le raisonnement et la limite de jetons.',
+    'prov.f.aliases':'Le serveur gère lui-même les alias Claude (haiku/sonnet/opus/fable)',
+    'prov.f.enabled':'Activé',
+    'prov.f.headers':'En-têtes supplémentaires',
+    'prov.f.headers.hint':'Un par ligne : Nom : valeur',
+    'prov.f.timeout':'Délai de silence de la réponse, s',
+    'prov.f.concurrency':'Requêtes parallèles',
+    'prov.f.stripBetas':'Ne pas transmettre l’en-tête anthropic-beta',
+    'prov.f.extra':'Corps de requête supplémentaire (JSON)',
+    'prov.f.extra.hint':'Fusionné dans chaque requête — pour les options propres au fournisseur.',
+    'prov.models.search':'Rechercher un modèle…',
+    'prov.models.refresh':'Actualiser le catalogue',
+    'prov.models.all_on':'Activer les affichés',
+    'prov.models.all_off':'Désactiver les affichés',
+    'prov.models.add':'Ajouter un modèle par id',
+    'prov.models.add.ph':'id du modèle, ex. gpt-5',
+    'prov.models.empty':'Catalogue vide — ajoutez des modèles par id.',
+    'prov.models.save_first':'Enregistrez le fournisseur pour gérer ses modèles.',
+    'prov.models.builtin':'La connexion CLI propose les alias Claude : Haiku, Sonnet, Opus, Fable.',
+    'prov.models.enabled_n':'{on} sur {all} activés',
+    'prov.models.more':'et {n} de plus — affinez la recherche',
+    'prov.models.probe':'Tester le modèle : un appel d’outil et une réponse courte',
+    'prov.models.caps':'Capacités et prix',
+    'prov.probe.res':'Outils {tools} · texte {text} · {ms} ms',
+    'prov.cap.tools':'outils',
+    'prov.cap.vision':'images',
+    'prov.cap.reasoning':'raisonnement',
+    'prov.cap.ctx':'contexte',
+    'prov.cap.out':'sortie max',
+    'prov.cap.price':'$ par 1M (entrée / sortie)',
+    'prov.roles.hint':'Modèles utilisés par le CLI pour ses appels d’arrière-plan et ses sous-agents. Vide = le modèle principal.',
+    'prov.role.main':'Principal (sonnet, fable)',
+    'prov.role.fast':'Rapide (haiku, appels d’arrière-plan)',
+    'prov.role.strong':'Puissant (opus)',
+    'prov.role.subagent':'Sous-agents (Task)',
+    'prov.role.none':'— le modèle principal —',
+    'prov.cancel':'Annuler',
+    'prov.create':'Ajouter',
+    'prov.save':'Enregistrer',
+    'prov.saved':'Enregistré',
+    'prov.test.ok':'La connexion fonctionne · modèles au catalogue : {n}',
+    'prov.test.nocat':'La connexion fonctionne · aucun catalogue de modèles publié',
+    'prov.test.fail':'Échec : {err}',
+    'prov.err.fields':'Vérifiez les champs : {fields}',
+    'prov.err.exists':'Un fournisseur avec cet identifiant existe déjà',
+    'prov.usage':'Consommation sur 30 jours (requêtes · jetons entrée/sortie · $)',
+    'prov.usage.none':'Aucune requête via le pont pour l’instant.',
+    'prov.notice.provider_missing':'Le fournisseur de « {ref} » n’existe plus — exécution sur le fournisseur par défaut.',
+    'prov.notice.provider_disabled':'Le fournisseur de « {ref} » est désactivé — exécution sur le fournisseur par défaut.',
+    'prov.notice.engine_api':'Le modèle « {ref} » n’est pas Claude : le moteur Abonnement ne peut pas l’exécuter, il passe par l’API.',
+    'model.more':'Autres modèles…',
+    'model.more.tip':'Modèles de tous les fournisseurs',
+    'model.pick.search':'Trouver un modèle…',
+    'model.pick.empty':'Rien trouvé',
+    'model.pick.manage':'⚙ Gérer les fournisseurs',
+    'model.pick.notools':'Sans outils — ne peut ni lire ni modifier les fichiers',
+    'engine.sub.only_claude':'Le moteur Abonnement n’exécute que les modèles Claude (connexion CLI)',
+    'engine.switched_api':'Modèle d’un autre fournisseur — moteur basculé sur l’API',
+    'effort.unsupported':'Ce modèle ne raisonne pas',
   },
   he: {
     'dlg.model':'מודל','dlg.effort':'רמת חשיבה','dlg.tuning.default':'ברירת מחדל',
@@ -6562,6 +7212,113 @@ const TRANSLATIONS = {
     "input.ph.mob":"כתבו משימה...",
     "skillcat.engineering":"⚙️ הנדסה","skillcat.ai":"🧠 בינה מלאכותית ופרומפטים","skillcat.quality":"💎 איכות קוד","skillcat.security":"🔒 אבטחה","skillcat.design":"🎨 עיצוב","skillcat.product":"📋 מוצר","skillcat.finance":"💼 פיננסים","skillcat.research":"🔬 מחקר","skillcat.workflow":"📐 תהליכי עבודה","skillcat.system":"⚙️ מערכת","skillcat.plugin":"🧩 מיומנויות של תוספים",
     "upd.available":"עדכון זמין","upd.btn":"עדכון","upd.updating":"מעדכן… {time}","upd.copy_cmd":"העתקת הפקודה","upd.via_terminal":"עדכון דרך הטרמינל:","upd.copied":"הועתק ✓","upd.retry":"ניסיון נוסף","upd.failed":"העדכון נכשל","upd.new_version":"גרסה חדשה {version} זמינה",
+    /* providers & model picker (providers.js) */
+    'sec.providers':'ספקים',
+    'prov.add':'＋ הוסף ספק',
+    'prov.hint':'מאיפה מגיעים המודלים. אפשר לבחור מודל של כל ספק בצ׳אט, בבוטים, במשימות ובתזמונים.',
+    'prov.bridge.down':'גשר ה-LLM לא פועל: ספקים תואמי OpenAI אינם זמינים',
+    'prov.utility':'מודל שירות',
+    'prov.utility.hint':'כותרות צ׳אט, בחירת מיומנויות, דחיסת היסטוריה, תרגום.',
+    'prov.utility.default':'haiku בספק ברירת המחדל',
+    'prov.builtin.claude':'Claude (התחברות CLI)',
+    'prov.default':'ברירת מחדל',
+    'prov.make_default':'הגדר כספק ברירת המחדל',
+    'prov.test':'בדוק',
+    'prov.edit':'ערוך',
+    'prov.del':'מחק',
+    'prov.del.confirm':'למחוק את הספק "{name}"? צ׳אטים שמשויכים אליו יעבדו עם ספק ברירת המחדל.',
+    'prov.models.count':'מודלים: {n}',
+    'prov.status.ok':'פועל',
+    'prov.status.unknown':'עדיין לא נבדק',
+    'prov.disabled':'מושבת',
+    'prov.type.anthropic':'Anthropic API',
+    'prov.type.anthropic-compatible':'תואם Anthropic (/v1/messages)',
+    'prov.type.openai-compatible':'תואם OpenAI (/chat/completions)',
+    'prov.type.claude-subscription':'התחברות Claude CLI (מנוי)',
+    'prov.modal.add.title':'＋ ספק חדש',
+    'prov.modal.edit.title':'ספק',
+    'prov.tab.main':'כללי',
+    'prov.tab.models':'מודלים',
+    'prov.tab.roles':'תפקידים',
+    'prov.tab.adv':'מתקדם',
+    'prov.f.preset':'תבנית',
+    'prov.f.preset.ph':'בחר תבנית…',
+    'prov.f.label':'שם',
+    'prov.f.id':'מזהה',
+    'prov.f.id.hint':'חלק מכל הפניה למודל ("id::model"). לא ניתן לשנות אחר כך.',
+    'prov.f.type':'סוג API',
+    'prov.f.url':'כתובת בסיס',
+    'prov.f.url.ph':'https://…',
+    'prov.f.url.hint.oai':'בדרך כלל מסתיימת ב-/v1 — מתווסף אליה /chat/completions.',
+    'prov.f.url.hint.anth':'בלי /v1/messages — ה-CLI מוסיף אותו.',
+    'prov.f.key':'מפתח API',
+    'prov.f.key.keep':'השאר ריק כדי לשמור את המפתח הקיים',
+    'prov.f.key.clear':'הסר את המפתח השמור',
+    'prov.f.key.hint':'נשמר מוצפן; הוא לעולם לא מגיע לדפדפן או לסביבת הסוכן.',
+    'prov.f.auth':'כותרת אימות',
+    'prov.auth.bearer':'Authorization: Bearer',
+    'prov.auth.xapikey':'x-api-key',
+    'prov.auth.both':'שתי הכותרות',
+    'prov.f.dialect':'דיאלקט',
+    'prov.f.dialect.hint':'איך להעביר לספק הזה את רמת המאמץ, החשיבה ומגבלת האסימונים.',
+    'prov.f.aliases':'השרת עצמו משרת את הכינויים של Claude (haiku/sonnet/opus/fable)',
+    'prov.f.enabled':'מופעל',
+    'prov.f.headers':'כותרות נוספות',
+    'prov.f.headers.hint':'אחת בכל שורה: שם: ערך',
+    'prov.f.timeout':'זמן המתנה לשקט בתגובה, שניות',
+    'prov.f.concurrency':'בקשות מקבילות',
+    'prov.f.stripBetas':'אל תעביר את הכותרת anthropic-beta',
+    'prov.f.extra':'גוף בקשה נוסף (JSON)',
+    'prov.f.extra.hint':'ממוזג לכל בקשה — עבור מתגים ייחודיים לספק.',
+    'prov.models.search':'חפש מודל…',
+    'prov.models.refresh':'רענן קטלוג',
+    'prov.models.all_on':'הפעל את המוצגים',
+    'prov.models.all_off':'השבת את המוצגים',
+    'prov.models.add':'הוסף מודל לפי מזהה',
+    'prov.models.add.ph':'מזהה מודל, למשל gpt-5',
+    'prov.models.empty':'אין קטלוג — הוסף מודלים לפי מזהה.',
+    'prov.models.save_first':'שמור את הספק כדי לנהל את המודלים שלו.',
+    'prov.models.builtin':'התחברות ה-CLI מציעה את הכינויים של Claude: Haiku, Sonnet, Opus, Fable.',
+    'prov.models.enabled_n':'{on} מתוך {all} מופעלים',
+    'prov.models.more':'ועוד {n} — צמצם את החיפוש',
+    'prov.models.probe':'בדוק את המודל: קריאה לכלי ותשובה קצרה',
+    'prov.models.caps':'יכולות ומחיר',
+    'prov.probe.res':'כלים {tools} · טקסט {text} · {ms} מ״ש',
+    'prov.cap.tools':'כלים',
+    'prov.cap.vision':'תמונות',
+    'prov.cap.reasoning':'חשיבה',
+    'prov.cap.ctx':'הקשר',
+    'prov.cap.out':'פלט מרבי',
+    'prov.cap.price':'$ ל-1M (קלט / פלט)',
+    'prov.roles.hint':'אילו מודלים ה-CLI משתמש בהם לקריאות רקע ולתתי-סוכנים. ריק = המודל הראשי.',
+    'prov.role.main':'ראשי (sonnet, fable)',
+    'prov.role.fast':'מהיר (haiku, קריאות רקע)',
+    'prov.role.strong':'חזק (opus)',
+    'prov.role.subagent':'תתי-סוכנים (Task)',
+    'prov.role.none':'— המודל הראשי —',
+    'prov.cancel':'ביטול',
+    'prov.create':'הוסף',
+    'prov.save':'שמור',
+    'prov.saved':'נשמר',
+    'prov.test.ok':'החיבור עובד · מודלים בקטלוג: {n}',
+    'prov.test.nocat':'החיבור עובד · לא מתפרסם קטלוג מודלים',
+    'prov.test.fail':'נכשל: {err}',
+    'prov.err.fields':'בדוק את השדות: {fields}',
+    'prov.err.exists':'ספק עם המזהה הזה כבר קיים',
+    'prov.usage':'שימוש ב-30 הימים האחרונים (בקשות · אסימונים קלט/פלט · $)',
+    'prov.usage.none':'עדיין אין בקשות דרך הגשר.',
+    'prov.notice.provider_missing':'הספק של "{ref}" כבר לא קיים — מריץ בספק ברירת המחדל.',
+    'prov.notice.provider_disabled':'הספק של "{ref}" מושבת — מריץ בספק ברירת המחדל.',
+    'prov.notice.engine_api':'המודל "{ref}" אינו Claude: מנוע המנוי לא יכול להריץ אותו, ולכן הוא רץ דרך ה-API.',
+    'model.more':'מודלים נוספים…',
+    'model.more.tip':'מודלים של כל הספקים',
+    'model.pick.search':'מצא מודל…',
+    'model.pick.empty':'לא נמצא דבר',
+    'model.pick.manage':'⚙ ניהול ספקים',
+    'model.pick.notools':'ללא כלים — לא יכול לקרוא או לשנות קבצים',
+    'engine.sub.only_claude':'מנוע המנוי מריץ רק מודלים של Claude (התחברות CLI)',
+    'engine.switched_api':'מודל של ספק אחר — המנוע הועבר ל-API',
+    'effort.unsupported':'המודל הזה אינו תומך בחשיבה',
   }
 };
 function t(key) {
@@ -6582,6 +7339,7 @@ const I18N_RERENDER = [
   'renderCommands', 'renderAgents', 'renderProjects', 'renderRemoteHostsList',
   'renderGlobalHome', 'renderCfgForm',
   'renderRemoteHostSelect', 'renderTabs', 'updateSessBarSkills', 'loadHist', 'updateMobSubtitle',
+  'renderProviders', 'syncModelMore', 'applyModelDependentDials', 'renderUtilitySelect',
 ];
 function rerenderI18nDynamic() {
   if (!_i18nDynReady) return;
@@ -7775,11 +8533,18 @@ function handleWsMsg(d) {
       break;
     }
 
+    case 'provider_notice': {
+      // The server ran a turn somewhere other than where the chat says (providers.js fallback).
+      const key = { provider_missing: 'prov.notice.provider_missing', provider_disabled: 'prov.notice.provider_disabled', engine_api: 'prov.notice.engine_api' }[d.kind];
+      if (key) toast(t(key).replace('{ref}', String(d.ref || '')));
+      break;
+    }
+
     case 'ui_state_change': {
       // Agent requested UI state update — validate before assigning to prevent invalid state
       const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus','fable'], _validAgents = ['single','multi','dispatch','conversation'], _validEngines = ['api','subscription'];
       if (d.mode && _validModes.includes(d.mode)) { curMode = d.mode; syncBtn('mode', d.mode); }
-      if (d.model && _validModels.includes(d.model)) { curModel = d.model; syncBtn('model', d.model); }
+      if (d.model && (_validModels.includes(d.model) || modelInfo(d.model).known)) { curModel = d.model; syncBtn('model', d.model); }
       if (d.agent && _validAgents.includes(d.agent)) { curAgent = d.agent; syncBtn('agent', d.agent); }
       if (d.engine && _validEngines.includes(d.engine)) { curEngine = d.engine; syncBtn('engine', d.engine); syncDefaultStar(); }
       break;
@@ -7879,6 +8644,8 @@ function handleWsMsg(d) {
         if (d.resultMeta && streaming.el) {
           const rm = d.resultMeta;
           const parts = [];
+          // Which provider answered — shown unless it is the plain Claude login.
+          if (rm.provider && rm.provider.id && rm.provider.id !== 'claude') parts.push(`${rm.provider.label} · ${rm.provider.model}`);
           if (rm.cost != null) parts.push(`$${rm.cost < 0.01 ? rm.cost.toFixed(4) : rm.cost.toFixed(3)}`);
           if (rm.usage) {
             const inT = rm.usage.input_tokens; const outT = rm.usage.output_tokens;
@@ -9077,12 +9844,25 @@ function botModelChoices(models, engine, current) {
   return { claude, gateway, extra };
 }
 let _gatewayModels = null; // null = not asked yet
+// Every provider's models (/api/models/choices), flattened into the shape this editor has
+// always used — {id, name, tools}. The default provider's four aliases ARE the chips above,
+// so they are not listed twice; another provider's aliases are real choices ("Claude · opus").
+function flattenChoicesForBots(c) {
+  const out = [];
+  for (const p of (c && c.providers) || []) {
+    const pl = p.builtin ? t('prov.builtin.claude') : p.label;
+    for (const m of p.models || []) {
+      if (m.alias && p.isDefault) continue;
+      out.push({ id: m.ref, name: `${pl} · ${m.alias ? m.id : (m.label || m.id)}`, tools: !(m.caps && m.caps.tools === false) });
+    }
+  }
+  return out;
+}
 async function loadGatewayModels() {
   if (_gatewayModels) return _gatewayModels;
   try {
-    const r = await fetch('/api/models');
-    const j = await r.json();
-    _gatewayModels = Array.isArray(j.models) ? j.models : [];
+    if (!_modelChoices) { const r = await fetch('/api/models/choices'); _modelChoices = await r.json(); }
+    _gatewayModels = flattenChoicesForBots(_modelChoices);
   } catch { _gatewayModels = []; }
   return _gatewayModels;
 }
@@ -9115,7 +9895,7 @@ function setBotEngine(v) {
   $i('botEngine').value = v || '';
   // A gateway id ("vendor/model:free") means nothing on the subscription; drop it visibly rather than keep a choice
   // the chips cannot show. Claude aliases and full Claude ids stay.
-  if (v === 'subscription' && !/^[A-Za-z0-9._-]*$/.test($i('botModel').value)) $i('botModel').value = '';
+  if (v === 'subscription' && !/^(claude::)?[A-Za-z0-9._-]*$/.test($i('botModel').value)) $i('botModel').value = '';
   renderBotEngine(); renderBotModel();
 }
 function renderBotRoomTools() {
@@ -9436,6 +10216,7 @@ function _atcDispatch() {
     tabId: activeTabId,
     workdir: curWorkdir || undefined,
     model: curModel,
+    effort: curEffort || null,
   }));
   const btn = document.querySelector('.atc-dispatch-btn');
   if (btn) { btn.textContent = t('msf.sent'); btn.disabled = true; }
@@ -11579,7 +12360,7 @@ function setOpt(btn, group) {
   const v = btn.dataset.v;
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
-  else if (group === 'model') curModel = v;
+  else if (group === 'model') { curModel = v; syncModelMore(); applyModelDependentDials(); }
   else if (group === 'engine') { curEngine = v; syncDefaultStar(); }
   updInd();
   // Sync mobile UI
@@ -11604,7 +12385,8 @@ function syncDefaultStar() {
 // runs last produces the correct result.
 function resolveEngineForView() {
   const want = _curSessionRunEngine || _globalDefaultEngine;
-  curEngine = (want === 'subscription' && _tmuxAvailable) ? 'subscription' : 'api';
+  // …and never the tmux engine for a model of another provider (subscriptionAllowedFor).
+  curEngine = (want === 'subscription' && _tmuxAvailable && subscriptionAllowedFor(curModel)) ? 'subscription' : 'api';
   syncBtn('engine', curEngine);
   syncDefaultStar();
 }
@@ -11663,6 +12445,14 @@ function updateSessBarSkills() {
 
 function syncBtn(group, val) {
   const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch','conversation'], model: ['haiku','sonnet','opus','fable'], engine: ['api','subscription'] };
+  if (group === 'model' && val && !groups.model.includes(val)) {
+    // A model of any provider ("deepseek::deepseek-chat"): no alias chip is lit, "⋯" names it.
+    document.querySelectorAll('.tb-group[data-tbg="model"] .tb-btn').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.mob-chip[data-mob="model"]').forEach(c => c.classList.remove('on'));
+    if (typeof syncModelMore === 'function') { syncModelMore(); applyModelDependentDials(); }
+    if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
+    return;
+  }
   if (!groups[group]?.includes(val)) return;
   // Sync desktop toolbar
   document.querySelectorAll('.tb-group .tb-btn').forEach(b => {
@@ -11675,6 +12465,7 @@ function syncBtn(group, val) {
   document.querySelectorAll(`.mob-chip[data-mob="${group}"]`).forEach(c => {
     c.classList.toggle('on', c.dataset.v === val);
   });
+  if (group === 'model' && typeof syncModelMore === 'function') { syncModelMore(); applyModelDependentDials(); }
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
 }
 
@@ -12300,6 +13091,7 @@ async function send() {
       tabId: activeTabId,
       sessionId: currentSessionId || undefined,
       model: curModel,
+      effort: curEffort || null,
       workdir: curWorkdir || undefined,
     }));
   } else {
@@ -12509,6 +13301,8 @@ function applyTmuxCapability(available) {
     curEngine = 'api';
     syncBtn('engine', 'api');
   }
+  // The same buttons are also off for a model of another provider — one place decides both.
+  if (typeof applyModelDependentDials === 'function') applyModelDependentDials();
   if (typeof syncDefaultStar === 'function') syncDefaultStar();
 }
 
@@ -14710,6 +15504,804 @@ document.addEventListener('keydown', e => {
 
 // ─── External Agents sidebar ─────────────────────────────────────────────────
 let _editingAgentId = null;
+
+// ─── Providers & model choices (providers.js on the server) ─────────────────
+// A model is one string: a bare alias ("sonnet" — the DEFAULT provider's, which is what
+// the four toolbar chips have always sent) or "provider::model". `_modelChoices` feeds
+// every picker on this page — the toolbar's "⋯" menu, the bot editor's list, the
+// utility-model select — and never carries a key.
+let _providersData = null;   // GET /api/providers (public view)
+let _modelChoices = null;    // GET /api/models/choices
+let _editingProviderId = null;
+let _provEdit = null;        // the provider open in the modal (public view), null while creating
+const _MODEL_ALIASES = ['haiku', 'sonnet', 'opus', 'fable'];
+const _MODEL_ALIAS_LABEL = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
+const _PROV_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+async function loadModelChoices() {
+  try {
+    const r = await fetch('/api/models/choices');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _modelChoices = await r.json();
+  } catch {
+    if (!_modelChoices) _modelChoices = { providers: [], defaultProviderId: 'claude', utilityModel: '' };
+  }
+  // The bot editor builds its second list from these; drop its copy so it rebuilds.
+  _gatewayModels = null;
+  syncModelMore();
+  applyModelDependentDials();
+  renderUtilitySelect();
+  return _modelChoices;
+}
+
+/** What this page knows about a stored model value. */
+function modelInfo(value) {
+  const v = String(value || '');
+  const i = v.indexOf('::');
+  const provId = i === -1 ? null : v.slice(0, i);
+  const modelId = i === -1 ? v : v.slice(i + 2);
+  const provs = (_modelChoices && _modelChoices.providers) || [];
+  const prov = provId ? provs.find(p => p.id === provId) : provs.find(p => p.isDefault);
+  const m = prov ? (prov.models || []).find(x => x.id === modelId) : null;
+  return {
+    value: v, qualified: !!provId, modelId,
+    providerId: prov ? prov.id : provId,
+    providerLabel: prov ? (prov.builtin ? t('prov.builtin.claude') : prov.label) : (provId || ''),
+    providerType: prov ? prov.type : null,
+    label: m ? (m.alias ? (_MODEL_ALIAS_LABEL[m.id] || m.id) : m.label) : (_MODEL_ALIAS_LABEL[modelId] || modelId),
+    caps: m ? m.caps : null,
+    alias: _MODEL_ALIASES.includes(modelId),
+    known: !!m,
+  };
+}
+
+/** The tmux Subscription engine runs the CLI's own login only (providers.effectiveEngine). */
+function subscriptionAllowedFor(value) {
+  const mi = modelInfo(value);
+  return !mi.qualified || mi.providerId === 'claude';
+}
+
+function _fmtTokens(n) {
+  if (!n) return '';
+  return n >= 1000000 ? (n / 1000000).toFixed(n % 1000000 ? 1 : 0) + 'M' : n >= 1000 ? Math.round(n / 1000) + 'K' : String(n);
+}
+
+function modelCapsText(caps) {
+  if (!caps) return '';
+  const out = [];
+  if (caps.tools !== false) out.push('🛠');
+  if (caps.vision) out.push('👁');
+  if (caps.reasoning) out.push('🧠');
+  if (caps.contextWindow) out.push(_fmtTokens(caps.contextWindow));
+  return out.join(' ');
+}
+
+/** "⋯" names the chosen model whenever it is not one of the four default-provider chips. */
+function syncModelMore() {
+  const mi = modelInfo(curModel);
+  const onChip = !mi.qualified && mi.alias;
+  for (const id of ['mdlMoreBtn', 'mobMdlMoreBtn']) {
+    const b = $i(id); if (!b) continue;
+    const on = !!curModel && !onChip;
+    b.classList.toggle('on', on);
+    const full = on ? `${mi.providerLabel ? mi.providerLabel + ' · ' : ''}${mi.label}` : t('model.more.tip');
+    b.textContent = on ? (mi.label.length > 22 ? mi.label.slice(0, 21) + '…' : mi.label) : (id === 'mobMdlMoreBtn' ? t('model.more') : '⋯');
+    b.title = full;
+    b.dataset.tip = full;
+  }
+}
+
+/** Engine and effort follow the model: no Subscription off Claude, no effort dial for a model that cannot reason. */
+function applyModelDependentDials() {
+  const subOk = subscriptionAllowedFor(curModel);
+  const tmuxOk = typeof _tmuxAvailable === 'undefined' ? true : !!_tmuxAvailable;
+  const sel = [
+    ...document.querySelectorAll('.tb-btn[data-v="subscription"]'),
+    ...document.querySelectorAll('.mob-chip[data-mob="engine"][data-v="subscription"]'),
+  ];
+  for (const btn of sel) {
+    const ok = tmuxOk && subOk;
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? '' : '0.4';
+    btn.style.cursor = ok ? '' : 'not-allowed';
+    btn.title = !tmuxOk ? t('tmux.required') : (!subOk ? t('engine.sub.only_claude') : t('engine.sub.title'));
+  }
+  if (!subOk && curEngine === 'subscription') {
+    curEngine = 'api';
+    syncBtn('engine', 'api');
+    if (typeof syncDefaultStar === 'function') syncDefaultStar();
+    toast(t('engine.switched_api'));
+  }
+  const es = $i('effortSel');
+  if (es) {
+    const mi = modelInfo(curModel);
+    const noReason = !!(mi.caps && mi.caps.reasoning === false);
+    es.disabled = noReason;
+    es.title = noReason ? t('effort.unsupported') : t('effort.title');
+  }
+}
+
+// ── The "⋯" picker ──────────────────────────────────────────────────────────
+let _mdlPickAnchor = null, _mdlPickKb = -1, _mdlPickRefs = [];
+
+function _ensureModelPicker() {
+  let el = $i('mdlPick');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'mdlPick';
+  el.className = 'mdl-pick';
+  el.setAttribute('role', 'dialog');
+  el.innerHTML = '<div class="mdl-pick-search"><input type="text" id="mdlPickInp" autocomplete="off" spellcheck="false"></div>'
+    + '<div class="mdl-pick-list" id="mdlPickList" role="listbox"></div>'
+    + '<div class="mdl-pick-foot"><button type="button" id="mdlPickManage"></button></div>';
+  document.body.appendChild(el);
+  const inp = el.querySelector('#mdlPickInp');
+  inp.addEventListener('input', () => { _mdlPickKb = -1; renderModelPicker(); });
+  inp.addEventListener('keydown', modelPickerKey);
+  el.querySelector('#mdlPickManage').addEventListener('click', () => { closeModelPicker(); openProvidersSection(); });
+  document.addEventListener('mousedown', (e) => {
+    const p = $i('mdlPick');
+    if (!p || !p.classList.contains('open')) return;
+    if (p.contains(e.target) || (_mdlPickAnchor && _mdlPickAnchor.contains(e.target))) return;
+    closeModelPicker();
+  }, true);
+  window.addEventListener('resize', () => { if ($i('mdlPick')?.classList.contains('open')) positionModelPicker(); });
+  return el;
+}
+
+function openModelPicker(anchor) {
+  const el = _ensureModelPicker();
+  if (el.classList.contains('open') && _mdlPickAnchor === anchor) { closeModelPicker(); return; }
+  _mdlPickAnchor = anchor || null;
+  const inp = $i('mdlPickInp');
+  inp.value = '';
+  inp.placeholder = t('model.pick.search');
+  $i('mdlPickManage').textContent = t('model.pick.manage');
+  _mdlPickKb = -1;
+  el.classList.add('open');
+  renderModelPicker();
+  positionModelPicker();
+  // Refresh in the background: a provider added in another tab shows up on the next open.
+  loadModelChoices().then(() => { if (el.classList.contains('open')) { renderModelPicker(); positionModelPicker(); } });
+  setTimeout(() => { try { inp.focus(); } catch {} }, 0);
+}
+
+function closeModelPicker() {
+  const el = $i('mdlPick');
+  if (el) el.classList.remove('open');
+  _mdlPickAnchor = null;
+}
+
+function positionModelPicker() {
+  const el = $i('mdlPick'); if (!el) return;
+  if (window.innerWidth <= 768 || !_mdlPickAnchor) { el.style.left = ''; el.style.top = ''; return; }
+  const r = _mdlPickAnchor.getBoundingClientRect();
+  const w = el.offsetWidth || 380, h = el.offsetHeight || 300;
+  let left = Math.min(r.left, window.innerWidth - w - 8);
+  let top = r.bottom + 6;
+  if (top + h > window.innerHeight - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
+  el.style.left = Math.max(8, left) + 'px';
+  el.style.top = Math.max(8, top) + 'px';
+}
+
+function renderModelPicker() {
+  const list = $i('mdlPickList'); if (!list) return;
+  const q = ($i('mdlPickInp')?.value || '').trim().toLowerCase();
+  const provs = (_modelChoices && _modelChoices.providers) || [];
+  const cur = modelInfo(curModel);
+  list.innerHTML = '';
+  _mdlPickRefs = [];
+  for (const p of provs) {
+    const pl = p.builtin ? t('prov.builtin.claude') : p.label;
+    const items = (p.models || []).filter(m => !q || pl.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || String(m.label || '').toLowerCase().includes(q));
+    if (!items.length) continue;
+    const g = document.createElement('div');
+    g.className = 'mdl-pick-grp';
+    g.innerHTML = `<span>${escH(pl)}</span>${p.isDefault ? `<span class="prov-badge">${escH(t('prov.default'))}</span>` : ''}`;
+    list.appendChild(g);
+    for (const m of items) {
+      const value = (m.alias && p.isDefault) ? m.id : m.ref;
+      const idx = _mdlPickRefs.push(value) - 1;
+      const on = cur.providerId === p.id && cur.modelId === m.id;
+      const noTools = m.caps && m.caps.tools === false;
+      const row = document.createElement('div');
+      row.className = 'mdl-pick-item' + (on ? ' on' : '') + (noTools ? ' dim' : '') + (idx === _mdlPickKb ? ' kb' : '');
+      row.setAttribute('role', 'option');
+      row.dataset.idx = String(idx);
+      const name = m.alias ? (_MODEL_ALIAS_LABEL[m.id] || m.id) : (m.label || m.id);
+      const sub = !m.alias && m.label && m.label !== m.id ? `<span class="sub">${escH(m.id)}</span>` : '';
+      row.innerHTML = `<span class="nm">${escH(name)}${sub}</span><span class="caps">${escH(modelCapsText(m.caps))}</span>`;
+      if (noTools) row.title = t('model.pick.notools');
+      row.addEventListener('click', () => pickModel(value));
+      list.appendChild(row);
+    }
+  }
+  if (!_mdlPickRefs.length) {
+    const e = document.createElement('div');
+    e.className = 'mdl-pick-empty';
+    e.textContent = t('model.pick.empty');
+    list.appendChild(e);
+  }
+}
+
+function modelPickerKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeModelPicker(); return; }
+  if (!_mdlPickRefs.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    _mdlPickKb = e.key === 'ArrowDown' ? Math.min(_mdlPickRefs.length - 1, _mdlPickKb + 1) : Math.max(0, _mdlPickKb - 1);
+    renderModelPicker();
+    $i('mdlPickList')?.querySelector('.mdl-pick-item.kb')?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    pickModel(_mdlPickRefs[_mdlPickKb >= 0 ? _mdlPickKb : 0]);
+  }
+}
+
+function pickModel(value) {
+  if (!value) return;
+  curModel = value;
+  closeModelPicker();
+  syncBtn('model', value);
+  if (typeof saveUIState === 'function') saveUIState();
+}
+
+// ── Sidebar section ─────────────────────────────────────────────────────────
+function provTypeLabel(type) {
+  return t('prov.type.' + type);
+}
+
+async function loadProviders() {
+  try {
+    const r = await fetch('/api/providers');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _providersData = await r.json();
+  } catch { return _providersData; }
+  renderProviders();
+  loadProviderUsage();
+  return _providersData;
+}
+
+function renderProviders() {
+  const el = $i('providersList'); if (!el) return;
+  const d = _providersData;
+  el.innerHTML = '';
+  if (!d) return;
+  const cnt = $i('providersCount'); if (cnt) cnt.textContent = d.providers.length;
+  const warn = $i('provBridgeWarn');
+  if (warn) warn.hidden = !(d.bridge && !d.bridge.running && d.providers.some(p => p.enabled && p.type === 'openai-compatible'));
+  for (const p of d.providers) {
+    const last = d.lastStatus && d.lastStatus[p.id];
+    const tested = p.lastTest ? (p.lastTest.ok ? 'ok' : 'err') : '';
+    // The most recent evidence wins: a failed live request after a green test is red.
+    const liveErr = last && last.status && last.status !== 'ok' && (!p.lastTest || last.ts * 1000 > p.lastTest.at);
+    const liveOk = last && last.status === 'ok' && (!p.lastTest || last.ts * 1000 > p.lastTest.at);
+    const dot = !p.enabled ? '' : (liveErr ? 'err' : (liveOk ? 'ok' : tested));
+    const dotTitle = liveErr ? (last.errorType || ('HTTP ' + last.httpStatus)) : (p.lastTest && p.lastTest.error) || (dot === 'ok' ? t('prov.status.ok') : t('prov.status.unknown'));
+    const nOn = p.models.filter(m => m.enabled).length + (p.aliases ? 4 : 0);
+    const name = p.builtin ? t('prov.builtin.claude') : p.label;
+    const isDef = p.id === d.defaultProviderId;
+    const div = document.createElement('div');
+    div.className = 'ci';
+    div.innerHTML = `
+      <div class="inf" style="flex:1;min-width:0">
+        <div class="nm" style="display:flex;gap:6px;align-items:center"><span class="prov-dot ${dot}" title="${escH(dotTitle)}"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(name)}</span>${isDef ? `<span class="prov-badge">${escH(t('prov.default'))}</span>` : ''}</div>
+        <div class="ds" style="font-size:11px">${escH(provTypeLabel(p.type))} · ${escH(t('prov.models.count').replace('{n}', nOn))}${p.enabled ? '' : ' · ' + escH(t('prov.disabled'))}</div>
+      </div>
+      ${!isDef && p.enabled ? `<button class="cfg prov-def-btn" title="${escH(t('prov.make_default'))}">★</button>` : ''}
+      <button class="cfg prov-test-btn" title="${escH(t('prov.test'))}" style="font-size:12px">▶</button>
+      <button class="cfg prov-edit-btn" title="${escH(t('prov.edit'))}">✏️</button>
+      ${p.builtin ? '' : `<button class="rm prov-del-btn" title="${escH(t('prov.del'))}">✕</button>`}`;
+    div.querySelector('.prov-def-btn')?.addEventListener('click', e => { e.stopPropagation(); setDefaultProvider(p.id); });
+    div.querySelector('.prov-test-btn').addEventListener('click', e => { e.stopPropagation(); testProvider(p.id, e.currentTarget); });
+    div.querySelector('.prov-edit-btn').addEventListener('click', e => { e.stopPropagation(); openProviderForm(p.id); });
+    div.querySelector('.prov-del-btn')?.addEventListener('click', e => { e.stopPropagation(); deleteProvider(p.id); });
+    el.appendChild(div);
+  }
+  renderUtilitySelect();
+}
+
+function renderUtilitySelect() {
+  const sel = $i('provUtilitySel'); if (!sel) return;
+  const cur = (_modelChoices && _modelChoices.utilityModel) || (_providersData && _providersData.utilityModel) || '';
+  sel.innerHTML = '';
+  const def = document.createElement('option');
+  def.value = ''; def.textContent = t('prov.utility.default');
+  sel.appendChild(def);
+  let found = !cur;
+  for (const p of (_modelChoices && _modelChoices.providers) || []) {
+    const og = document.createElement('optgroup');
+    og.label = p.builtin ? t('prov.builtin.claude') : p.label;
+    for (const m of p.models || []) {
+      const o = document.createElement('option');
+      o.value = m.ref;
+      o.textContent = m.alias ? (_MODEL_ALIAS_LABEL[m.id] || m.id) : (m.label || m.id);
+      if (m.ref === cur) found = true;
+      og.appendChild(o);
+    }
+    if (og.children.length) sel.appendChild(og);
+  }
+  if (!found) { const o = document.createElement('option'); o.value = cur; o.textContent = cur; sel.appendChild(o); }
+  sel.value = cur;
+}
+
+async function setUtilityModel(v) {
+  try {
+    const r = await fetch('/api/providers-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ utilityModel: v || '' }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    toast(t('prov.saved'));
+    loadModelChoices();
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+}
+
+async function loadProviderUsage() {
+  const el = $i('provUsage'); if (!el) return;
+  try {
+    const r = await fetch('/api/llm-usage?days=30');
+    const d = await r.json();
+    const by = {};
+    for (const row of d.rows || []) {
+      const k = row.provider_id || '?';
+      const a = by[k] || (by[k] = { requests: 0, input: 0, output: 0, cost: 0, priced: true, errors: 0 });
+      a.requests += row.requests || 0; a.input += row.input || 0; a.output += row.output || 0; a.errors += row.errors || 0;
+      if (row.cost == null) a.priced = false; else a.cost += row.cost;
+    }
+    const keys = Object.keys(by);
+    if (!keys.length) { el.innerHTML = `<div>${escH(t('prov.usage'))}</div><div style="margin-top:3px">${escH(t('prov.usage.none'))}</div>`; return; }
+    const label = (id) => { const p = _providersData && _providersData.providers.find(x => x.id === id); return p ? (p.builtin ? t('prov.builtin.claude') : p.label) : id; };
+    el.innerHTML = `<div>${escH(t('prov.usage'))}</div><table>${keys.map(k => {
+      const a = by[k];
+      const cost = a.priced ? `$${a.cost < 0.01 ? a.cost.toFixed(4) : a.cost.toFixed(2)}` : '—';
+      return `<tr><td>${escH(label(k))}</td><td class="n">${a.requests}</td><td class="n">${escH(_fmtTokens(a.input) || '0')}/${escH(_fmtTokens(a.output) || '0')}</td><td class="n">${escH(cost)}</td></tr>`;
+    }).join('')}</table>`;
+  } catch { el.innerHTML = ''; }
+}
+
+function openProvidersSection() {
+  // The left panel may itself be folded away; opening the section inside it would show nothing.
+  if ($i('leftPanel')?.classList.contains('collapsed')) toggle('leftPanel');
+  const body = $i('providersBody');
+  if (body && body.classList.contains('collapsed')) toggleSec('providers');
+  try { body?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch {}
+}
+
+async function setDefaultProvider(id) {
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(id)}/default`, { method: 'POST' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await loadProviders();
+    await loadModelChoices();
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+}
+
+function _provTestText(r) {
+  if (!r) return '';
+  if (r.ok) return r.noCatalog && !r.total ? t('prov.test.nocat') : t('prov.test.ok').replace('{n}', r.total || 0);
+  return t('prov.test.fail').replace('{err}', r.error || '?');
+}
+
+async function testProvider(id, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(id)}/test`, { method: 'POST' });
+    const d = await r.json();
+    toast(_provTestText(d), !d.ok);
+    await loadProviders();
+    loadModelChoices();
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+async function deleteProvider(id) {
+  const p = _providersData && _providersData.providers.find(x => x.id === id);
+  if (!p || p.builtin) return;
+  if (!confirm(t('prov.del.confirm').replace('{name}', p.label))) return;
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await loadProviders();
+    loadModelChoices();
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+}
+
+// ── Provider form ───────────────────────────────────────────────────────────
+function provTab(name) {
+  document.querySelectorAll('#provModal .prov-tab').forEach(b => b.classList.toggle('on', b.dataset.pt === name));
+  document.querySelectorAll('#provModal .prov-pane').forEach(p => { p.hidden = p.dataset.pp !== name; });
+  if (name === 'models') renderProviderModels();
+  if (name === 'roles') renderProviderRoles();
+}
+
+function _provSlug(label) {
+  const cyr = {'а':'a','б':'b','в':'v','г':'g','ґ':'g','д':'d','е':'e','є':'ye','ж':'zh','з':'z','и':'y','і':'i','ї':'yi','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ь':'','ю':'yu','я':'ya','ы':'y','э':'e','ё':'yo'};
+  const s = String(label || '').toLowerCase().replace(/[а-яґєіїё]/g, c => cyr[c] || '');
+  return s.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '') || 'provider';
+}
+
+function _provUniqueId(base) {
+  const taken = new Set(((_providersData && _providersData.providers) || []).map(p => p.id));
+  if (!taken.has(base)) return base;
+  for (let i = 2; i < 100; i++) { const c = `${base.slice(0, 28)}-${i}`; if (!taken.has(c)) return c; }
+  return `${base.slice(0, 20)}-${Date.now().toString(36)}`;
+}
+
+function provLabelChanged() {
+  if (_editingProviderId) return;
+  const idEl = $i('provId');
+  if (idEl.dataset.touched) return;
+  idEl.value = _provUniqueId(_provSlug($i('provLabel').value));
+}
+
+function provTypeChanged() {
+  const type = $i('provType').value;
+  const builtin = !!(_provEdit && _provEdit.builtin);
+  const oai = type === 'openai-compatible';
+  $i('provDialectRow').hidden = builtin || !oai;
+  $i('provAuthRow').hidden = builtin || oai;
+  $i('provAliasesRow').hidden = builtin || type !== 'anthropic-compatible';
+  $i('provStripRow').hidden = builtin || oai;
+  $i('provUrlHint').textContent = oai ? t('prov.f.url.hint.oai') : t('prov.f.url.hint.anth');
+}
+
+function _fillSelect(sel, items, value) {
+  sel.innerHTML = '';
+  for (const [v, label] of items) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); }
+  if (value !== undefined) sel.value = value;
+}
+
+function applyProviderPreset(presetId) {
+  const pr = ((_providersData && _providersData.presets) || []).find(p => p.id === presetId);
+  if (!pr) return;
+  if (!$i('provLabel').value.trim() || $i('provLabel').dataset.fromPreset) {
+    $i('provLabel').value = pr.label;
+    $i('provLabel').dataset.fromPreset = '1';
+  }
+  if (!$i('provId').dataset.touched) $i('provId').value = _provUniqueId(pr.id);
+  $i('provType').value = pr.type;
+  $i('provUrl').value = pr.baseUrl || '';
+  $i('provAuth').value = pr.authScheme || 'bearer';
+  $i('provDialect').value = pr.dialect || 'generic';
+  $i('provAliases').checked = !!pr.aliases;
+  provTypeChanged();
+  $i(pr.baseUrl ? 'provKey' : 'provUrl').focus();
+}
+
+function openProviderForm(id) {
+  const d = _providersData;
+  if (!d) { loadProviders().then(() => { if (_providersData) openProviderForm(id); }); return; }
+  const p = id ? d.providers.find(x => x.id === id) : null;
+  if (id && !p) return;
+  _editingProviderId = id || null;
+  _provEdit = p || null;
+  const builtin = !!(p && p.builtin);
+  _fillSelect($i('provPreset'), [['', t('prov.f.preset.ph')], ...d.presets.map(pr => [pr.id, pr.label])], '');
+  _fillSelect($i('provDialect'), d.dialects.map(x => [x, x]), (p && p.dialect) || 'generic');
+  $i('provPresetRow').hidden = !!p;
+  $i('provIdRow').hidden = !!p;
+  $i('provTypeRow').hidden = builtin;
+  $i('provUrlRow').hidden = builtin;
+  $i('provKeyRow').hidden = builtin;
+  $i('provLabel').value = p ? (builtin ? t('prov.builtin.claude') : p.label) : '';
+  $i('provLabel').disabled = builtin;
+  delete $i('provLabel').dataset.fromPreset;
+  $i('provId').value = p ? p.id : '';
+  delete $i('provId').dataset.touched;
+  $i('provType').value = p && !builtin ? p.type : 'anthropic-compatible';
+  $i('provUrl').value = p ? (p.baseUrl || '') : '';
+  $i('provKey').value = '';
+  $i('provKeyKeep').hidden = !(p && p.hasKey);
+  $i('provKeyClearRow').hidden = !(p && p.hasKey);
+  $i('provKeyClear').checked = false;
+  $i('provAuth').value = (p && p.authScheme) || 'bearer';
+  $i('provAliases').checked = !!(p && p.aliasesSetting);
+  $i('provEnabled').checked = !p || p.enabled;
+  $i('provHeaders').value = p ? Object.entries(p.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n') : '';
+  $i('provTimeout').value = p && p.options && p.options.timeoutMs ? Math.round(p.options.timeoutMs / 1000) : '';
+  $i('provConcurrency').value = p && p.options && p.options.maxConcurrency ? p.options.maxConcurrency : '';
+  $i('provStripBetas').checked = !!(p && p.options && p.options.stripBetas);
+  $i('provExtra').value = p && p.options && p.options.extraBody ? JSON.stringify(p.options.extraBody, null, 2) : '';
+  $i('provTestRes').textContent = ''; $i('provTestRes').className = 'prov-test-res';
+  $i('provModelSearch').value = '';
+  document.querySelectorAll('#provModal .prov-tab').forEach(b => {
+    b.hidden = builtin && (b.dataset.pt === 'roles' || b.dataset.pt === 'adv');
+  });
+  const title = $i('provModalTitle'), btn = $i('provSaveBtn');
+  const tk = p ? 'prov.modal.edit.title' : 'prov.modal.add.title', bk = p ? 'prov.save' : 'prov.create';
+  title.textContent = p ? `${t(tk)} · ${builtin ? t('prov.builtin.claude') : p.label}` : t(tk);
+  btn.textContent = t(bk); btn.setAttribute('data-i18n', bk);
+  provTypeChanged();
+  provTab('main');
+  openModalOverlay('provModal', { initialFocus: p ? '#provLabel' : '#provPreset', labelId: 'provModalTitle', onEscape: cancelProviderForm });
+}
+
+function cancelProviderForm() {
+  closeModalOverlay('provModal');
+  _editingProviderId = null;
+  _provEdit = null;
+}
+
+function _provParseHeaders(text) {
+  const out = {};
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const s = line.trim(); if (!s) continue;
+    const i = s.indexOf(':');
+    if (i <= 0) return null;
+    out[s.slice(0, i).trim()] = s.slice(i + 1).trim();
+  }
+  return out;
+}
+
+/** The form as an API body. Returns null (and says why) when a field cannot be read. */
+function _provFormBody() {
+  const builtin = !!(_provEdit && _provEdit.builtin);
+  if (builtin) return { enabled: $i('provEnabled').checked };
+  const headers = _provParseHeaders($i('provHeaders').value);
+  if (headers === null) { toast(t('prov.err.fields').replace('{fields}', t('prov.f.headers')), true); provTab('adv'); return null; }
+  let extraBody = null;
+  const ex = $i('provExtra').value.trim();
+  if (ex) {
+    try { extraBody = JSON.parse(ex); if (!extraBody || typeof extraBody !== 'object' || Array.isArray(extraBody)) throw new Error('object'); }
+    catch { toast(t('prov.err.fields').replace('{fields}', t('prov.f.extra')), true); provTab('adv'); return null; }
+  }
+  const type = $i('provType').value;
+  const tsec = parseInt($i('provTimeout').value, 10);
+  const conc = parseInt($i('provConcurrency').value, 10);
+  const body = {
+    label: $i('provLabel').value.trim(),
+    type,
+    baseUrl: $i('provUrl').value.trim(),
+    authScheme: $i('provAuth').value,
+    dialect: $i('provDialect').value,
+    aliases: type === 'anthropic-compatible' && $i('provAliases').checked,
+    enabled: $i('provEnabled').checked,
+    headers,
+    options: {
+      timeoutMs: tsec > 0 ? tsec * 1000 : null,
+      maxConcurrency: conc > 0 ? conc : null,
+      stripBetas: type !== 'openai-compatible' && $i('provStripBetas').checked,
+      extraBody,
+    },
+  };
+  const key = $i('provKey').value.trim();
+  if (key) body.apiKey = key;
+  if (!key && $i('provKeyClear').checked) body.clearApiKey = true;
+  return body;
+}
+
+async function testProviderForm() {
+  const body = _provFormBody(); if (!body) return;
+  const res = $i('provTestRes');
+  res.className = 'prov-test-res'; res.textContent = '…';
+  try {
+    let d;
+    if (_provEdit && _provEdit.builtin) {
+      d = await (await fetch(`/api/providers/${encodeURIComponent(_provEdit.id)}/test`, { method: 'POST' })).json();
+    } else {
+      d = await (await fetch('/api/providers-test', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, id: _editingProviderId || undefined }) })).json();
+    }
+    res.className = 'prov-test-res ' + (d.ok ? 'ok' : 'err');
+    res.textContent = _provTestText(d) + (d.sample && d.sample.length ? ` · ${d.sample.join(', ')}` : '');
+  } catch (e) { res.className = 'prov-test-res err'; res.textContent = t('prov.test.fail').replace('{err}', e.message); }
+}
+
+async function saveProvider() {
+  const body = _provFormBody(); if (!body) return;
+  const creating = !_editingProviderId;
+  if (creating) {
+    body.id = $i('provId').value.trim();
+    if (!_PROV_ID_RE.test(body.id)) { toast(t('prov.err.fields').replace('{fields}', t('prov.f.id')), true); return; }
+  }
+  const btn = $i('provSaveBtn'); btn.disabled = true;
+  try {
+    const r = await fetch(creating ? '/api/providers' : `/api/providers/${encodeURIComponent(_editingProviderId)}`, {
+      method: creating ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 409) { toast(t('prov.err.exists'), true); return; }
+    if (!r.ok) { toast(t('prov.err.fields').replace('{fields}', (d.fields || [d.error || r.status]).join(', ')), true); return; }
+    toast(t('prov.saved'));
+    await loadProviders();
+    await loadModelChoices();
+    if (creating) {
+      // Straight on to the models the catalogue brought in — that is the next thing to decide.
+      openProviderForm(body.id);
+      if (d.refresh) { const res = $i('provTestRes'); res.className = 'prov-test-res ' + (d.refresh.ok ? 'ok' : 'err'); res.textContent = _provTestText(d.refresh); }
+      provTab('models');
+    } else {
+      cancelProviderForm();
+    }
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+  finally { btn.disabled = false; }
+}
+
+// ── Models tab ──────────────────────────────────────────────────────────────
+const PROV_MODELS_SHOWN = 200;
+let _provModelEditOpen = new Set();
+
+function _provModelsVisible() {
+  const p = _provEdit; if (!p) return [];
+  const q = ($i('provModelSearch')?.value || '').trim().toLowerCase();
+  return p.models.filter(m => !q || m.id.toLowerCase().includes(q) || String(m.label || '').toLowerCase().includes(q));
+}
+
+function _capSel(name, v) {
+  const val = v === true ? '1' : v === false ? '0' : '';
+  return `<label>${escH(t('prov.cap.' + name))} <select data-cap="${name}"><option value=""${val === '' ? ' selected' : ''}>?</option><option value="1"${val === '1' ? ' selected' : ''}>✓</option><option value="0"${val === '0' ? ' selected' : ''}>✗</option></select></label>`;
+}
+
+function renderProviderModels() {
+  const note = $i('provModelsNote'), box = $i('provModelsBox'), list = $i('provModelsList');
+  if (!list) return;
+  const p = _provEdit;
+  if (!p || p.builtin) {
+    note.hidden = false;
+    note.textContent = !p ? t('prov.models.save_first') : t('prov.models.builtin');
+    box.hidden = true;
+    return;
+  }
+  note.hidden = true; box.hidden = false;
+  const vis = _provModelsVisible();
+  const on = p.models.filter(m => m.enabled).length;
+  $i('provModelsCount').textContent = t('prov.models.enabled_n').replace('{on}', on).replace('{all}', p.models.length);
+  list.innerHTML = '';
+  if (!p.models.length) {
+    const e = document.createElement('div'); e.className = 'mdl-pick-empty'; e.textContent = t('prov.models.empty'); list.appendChild(e);
+    return;
+  }
+  for (const m of vis.slice(0, PROV_MODELS_SHOWN)) {
+    const row = document.createElement('div');
+    row.className = 'prov-model';
+    const c = m.caps || {};
+    const capsBits = [modelCapsText(c)];
+    if (c.maxOutput) capsBits.push(`${t('prov.cap.out')} ${_fmtTokens(c.maxOutput)}`);
+    if (m.pricing) capsBits.push(`$${m.pricing.in ?? '?'}/${m.pricing.out ?? '?'}`);
+    let ver = '';
+    if (m.verified) {
+      const v = m.verified;
+      ver = ` · <span class="${v.tools && v.text ? 'pm-ok' : 'pm-bad'}">${escH(t('prov.probe.res').replace('{tools}', v.tools ? '✓' : '✗').replace('{text}', v.text ? '✓' : '✗').replace('{ms}', v.latencyMs || '?'))}</span>`;
+    }
+    const open = _provModelEditOpen.has(m.id);
+    row.innerHTML = `
+      <div class="pm-top">
+        <input type="checkbox" class="pm-on" ${m.enabled ? 'checked' : ''}>
+        <span class="pm-id" title="${escH(m.id)}">${escH(m.label || m.id)}${m.label && m.label !== m.id ? `<code>${escH(m.id)}</code>` : ''}</span>
+        <button type="button" class="pm-btn pm-probe" title="${escH(t('prov.models.probe'))}">▶</button>
+        <button type="button" class="pm-btn pm-caps-btn" title="${escH(t('prov.models.caps'))}">✎</button>
+        ${m.source === 'manual' ? `<button type="button" class="pm-btn pm-del" title="${escH(t('prov.del'))}">✕</button>` : ''}
+      </div>
+      <div class="pm-caps">${escH(capsBits.filter(Boolean).join(' · ') || '—')}${ver}</div>
+      <div class="pm-edit" ${open ? '' : 'hidden'}>
+        ${_capSel('tools', c.tools)}${_capSel('vision', c.vision)}${_capSel('reasoning', c.reasoning)}
+        <label>${escH(t('prov.cap.ctx'))} <input type="number" min="1000" step="1000" data-num="contextWindow" value="${c.contextWindow || ''}"></label>
+        <label>${escH(t('prov.cap.out'))} <input type="number" min="256" step="256" data-num="maxOutput" value="${c.maxOutput || ''}"></label>
+        <label>${escH(t('prov.cap.price'))} <input type="number" min="0" step="0.01" data-price="in" value="${m.pricing && m.pricing.in != null ? m.pricing.in : ''}"> / <input type="number" min="0" step="0.01" data-price="out" value="${m.pricing && m.pricing.out != null ? m.pricing.out : ''}"></label>
+        <button type="button" class="bg pm-save">${escH(t('prov.save'))}</button>
+      </div>`;
+    row.querySelector('.pm-on').addEventListener('change', e => updateProviderModel(m.id, { enabled: e.target.checked }));
+    row.querySelector('.pm-probe').addEventListener('click', e => probeProviderModel(m.id, e.currentTarget));
+    row.querySelector('.pm-caps-btn').addEventListener('click', () => {
+      if (_provModelEditOpen.has(m.id)) _provModelEditOpen.delete(m.id); else _provModelEditOpen.add(m.id);
+      renderProviderModels();
+    });
+    row.querySelector('.pm-del')?.addEventListener('click', () => removeProviderModel(m.id));
+    row.querySelector('.pm-save')?.addEventListener('click', () => {
+      const caps = {};
+      row.querySelectorAll('select[data-cap]').forEach(s => { if (s.value !== '') caps[s.dataset.cap] = s.value === '1'; });
+      row.querySelectorAll('input[data-num]').forEach(i => { const n = parseInt(i.value, 10); if (n > 0) caps[i.dataset.num] = n; });
+      const pin = parseFloat(row.querySelector('input[data-price="in"]').value), pout = parseFloat(row.querySelector('input[data-price="out"]').value);
+      const pricing = (isFinite(pin) || isFinite(pout)) ? { ...(isFinite(pin) ? { in: pin } : {}), ...(isFinite(pout) ? { out: pout } : {}) } : null;
+      _provModelEditOpen.delete(m.id);
+      updateProviderModel(m.id, { caps, pricing });
+    });
+    list.appendChild(row);
+  }
+  if (vis.length > PROV_MODELS_SHOWN) {
+    const more = document.createElement('div'); more.className = 'mdl-pick-empty';
+    more.textContent = t('prov.models.more').replace('{n}', vis.length - PROV_MODELS_SHOWN);
+    list.appendChild(more);
+  }
+}
+
+async function _provReloadEdit() {
+  await loadProviders();
+  if (_editingProviderId) _provEdit = (_providersData.providers || []).find(x => x.id === _editingProviderId) || _provEdit;
+  renderProviderModels();
+  loadModelChoices();
+}
+
+async function updateProviderModel(modelId, patch) {
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(_editingProviderId)}/models`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId, ...patch }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+  await _provReloadEdit();
+}
+
+async function bulkProviderModels(enabled) {
+  const ids = _provModelsVisible().map(m => m.id);
+  if (!ids.length) return;
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(_editingProviderId)}/models/bulk`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelIds: ids, enabled }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+  await _provReloadEdit();
+}
+
+async function refreshProviderModels() {
+  const res = $i('provTestRes');
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(_editingProviderId)}/models/refresh`, { method: 'POST' });
+    const d = await r.json();
+    toast(_provTestText(d), !d.ok);
+    if (res) { res.className = 'prov-test-res ' + (d.ok ? 'ok' : 'err'); res.textContent = _provTestText(d); }
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+  await _provReloadEdit();
+}
+
+async function addProviderModel() {
+  const inp = $i('provModelAddId');
+  const modelId = inp.value.trim();
+  if (!modelId) return;
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(_editingProviderId)}/models`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    inp.value = '';
+  } catch (e) { toast(t('prov.err.fields').replace('{fields}', t('prov.models.add.ph')), true); }
+  await _provReloadEdit();
+}
+
+async function removeProviderModel(modelId) {
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(_editingProviderId)}/models?modelId=${encodeURIComponent(modelId)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+  await _provReloadEdit();
+}
+
+async function probeProviderModel(modelId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(_editingProviderId)}/models/probe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId }) });
+    const d = await r.json();
+    if (d.verified) {
+      const v = d.verified;
+      toast(t('prov.probe.res').replace('{tools}', v.tools ? '✓' : '✗').replace('{text}', v.text ? '✓' : '✗').replace('{ms}', v.latencyMs || '?') + (v.error ? ` · ${v.error}` : ''), !(v.tools && v.text));
+    } else {
+      toast(t('prov.test.fail').replace('{err}', d.error === 'bridge_down' ? t('prov.bridge.down') : (d.error || '?')), true);
+    }
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+  await _provReloadEdit();
+}
+
+// ── Roles tab ───────────────────────────────────────────────────────────────
+function renderProviderRoles() {
+  const p = _provEdit;
+  const opts = [['', t('prov.role.none')], ...((p && p.models) || []).filter(m => m.enabled).map(m => [m.id, m.label && m.label !== m.id ? `${m.label} (${m.id})` : m.id])];
+  const roles = (p && p.roles) || {};
+  for (const [id, key] of [['provRoleMain', 'main'], ['provRoleFast', 'fast'], ['provRoleStrong', 'strong'], ['provRoleSubagent', 'subagent']]) {
+    const sel = $i(id); if (!sel) continue;
+    const items = opts.slice();
+    if (roles[key] && !items.some(o => o[0] === roles[key])) items.push([roles[key], roles[key]]);
+    _fillSelect(sel, items, roles[key] || '');
+    sel.disabled = !p;
+    sel.onchange = () => saveProviderRoles();
+  }
+}
+
+async function saveProviderRoles() {
+  if (!_editingProviderId) return;
+  const roles = {
+    main: $i('provRoleMain').value, fast: $i('provRoleFast').value,
+    strong: $i('provRoleStrong').value, subagent: $i('provRoleSubagent').value,
+  };
+  try {
+    const r = await fetch(`/api/providers/${encodeURIComponent(_editingProviderId)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roles }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    toast(t('prov.saved'));
+  } catch (e) { toast(t('prov.test.fail').replace('{err}', e.message), true); }
+  await _provReloadEdit();
+}
 
 function renderAgents() {
   // ONE row per agent. An agent is a single config record with two independent
@@ -17015,7 +18607,7 @@ const LS_KEY = 'cc_ui_state';
 const SIDEBAR_SECTIONS = {
   activity: 'activityBody', proj: 'projBody', sshHosts: 'sshHostsBody', hist: 'histBody',
   mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', bots: 'botsBody',
-  agents: 'agentsBody', tunnel: 'tunnelBody', tg: 'tgBody',
+  providers: 'providersBody', agents: 'agentsBody', tunnel: 'tunnelBody', tg: 'tgBody',
 };
 function sidebarSectionsState() {
   const out = {};
@@ -17245,7 +18837,7 @@ function updateMobSubtitle() {
   if (!el) return;
   const modeKey = { auto: 'mode.auto', planning: 'mode.plan', task: 'mode.task' }[curMode];
   const modeLabel = modeKey ? t(modeKey) : curMode;
-  const modelLabel = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' }[curModel] || curModel;
+  const modelLabel = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' }[curModel] || modelInfo(curModel).label;
   el.textContent = modeLabel + ' · ' + modelLabel;
 }
 function updateMobStatus(status) {
@@ -17914,6 +19506,7 @@ fetch('/api/lang').then(r => r.json()).then(d => {
 restoreUIState();
 _rlRestore(); // Restore rate limit badge from localStorage if still active
 _loadExternalAgents().then(() => renderAgents()); // Load agent labels + render sidebar
+loadProviders(); loadModelChoices(); // Providers section + every model picker's choices
 _restoreDelegationState(); // Restore active delegation panel if server has one
 {
   const btn = $i('autoSkillsBtn');
