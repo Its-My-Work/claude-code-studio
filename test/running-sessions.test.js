@@ -20,6 +20,9 @@ const fs = require('fs');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+// Runs here go through the fake headless `claude`: pin an API provider as the default
+// (see _api-provider-env.js — otherwise CI's tmux would take them to the Subscription engine).
+const API_PROVIDER_ENV = require('./_api-provider-env');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
 
@@ -58,7 +61,7 @@ let srv = null, srvExited = false, srvLog = '';
 function startServer() {
   // CCS_DESKTOP=1 bypasses auth and binds 127.0.0.1 only; APP_DIR redirects data/ to the temp dir.
   srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR: APP_DIR, HOME: HOME_DIR },
+    env: { ...process.env, ...API_PROVIDER_ENV, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR: APP_DIR, HOME: HOME_DIR },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   srv.on('exit', () => { srvExited = true; });

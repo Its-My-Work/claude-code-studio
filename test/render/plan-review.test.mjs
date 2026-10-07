@@ -4,7 +4,7 @@ import { loadFn } from './_load.mjs';
 
 // The plan-review card (planner's plan/ package -> Kanban approval). planReviewCardHtml is pure
 // (given the global selection state it reads); the DOM-driving functions around it are checked by
-// wiring assertions against the source, same as bot-engine.test.mjs does for that editor.
+// wiring assertions against the source, same as bot-model.test.mjs does for that editor.
 const html = readFileSync(new URL('../../public/index.html', import.meta.url), 'utf8');
 
 const T = (id, over = {}) => ({ id, title: `Task ${id}`, bot: 'kolya-prohramist', depends_on: [], covers: [], model: null, max_turns: null, file: `plan/tasks/${id}.md`, description: 'd', context: 'c', errors: [], warnings: [], existingTaskId: null, ...over });

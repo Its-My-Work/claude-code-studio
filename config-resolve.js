@@ -81,9 +81,8 @@ function isSecretKey(key, def) {
  */
 const SETTINGS = [
   // ── AI models & engine ────────────────────────────────────────────────────
-  { key: 'defaultEngine', section: 'engine', backing: 'config', merge: 'merged', path: 'defaultEngine',
-    type: 'enum', choices: ['api', 'subscription'], def: 'api', falsyFallsThrough: true,
-    src: 'server.js:loadMergedConfig' },
+  // No `defaultEngine` row any more: the engine follows the chosen model's provider
+  // (providers.engineForModel), so there is nothing left to default.
   { key: 'ANTHROPIC_BASE_URL', section: 'engine', backing: 'env', type: 'string', def: '', restart: true,
     src: '.env.example / claude-cli.js env passthrough' },
 

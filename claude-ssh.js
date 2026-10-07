@@ -346,7 +346,10 @@ class ClaudeSSH {
             const cleanName = name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 100);
             if (cleanName) args.push('--name', cleanName);
           }
-          if (model) args.push('--model', MODEL_MAP[model] || model);
+          // A provider ref ("deepseek::deepseek-chat", providers.js) means nothing to the
+          // REMOTE claude: it runs on that host's own login/config, so it gets the bare id.
+          const bare = model && String(model).includes('::') ? String(model).slice(String(model).indexOf('::') + 2) : model;
+          if (bare) args.push('--model', MODEL_MAP[bare] || bare);
           if (maxTurns) args.push('--max-turns', String(maxTurns));
           if (typeof effort === 'string') {
             const e = effort.trim().toLowerCase();

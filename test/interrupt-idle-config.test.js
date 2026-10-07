@@ -86,7 +86,7 @@ const SQLVAL_SRC = block('function sqlVal(v) {', 'sqlVal');
 
 // A fully configured session — the kind a user actually loses.
 const CONFIGURED = {
-  id: 'S1', model: 'opus', mode: 'plan', agent_mode: 'multi',
+  id: 'S1', model: 'claude::opus', mode: 'plan', agent_mode: 'multi',
   workdir: '/srv/some/project', active_skills: '["research","writing"]',
   active_mcp: '["context7","tavily"]', run_engine: 'subscription',
 };
@@ -128,7 +128,10 @@ function runInterrupt(msg, { busy = false } = {}) {
 // with defaults and written straight back onto the row.
 const DESTRUCTURE = pick(/const \{ text:userMessage, attachments=\[\][\s\S]*?\} = msg;/, 'processChat destructure');
 const WRITEBACK = pick(/try \{ stmts\.updateConfig\.run\(JSON\.stringify\(mIds\)[\s\S]*?catch \(e\) \{[\s\S]*?throw e; \}/, 'updateConfig call');
-const ENGINE_WRITE = pick(/db\.prepare\(`UPDATE sessions SET run_engine=\? WHERE id=\?`\)\.run\(engine === 'subscription' \? 'subscription' : 'api', localSessionId\);/, 'run_engine write');
+// There is no engine dial: the engine is derived from the model (runEngineFor) and the
+// derived value is what gets recorded on the row.
+const ENGINE_DERIVE = pick(/const engine = runEngineFor\(model\);/, 'engine derivation');
+const ENGINE_WRITE = pick(/db\.prepare\(`UPDATE sessions SET run_engine=\? WHERE id=\?`\)\.run\(engine, localSessionId\);/, 'run_engine write');
 
 // Feed one dispatched message through processChat's own config-persisting path.
 function persistConfigFor(dispatchedMsg) {
@@ -141,11 +144,14 @@ function persistConfigFor(dispatchedMsg) {
   const sandbox = {
     msg: dispatchedMsg, stmts, db, JSON, Buffer, Object, Array, Number,
     localSessionId: 'S1', log: { error() {} }, chatDefaults, _cd,
+    // server.js runEngineFor with a gateway as the default provider: `claude::` is the CLI login.
+    runEngineFor: (m) => (/^claude::/.test(String(m || '')) ? 'subscription' : 'api'),
   };
   vm.createContext(sandbox);
   vm.runInContext(`
     ${SQLVAL_SRC}
     ${DESTRUCTURE}
+    ${ENGINE_DERIVE}
     const effectiveSkills = sIds;   // autoSkill off: processChat uses sIds verbatim
     ${WRITEBACK}
     ${ENGINE_WRITE}
@@ -164,27 +170,25 @@ console.log('an idle interrupt must leave the session row exactly as it found it
 
   persistConfigFor(dispatched[0]);
   const after = snapshot('S1');
-  const drop = ({ run_engine, ...rest }) => rest;   // run_engine: see the note below
   // The whole bug in one line. Old behaviour produced
   //   { model:'sonnet', mode:'auto', agent_mode:'single', workdir:null,
   //     active_skills:'[]', active_mcp:'[]' }
-  check('the session row is byte-identical after the turn persists its config', drop(after), drop(before));
+  // run_engine included: it follows the model now, and the model is replayed.
+  check('the session row is byte-identical after the turn persists its config', after, before);
   // ...and the same assertions field by field, so a failure names what was lost.
-  check('model survived', after.model, 'opus');
+  check('model survived', after.model, 'claude::opus');
   check('mode survived', after.mode, 'plan');
   check('agent_mode survived', after.agent_mode, 'multi');
   check('workdir survived — the turn did NOT silently move to the global WORKDIR', after.workdir, '/srv/some/project');
   check('skills survived', after.active_skills, '["research","writing"]');
   check('MCP servers survived', after.active_mcp, '["context7","tavily"]');
 
-  // run_engine is the ONE field the rebuild deliberately does NOT replay, and the assertion
-  // is here so that stays a decision rather than an oversight. The SPA sends `engine: 'api'`
-  // on every chat (Subscription is a per-turn toggle), so feeding a stored 'subscription'
-  // back in would route this turn through the tmux engine behind the user's back. The
-  // documented cost: an idle interrupt on a subscription session leaves the row on 'api'.
+  // The engine is not replayed as a field — it has no dial any more. It follows the model,
+  // which IS replayed, so a subscription chat stays on the subscription after the interrupt
+  // (the old trade-off, "an idle interrupt resets the row to api", is gone).
   check('engine is deliberately omitted from the rebuilt turn', 'engine' in dispatched[0], false);
-  check('...which resets run_engine to api — the accepted trade-off, not a leftover wipe',
-    after.run_engine, 'api');
+  check('...and run_engine survives anyway, because it follows the replayed model',
+    after.run_engine, 'subscription');
   check('...and the omission is documented where the next reader will look',
     /Engine deliberately omitted/.test(INTERRUPT), true);
 }
@@ -262,7 +266,7 @@ console.log('\nthe idle branch is entered only when the session really is idle:'
   check('...with the user text', busy.pending?.[0].content, 'wait, use TypeScript');
   check('...and confirms to the client', busy.sent.some(f => f.type === 'interrupt_queued'), true);
   check('the busy path left the config alone too — including the engine', snapshot('S1'), {
-    model: 'opus', mode: 'plan', agent_mode: 'multi', workdir: '/srv/some/project',
+    model: 'claude::opus', mode: 'plan', agent_mode: 'multi', workdir: '/srv/some/project',
     active_skills: '["research","writing"]', active_mcp: '["context7","tavily"]', run_engine: 'subscription' });
   // hasRunningTask is load-bearing: a Kanban worker is NOT in activeTasks, so without it a
   // clarification sent to a running task becomes a fresh turn on the same session.

@@ -31,6 +31,7 @@ const crypto = require('node:crypto');
 
 const { findClaudeBin } = require('./claude-cli');
 const { agentsMdPreamble } = require('./agents-md');
+const { PROVIDER_ENV_VARS } = require('./providers');
 // ONE definition of the socket name, imported — never a second copy of the string.
 const { TMUX_SOCKET } = require('./terminal-bridge');
 
@@ -279,8 +280,19 @@ function spawnScriptDir() {
 
 // Full `claude` invocation for the interactive engine. Pure — the prompt is inline
 // here on purpose: this string becomes the script body, i.e. the child's argv.
-function buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath }) {
-  let cmd = `env -u CLAUDECODE ${shq(claudeBin)} ${idFlag} --model ${shq(modelAlias)} --dangerously-skip-permissions`;
+//
+// Every provider variable is unset HERE, in the script, and not only in the spawn env
+// below: tmux builds a pane's environment from its SERVER's global environment, not
+// from the client that ran `new-session`. The ccstudio tmux server is often started
+// first by terminal-bridge.js, which keeps the server's ANTHROPIC_* — so deleting them
+// from our spawn env alone could still hand this pane the gateway token, and `claude`
+// ranks a token above the stored OAuth login (the Subscription engine's whole point).
+const PANE_UNSET_ENV = ['CLAUDECODE', ...PROVIDER_ENV_VARS];
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+function buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath, effort }) {
+  const unset = PANE_UNSET_ENV.map(v => `-u ${v}`).join(' ');
+  let cmd = `env ${unset} ${shq(claudeBin)} ${idFlag} --model ${shq(modelAlias)} --dangerously-skip-permissions`;
+  if (EFFORTS.includes(effort)) cmd += ` --effort ${effort}`;
   if (sp) cmd += ` --append-system-prompt ${shq(sp)}`;
   if (mcpPath) cmd += ` --mcp-config ${shq(mcpPath)}`;
   return cmd;
@@ -353,7 +365,7 @@ function killInteractiveTmux(localSessionId) {
 // mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId; ignores the rest.
 // Returns { cid, completed, resultMeta, fullText, fullThinking, toolEvents }.
 async function runInteractiveSingle(params) {
-  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, markInterruptsDelivered, requeueInterrupts, fanout, agent } = params;
+  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, markInterruptsDelivered, requeueInterrupts, fanout, agent, effort } = params;
   const start = Date.now();
   // `agent` tags every frame with which bot produced it — set only when this call is one
   // seat in a bots room/multi turn, not a plain single-agent chat. Without it the UI has
@@ -400,11 +412,18 @@ async function runInteractiveSingle(params) {
     // project without AGENTS.md keeps its previous hash and does NOT respawn.
     const agentsMd = agentsMdPreamble(workdir || process.cwd());
     const sp = [(mp + (systemPrompt || '')).trim(), agentsMd].filter(Boolean).join('\n\n');
-    const modelAlias = /^[a-zA-Z0-9._-]+$/.test(String(model || '')) ? model : 'sonnet';
+    // A ref to the CLI-login provider ("claude::opus", providers.js) is a plain Claude
+    // model here. The router never sends another provider's ref to this engine
+    // (providers.effectiveEngine); if one slips through, it still becomes `sonnet`.
+    const bareModel = String(model || '').startsWith('claude::') ? String(model).slice('claude::'.length) : String(model || '');
+    const modelAlias = /^[a-zA-Z0-9._-]+$/.test(bareModel) ? bareModel : 'sonnet';
+    // Effort used to be dropped on this engine; it is a spawn flag, so it joins cfgHash
+    // and changing it respawns the pane with --resume like a model change does.
+    const effortFlag = EFFORTS.includes(effort) ? effort : '';
     const mcpPath = mcpConfigPath(mcpServers);
     let mcpJson = '';
     if (mcpPath) { try { mcpJson = fs.readFileSync(mcpPath, 'utf8'); } catch {} }
-    const cfgHash = crypto.createHash('sha256').update(JSON.stringify([sp, mcpJson, modelAlias])).digest('hex').slice(0, 16);
+    const cfgHash = crypto.createHash('sha256').update(JSON.stringify(effortFlag ? [sp, mcpJson, modelAlias, effortFlag] : [sp, mcpJson, modelAlias])).digest('hex').slice(0, 16);
 
     // ── Spawn (or reuse) the tmux session ──────────────────────────────────
     // tmux alive but no recorded claude session id: without a cid we cannot
@@ -425,7 +444,7 @@ async function runInteractiveSingle(params) {
       const idFlag = resuming ? `--resume ${shq(cid)}` : `--session-id ${shq(cid)}`;
 
       const claudeBin = findClaudeBin();
-      const innerCmd = buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath });
+      const innerCmd = buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath, effort: effortFlag });
 
       const env = utf8Env();
       delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
@@ -437,9 +456,7 @@ async function runInteractiveSingle(params) {
       // routes every "Subscription" turn through that token instead — same
       // symptom as no subscription selection existing at all, just with an extra
       // layer of "why is this billing wrong" on top.
-      delete env.ANTHROPIC_API_KEY;
-      delete env.ANTHROPIC_AUTH_TOKEN;
-      delete env.ANTHROPIC_BASE_URL;
+      for (const v of PROVIDER_ENV_VARS) delete env[v];
       // stderr is PIPED, not ignored: `command too long` was the whole content of
       // issue #96 and it used to be discarded, leaving only the generic line below.
       let tmuxErr = '';

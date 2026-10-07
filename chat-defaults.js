@@ -19,6 +19,8 @@
 // the validation can be unit-tested without booting anything.
 'use strict';
 
+const { isQualifiedRef } = require('./providers');
+
 /** The five dials, in the order the toolbar shows them. */
 const KEYS = ['mode', 'agent', 'model', 'effort', 'turns'];
 
@@ -70,6 +72,10 @@ function coerce(key, raw) {
     return { ok: true, value: Math.trunc(n) };
   }
   const v = String(raw);
+  // Beyond the four aliases a model may be any provider ref ("deepseek::deepseek-chat",
+  // providers.js). Only the SHAPE is checked here — this module stays pure; whether the
+  // provider still exists is the resolver's business (it falls back and says so).
+  if (key === 'model' && isQualifiedRef(v)) return { ok: true, value: v };
   if (!CHOICES[key].includes(v)) return { ok: false, error: 'invalid_choice' };
   return { ok: true, value: v };
 }

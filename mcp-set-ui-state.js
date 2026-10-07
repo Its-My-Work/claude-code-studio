@@ -44,8 +44,7 @@ const SET_UI_STATE_TOOL = {
       },
       model: {
         type: 'string',
-        enum: ['haiku', 'sonnet', 'opus'],
-        description: 'Model to switch to in the UI',
+        description: 'Model to switch to in the UI: a Claude alias (haiku, sonnet, opus, fable) or a provider ref "provider::model" configured in this studio',
       },
       agent: {
         type: 'string',
@@ -137,14 +136,18 @@ async function handleMessage(msg) {
 
       // Validate enum values
       const validModes = ['auto', 'planning', 'task'];
-      const validModels = ['haiku', 'sonnet', 'opus'];
+      // `fable` was missing from this list while every other model picker offered it.
+      // A provider ref ("deepseek::deepseek-chat") is checked for SHAPE only; the UI
+      // ignores a model it does not offer.
+      const validModels = ['haiku', 'sonnet', 'opus', 'fable'];
+      const MODEL_REF_RE = /^[a-z0-9][a-z0-9_-]{0,31}::[A-Za-z0-9._:/@+-]{1,160}$/;
       const validAgents = ['single', 'multi'];
 
       if (mode && !validModes.includes(mode)) {
         sendError(id, -32602, `Invalid mode: ${mode}. Valid values: ${validModes.join(', ')}`);
         return;
       }
-      if (model && !validModels.includes(model)) {
+      if (model && !validModels.includes(model) && !MODEL_REF_RE.test(model)) {
         sendError(id, -32602, `Invalid model: ${model}. Valid values: ${validModels.join(', ')}`);
         return;
       }

@@ -6,7 +6,7 @@ const {
   parseMentions, renderRoster, languageClause, buildBotSystemPrompt, planDispatch, EVIDENCE_CLAUSE, ROSTER_MAX,
   seatingPrompt, parseSeating, shouldReseat, SEATING_SCHEMA, SEATING_REPICK_MIN_CHARS,
   roomTurnCap, renderTranscript, buildRoomHistory, currentTurnAttachments, closingRules, ROOM_BOT_MIN_TURNS,
-  normalizeBotEngine, botEngine, botModel, seatPlanner, PLANNER_HANDLE, PLAN_INTENT_RE,
+  normalizeBotEngine, botModel, seatPlanner, PLANNER_HANDLE, PLAN_INTENT_RE,
   stripReportFormat, normalizeRoomTools, roomToolScope, ROOM_TOOL_SCOPES,
 } = require('../bots');
 
@@ -915,18 +915,14 @@ check('empty / null mean "as the chat"', [normalizeBotEngine(''), normalizeBotEn
 check('an absent field stays absent (a partial edit keeps the stored value)', normalizeBotEngine(undefined), undefined);
 check('api and subscription are kept', [normalizeBotEngine('api'), normalizeBotEngine('subscription')], ['api', 'subscription']);
 check('anything else is invalid', [normalizeBotEngine('codex'), normalizeBotEngine('SUBSCRIPTION'), normalizeBotEngine(1)], [false, false, false]);
-const ON = { enabled: true, tmux: true };
-check('a bot with no choice follows the chat', [botEngine({}, 'api', ON), botEngine({ run_engine: null }, 'subscription', ON)], ['api', 'subscription']);
-check('the planner on subscription stays on it in an api chat', botEngine({ run_engine: 'subscription' }, 'api', ON), 'subscription');
-check('a bot pinned to api stays on api in a subscription chat', botEngine({ run_engine: 'api' }, 'subscription', ON), 'api');
-check('the override is ignored where the caller did not enable it (Telegram)', botEngine({ run_engine: 'subscription' }, 'api', { enabled: false, tmux: true }), 'api');
-check('the override is ignored by default', botEngine({ run_engine: 'subscription' }, 'api'), 'api');
-check('without tmux a subscription bot follows the chat instead of failing every turn', botEngine({ run_engine: 'subscription' }, 'api', { enabled: true, tmux: false }), 'api');
-check('an unknown stored value follows the chat', botEngine({ run_engine: 'codex' }, 'subscription', ON), 'subscription');
-check('an unknown chat engine counts as api', botEngine({}, undefined, ON), 'api');
 {
   const plan = planBotImport({ incoming: [{ label: 'Planner', run_engine: 'subscription' }, { label: 'Other', runEngine: 'api' }, { label: 'Bad', run_engine: 'codex' }, { label: 'None' }], live: [], reserved: [] });
-  check('import carries the engine, in either spelling', plan.create.map(b => b.run_engine), ['subscription', 'api', null, null]);
+  // The engine follows the model now: a file that says "subscription" pins that bot's model
+  // to the CLI login (claude::), in either spelling, and no engine is stored.
+  check('an old "subscription" bot is imported onto the CLI login\'s model', plan.create.map(b => b.model), ['claude::sonnet', null, null, null]);
+  check('no engine is stored any more', plan.create.map(b => b.run_engine), [null, null, null, null]);
+  const p2 = planBotImport({ incoming: [{ label: 'Opus planner', model: 'opus', runEngine: 'subscription' }, { label: 'Gw', model: 'kilo::gpt-x', run_engine: 'subscription' }], live: [], reserved: [] });
+  check('its own alias is kept, a ref of another provider is left alone', p2.create.map(b => b.model), ['claude::opus', 'kilo::gpt-x']);
 }
 
 console.log('per-bot model:');

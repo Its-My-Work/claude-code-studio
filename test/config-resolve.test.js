@@ -69,13 +69,13 @@ console.log('env-backed settings — process env beats .env beats the default:')
 // server.js:2308-2347 loadConfig()       → local > default, global never opened
 console.log('\nconfig.json-backed settings — local overrides global, on the merged chain only:');
 {
-  const merged = resolve('defaultEngine', {
-    localConfig: { defaultEngine: 'subscription' },
-    globalConfig: { defaultEngine: 'api' },
+  const merged = resolve('editor', {
+    localConfig: { editor: 'cursor' },
+    globalConfig: { editor: 'vscodium' },
   });
-  check('local config.json wins on the merged chain', merged.effective, 'subscription');
+  check('local config.json wins on the merged chain', merged.effective, 'cursor');
   check('candidate order is local, global, default', srcOrder(merged), ['config-local', 'config-global', 'default']);
-  check('the global value is shown, not hidden', merged.sources[1].value, 'api');
+  check('the global value is shown, not hidden', merged.sources[1].value, 'vscodium');
   check('the global value is not marked ignored', merged.sources[1].ignored, false);
 
   const globalOnly = resolve('lang', { globalConfig: { lang: 'fr' } });
@@ -100,7 +100,7 @@ console.log('\nconfig.json-backed settings — local overrides global, on the me
 }
 
 // ── 2b. `||` vs `??` — the UI must report the value the server actually runs on ─
-// loadMergedConfig() resolves lang and defaultEngine with `||` and
+// loadMergedConfig() resolves lang and editor with `||` and
 // recentProjectsCount with `??`. That difference is invisible until a config file
 // carries a falsy value: with `||` an empty string is SKIPPED and the next source
 // down is what the server uses, so reporting `""` as effective would point the
@@ -118,9 +118,9 @@ console.log('\nfalsy config values follow the operator loadMergedConfig() actual
   check('two empty files fall through to the built-in default', both.effective, 'en');
   check('and both are flagged', both.ignoredSources, ['config-local', 'config-global']);
 
-  const engine = resolve('defaultEngine', { localConfig: { defaultEngine: '' } });
-  check('defaultEngine behaves the same way', engine.effective, 'api');
-  check('crediting the default', engine.effectiveSource, 'default');
+  const editor = resolve('editor', { localConfig: { editor: '' } });
+  check('editor behaves the same way', editor.effective, 'vscode');
+  check('crediting the default', editor.effectiveSource, 'default');
 
   // Positive control: the flag must not swallow real values. Only falsy ones.
   const real = resolve('lang', { localConfig: { lang: 'he' }, globalConfig: { lang: 'fr' } });
@@ -306,7 +306,7 @@ console.log('\nreset removes the key from the file the form owns:');
     resolve('PORT', { processEnv: { PORT: '4100' } }).resettable, false);
   check('an untouched setting is not resettable', resolve('PORT', {}).resettable, false);
   check('a local config.json value is resettable',
-    resolve('defaultEngine', { localConfig: { defaultEngine: 'subscription' } }).resettable, true);
+    resolve('editor', { localConfig: { editor: 'cursor' } }).resettable, true);
   check('a value that only the global file defines is not ours to reset',
     resolve('lang', { globalConfig: { lang: 'fr' } }).resettable, false);
   check('a secret is never resettable',
@@ -360,7 +360,7 @@ console.log('\nlive server: /api/config/resolved + /api/config/setting');
   fs.writeFileSync(path.join(tmp, '.env'),
     `ANTHROPIC_API_KEY=${RAW_SECRET}\nMAX_TASK_WORKERS=7\nCLAUDE_HARD_CAP_MS=1234567\n`);
   fs.writeFileSync(path.join(tmp, 'config.json'),
-    JSON.stringify({ mcpServers: {}, skills: {}, defaultEngine: 'subscription' }, null, 2));
+    JSON.stringify({ mcpServers: {}, skills: {}, editor: 'cursor' }, null, 2));
 
   // Other agents hold 3990-3999 in this workspace; pick high and poll, never kill.
   const PORT = 3907 + (process.pid % 40);
@@ -437,7 +437,9 @@ console.log('\nlive server: /api/config/resolved + /api/config/setting');
       by('CLAUDE_HARD_CAP_MS').effectiveSource, 'dotenv');
     check('and its value comes through', by('CLAUDE_HARD_CAP_MS').effective, '1234567');
     check('and it is not marked shadowed', by('CLAUDE_HARD_CAP_MS').shadowedDotenv, false);
-    check('the local config.json value wins for defaultEngine', by('defaultEngine').effective, 'subscription');
+    check('the local config.json value wins for editor', by('editor').effective, 'cursor');
+    // The engine is decided by the model's provider now — there is no setting to default it.
+    check('there is no defaultEngine setting any more', by('defaultEngine'), undefined);
 
     // Write path: a config-backed setting round-trips into config.json.
     const w = await get('/api/config/setting', {
@@ -491,15 +493,15 @@ console.log('\nlive server: /api/config/resolved + /api/config/setting');
     // default, so name the value the resolver must now report.
     check('and the resolver reports the catalogued default, not some other number',
       JSON.parse(del.body).setting.effective, R.getSetting('terminal.maxLive').def);
-    check('a sibling key in config.json survived the reset', confAfter.defaultEngine, 'subscription');
+    check('a sibling key in config.json survived the reset', confAfter.editor, 'cursor');
 
     // A key that loadConfig() does NOT re-seed disappears from the file outright.
-    const delEngine = await get('/api/config/setting?key=defaultEngine', { method: 'DELETE', headers: auth });
+    const delEngine = await get('/api/config/setting?key=editor', { method: 'DELETE', headers: auth });
     check('resetting an unseeded key is accepted', JSON.parse(delEngine.body).ok, true);
     check('and it is gone from config.json',
-      'defaultEngine' in JSON.parse(fs.readFileSync(path.join(tmp, 'config.json'), 'utf8')), false);
+      'editor' in JSON.parse(fs.readFileSync(path.join(tmp, 'config.json'), 'utf8')), false);
     check('the resolver reports the built-in default for it',
-      JSON.parse(delEngine.body).setting.effective, 'api');
+      JSON.parse(delEngine.body).setting.effective, 'vscode');
 
     const delEnv = await get('/api/config/setting?key=SESSION_TTL_DAYS', { method: 'DELETE', headers: auth });
     check('the .env reset is accepted', JSON.parse(delEnv.body).ok, true);

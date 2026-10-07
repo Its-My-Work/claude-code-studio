@@ -26,6 +26,9 @@ const fs = require('fs');
 const os = require('os');
 const net = require('net');
 const path = require('path');
+// Runs here go through the fake headless `claude`: pin an API provider as the default
+// (see _api-provider-env.js — otherwise CI's tmux would take them to the Subscription engine).
+const API_PROVIDER_ENV = require('./_api-provider-env');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
@@ -109,7 +112,7 @@ async function api(method, url, body) {
 // The parent shell of a Claude Code session exports CCS_DESKTOP=1 (auth wall off) and
 // APP_DIR (repoints data/ at the real user dir), so the child env is scrubbed.
 function childEnv(extra) {
-  const env = { ...process.env, ...extra };
+  const env = { ...process.env, ...API_PROVIDER_ENV, ...extra };
   delete env.CCS_DESKTOP;
   for (const k of ['CCS_INTERRUPT_URL', 'CCS_INTERRUPT_SESSION', 'CCS_INTERRUPT_SECRET']) delete env[k];
   return env;

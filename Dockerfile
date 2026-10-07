@@ -5,8 +5,12 @@ RUN apt-get update && apt-get install -y \
     git curl python3 python3-pip build-essential tmux \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI globally
-RUN npm install -g @anthropic-ai/claude-code
+# Install Claude Code CLI globally — PINNED. The provider bridge (llm-bridge/) translates
+# the requests this exact CLI sends; an unpinned install lets any rebuild pull a CLI whose
+# request shape nobody has run the contract test against (test/llm-bridge-contract.test.js).
+# Bump deliberately, together with that test: docker build --build-arg CLAUDE_CODE_VERSION=…
+ARG CLAUDE_CODE_VERSION=2.1.281
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
 # Install opencode CLI globally — an externalAgents engine (config.json), so it
 # must be baked into the image rather than installed live: /app is an image
